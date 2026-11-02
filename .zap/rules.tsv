@@ -2,3 +2,4 @@
 10109	IGNORE	(Modern Web Application: informational)
 10104	IGNORE	(User Agent Fuzzer: informational)
 10035	IGNORE	(HSTS deliberately off with the default self-signed certificate, owner decision D12; enable with TCMON_HSTS=true)
+10112	IGNORE	(Session Management Response Identified: informational detection of the session/form cookies, which are Secure, HttpOnly, SameSite=Strict and __Host- prefixed)
