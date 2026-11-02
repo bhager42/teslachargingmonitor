@@ -244,9 +244,15 @@ login_attempts(ip, ts)                                   -- for throttling
 audit_log(id, ts, actor_ip, action, details_json)
 ```
 
-Retention defaults (all configurable): at the default hourly cadence one
-device produces ~8,800 rows/year per table, so **raw readings are kept 2 years**
-and no rollups are needed. Rollups (5-min → 1-h) are generated only for data
+**Retention is adjustable in the Web GUI (owner decision D15); default 2 years
+for readings.** Settings → Data retention offers, per data class, presets
+(30 d, 90 d, 6 months, 1 y, **2 y**, 5 y, Keep forever) or a custom number of
+days; it shows the current DB size and an estimated size for the chosen
+setting. Shortening retention shows a confirmation ("this permanently deletes
+data older than …") and suggests downloading a backup first; pruning runs
+nightly and on demand. At the default hourly cadence one device produces
+~8,800 rows/year per table, so 2 years of raw readings is small and no
+rollups are needed for that data. Rollups (5-min → 1-h) are generated only for data
 sampled more often than hourly (e.g. if the owner shortens the interval or
 enables faster polling while charging, which is on by default) and are kept
 indefinitely. Raw payloads
@@ -770,8 +776,8 @@ Deliverables:
 - `LICENSE` containing the full **GNU AGPL v3** text (verbatim from gnu.org).
 - SPDX header in every source file:
   `// SPDX-License-Identifier: AGPL-3.0-or-later` (owner decision D13) and a
-  copyright line `// Copyright (C) 2026 <copyright holder> and contributors`
-  (holder name still open, §15 Q19). The README and About page use the
+  copyright line `// Copyright (C) 2026 Brad Hager and contributors`
+  (owner decision D14). The README and About page use the
   standard "either version 3 of the License, or (at your option) any later
   version" wording.
 - **AGPL §13 compliance:** because users interact over a network, the web UI
@@ -829,8 +835,14 @@ until the previous phase's acceptance criteria pass.
   ADRs in `docs/adr/` (0001 language, 0002 SQLite, 0003 no-build frontend).
 - CI skeleton: lint, test, govulncheck, CodeQL, Scorecard, licence check.
 
-**Accept:** UWC fixtures (idle + charging) committed and the field list in §2
-updated to match reality; CI green
+**Accept:** UWC idle fixtures committed and the field list in §2 updated to
+match reality (done for version/lifetime/wifi_status/idle vitals). The
+**charging `/vitals` capture is deferred** (owner's car unavailable — D16): do
+not block on it. Open a tracking issue "Add UWC charging vitals fixture"; until
+it lands, the simulator's charging scenario is synthesised from the Gen 3 field
+semantics and labelled provisional, and `relay_voltage_abnormal` and
+`overcurrent` ship **disabled by default** with a UI note "needs calibration
+from a charging capture"; CI green
 on an empty `main` package; licence headers enforced by a CI check.
 
 ### Phase 1 — Wall Connector client + simulator
@@ -943,18 +955,22 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 | D11 | Email provider is **Gmail**. | 2026-11-02 | §7: Gmail default preset, app-password guidance, Gmail error hints. |
 | D12 | **LAN only**; no CA-validated HTTPS certificate. | 2026-11-02 | §10: self-signed cert by default with fingerprint + download; client-IP allowlist of private ranges; HSTS off; plain HTTP only by explicit opt-in. |
 | D13 | License **AGPL-3.0-or-later**. | 2026-11-02 | §12 SPDX headers, OCI label, README wording. |
+| D14 | Copyright holder: **Brad Hager**. | 2026-11-02 | §12 header line. |
+| D15 | Data retention **adjustable in the Web GUI**, default **2 years**. | 2026-11-02 | §5 retention UI with presets, size estimate, confirmation before deleting. |
+| D16 | Charging `/vitals` capture **deferred** (car not available). HTTPS with a self-signed cert and one-time browser warning **confirmed** (D12). | 2026-11-02 | Phase 0 no longer blocks on it; charging-dependent rules ship disabled until calibrated. |
 
 ### 15.1 Still open
+
+Anything below that is not answered uses the documented default; Claude Code
+records the assumption in the PR that relies on it.
 
 **Hardware & network**
 1. How many UWCs (just one?) and is it in a **power-sharing** group? *(Model
    answered: UWC — D1.)*
 2. *(Answered — D2: entered in the Web GUI.)* Please still reserve the UWC's IP
    in your router's DHCP so it doesn't change.
-3. Remaining sample JSON from your UWC: `/version`, `/lifetime` and idle
-   `/vitals` are captured (D3, D4); still needed are **`/api/1/vitals` while a
-   car is actively charging** (and ideally plugged-in-but-not-charging) —
-   the last missing capture. For reference, the full list: run
+3. **Deferred (D16):** `/api/1/vitals` while a car is actively charging (and
+   ideally plugged-in-but-not-charging) — send it when the car is back. For reference, the full list: run
    `curl http://<ip>/api/1/vitals`, `/lifetime`, `/wifi_status`, `/version`
    (ideally once idle and once while charging) and share them — redact serial,
    MAC and SSID if you like. *(The restart that produced 16 s uptime was
@@ -976,23 +992,21 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 
 **Access & security**
 11. *(Answered — D12: LAN only.)*
-12. *(Answered — D12: no validated certificate → app self-signs.)* Please
-    confirm you're OK with HTTPS using a self-signed certificate (one-time
-    browser warning) rather than plain HTTP.
+12. *(Answered — D12/D16: self-signed HTTPS, one-time browser warning.)*
 13. Password provisioning preference: first-run setup token (default), Docker
     secret file, or pre-hashed value? Should a plaintext env var be refused
     entirely?
 14. Session lifetime preferences (default 12 h idle / 7 d absolute)?
 
 **Data**
-15. Retention preferences (defaults in §5)? Which dataset/pool path on TrueNAS?
+15. *(Answered — D15: adjustable in GUI, 2-year default.)* Which dataset/pool
+    path on TrueNAS? (Default in docs: `/mnt/<pool>/apps/tcmon/data`.)
 16. Prometheus/Grafana or InfluxDB export wanted? Home Assistant/MQTT integration?
 17. Units: °C or °F; time zone.
 
 **Project / legal**
 18. *(Answered — D8: Tesla Charger Monitoring, short id `tcmon`.)*
-19. *(Answered — D13: AGPL-3.0-or-later.)* Copyright holder name for file
-    headers (your real name, or your GitHub handle `bhager42`)?
+19. *(Answered — D13/D14: AGPL-3.0-or-later, © Brad Hager.)*
 20. *(Answered — D8: public.)*
 21. Contributions: DCO sign-off OK, or do you want a CLA (only needed if you may
     ever relicense)?
