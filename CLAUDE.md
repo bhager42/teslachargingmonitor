@@ -19,6 +19,8 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
 - `make build` — builds `bin/tcmon`; `make vuln`, `make licenses` for dependency checks
 - `scripts/capture.sh <ip> [label]` — capture redacted Wall Connector fixtures
 - `make sim SCENARIO=<name> SPEED=<x>` — run the Wall Connector simulator (`internal/wcsim`)
+- `make soak SOAK_POLLS=3000` — leak/soak test of the poller against the simulator
+- `go run ./cmd/tcmon serve -data-dir ./data` with `tcmon device add -data-dir ./data -address 127.0.0.1:8099` (after `make sim`) for a local end-to-end run
 - `make fuzz FUZZTIME=60s` — run all fuzz targets; commit any failing input under `testdata/fuzz` as a regression seed
 
 ## Conventions
@@ -30,5 +32,7 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
 - Record significant decisions as ADRs in `docs/adr/`.
 - Device data is untrusted: decode with `wallconnector.Decode*` and honour the
   `Report` (fields in `Report.Invalid` must not drive alerts as if valid).
+- Schema changes go in a new `internal/store/migrations/NNNN_*.sql` file (numbered
+  consecutively); never edit an applied migration.
 - Only add status-code meanings to `internal/wallconnector/codes.go` that were
   observed on hardware; never guess.

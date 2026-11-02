@@ -18,7 +18,7 @@ GORUN     := GOTOOLCHAIN=$(TOOLCHAIN) $(GO) run
 export CGO_ENABLED = 0
 export GOFLAGS     = -mod=readonly
 
-.PHONY: all build sim test cover fuzz lint fmt vet vuln headers licenses check clean
+.PHONY: all build sim test cover fuzz soak lint fmt vet vuln headers licenses check clean
 
 all: check build
 
@@ -35,6 +35,11 @@ test: ## Run unit tests with the race detector
 cover: ## Run tests with coverage report
 	$(GO) test -count=1 -coverprofile=coverage.out ./...
 	$(GO) tool cover -func=coverage.out | tail -n 1
+
+SOAK_POLLS ?= 3000
+
+soak: ## Poll the simulator SOAK_POLLS times; fails on goroutine/heap growth
+	TCMON_SOAK_POLLS=$(SOAK_POLLS) $(GO) test -run '^TestSoak$$' -count=1 -v ./internal/poller
 
 FUZZTIME ?= 60s
 FUZZ_TARGETS := FuzzDecode FuzzParseAddress FuzzParseFirmware

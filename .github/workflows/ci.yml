@@ -63,6 +63,8 @@ jobs:
         run: go tool cover -func=coverage.out | tail -n 1
       - name: Build
         run: make build && ./bin/tcmon version
+      - name: Soak (3000 polls against the simulator)
+        run: make soak SOAK_POLLS=3000
 
   fuzz:
     name: Fuzz (${{ matrix.target }})

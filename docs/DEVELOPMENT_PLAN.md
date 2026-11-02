@@ -252,7 +252,16 @@ setting. Shortening retention shows a confirmation ("this permanently deletes
 data older than …") and suggests downloading a backup first; pruning runs
 nightly and on demand. At the default hourly cadence one device produces
 ~8,800 rows/year per table, so 2 years of raw readings is small and no
-rollups are needed for that data. Rollups (5-min → 1-h) are generated only for data
+rollups are needed for that data.
+
+**Measured storage (Phase 2 soak, 3,000 polls):** ≈ 1.9 KB per poll
+including raw payloads, i.e. **≈ 16 MiB/year** at hourly polling and
+**≈ 31 MiB/year** with ~2 h/day plugged in at the 5-min cadence — an upper
+bound, since raw payloads (≈ 70 % of that) are pruned after 90 days.
+Implementation: only **1-hour rollups** (`rollups_1h`) are kept; 5-minute
+rollups were dropped because 5 min is already the finest sampling cadence.
+Fields the decoder flags invalid are stored as SQL NULL and listed in each
+row's `invalid_json`, so rollups and alerts never consume them. Rollups (5-min → 1-h) are generated only for data
 sampled more often than hourly (e.g. if the owner shortens the interval or
 enables faster polling while charging, which is on by default) and are kept
 indefinitely. Raw payloads
@@ -903,6 +912,24 @@ on an empty `main` package; licence headers enforced by a CI check.
 simulator scenarios selectable via flag/env.
 
 ### Phase 2 — Storage + poller
+
+> **Status (2026-11-02): implemented.** `internal/store` (SQLite via
+> modernc.org/sqlite v1.60.1, WAL, incremental auto-vacuum, 0600 file,
+> embedded consecutive migrations with downgrade refusal; devices with
+> 80 %-of-breaker max current, readings/raw payloads/events/poll log,
+> hourly rollups with watermark, batched retention pruning that never drops
+> un-rolled data, `VACUUM INTO` backups, stats). `internal/poller`
+> (worker per device, 60 min / 5 min plugged-in cadence with ±2 % jitter,
+> retries at 30 s / 2 min / 5 min, poll-now with 10 s rate limit, hot
+> reload via `Sync` every minute, reboot / firmware / grid-profile /
+> identity-mismatch detection with first-sighting baselines, update
+> fan-out for Phase 3). `tcmon serve` (JSON logs, nightly 03:17
+> maintenance) plus an **interim admin CLI** `tcmon device add|update|list|
+> remove|test`, `backup`, `migrate`. The CLI writes the same `devices`
+> table the web UI will own; D2 (address configured in the GUI, never env
+> vars) still holds — the CLI is an operator fallback, not configuration.
+> Soak: 3,000 back-to-back polls, goroutines and heap flat (CI runs it on
+> every build). Coverage: store 81 %, poller 93 %, cli 83 %.
 - SQLite store, migrations, retention + rollup jobs, backup (`VACUUM INTO`).
 - Poller with jitter/backoff/active-cadence; reboot & firmware-change detection.
 - `tcmon serve` runs headless and logs readings.

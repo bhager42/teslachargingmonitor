@@ -6,49 +6,22 @@
 // Free Software Foundation, either version 3 of the License, or (at your
 // option) any later version. See the LICENSE file for details.
 
-// Command tcmon is the Tesla Charger Monitoring server.
-//
-// Phase 0 only provides the "version" subcommand; "serve", "healthcheck",
-// "reset-password", "hash-password" and "migrate" arrive in later phases
-// (see docs/DEVELOPMENT_PLAN.md §3 and §14).
+// Command tcmon is the Tesla Charger Monitoring server and admin CLI.
+// See internal/cli and docs/DEVELOPMENT_PLAN.md.
 package main
 
 import (
-	"fmt"
-	"io"
+	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
-	"github.com/bhager42/teslachargingmonitor/internal/buildinfo"
+	"github.com/bhager42/teslachargingmonitor/internal/cli"
 )
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
-}
-
-func run(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		usage(stderr)
-		return 2
-	}
-	switch args[0] {
-	case "version", "--version", "-v":
-		_, _ = fmt.Fprintln(stdout, buildinfo.Get().String())
-		return 0
-	case "help", "--help", "-h":
-		usage(stdout)
-		return 0
-	default:
-		_, _ = fmt.Fprintf(stderr, "tcmon: unknown command %q\n\n", args[0])
-		usage(stderr)
-		return 2
-	}
-}
-
-func usage(w io.Writer) {
-	_, _ = fmt.Fprint(w, `Usage: tcmon <command>
-
-Commands:
-  version   Print version, license and source-code information
-  help      Show this help
-`)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := cli.Run(ctx, os.Args[1:], cli.OSEnv())
+	stop()
+	os.Exit(code)
 }
