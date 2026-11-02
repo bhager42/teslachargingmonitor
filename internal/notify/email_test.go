@@ -194,6 +194,9 @@ func TestComposeIsWellFormedAndSafe(t *testing.T) {
 		!strings.Contains(text, "not affiliated with Tesla, Inc.") {
 		t.Errorf("text part:\n%s", text)
 	}
+	if strings.Contains(text, "SPDX") || strings.Contains(html, "SPDX") || !strings.HasPrefix(html, "<!doctype html>") {
+		t.Errorf("template license header leaked into the email:\ntext: %.80q\nhtml: %.80q", text, html)
+	}
 	if strings.Contains(html, "<script>") || !strings.Contains(html, "&lt;script&gt;") || !strings.Contains(html, "color-scheme") {
 		t.Errorf("HTML part not escaped:\n%s", html)
 	}
