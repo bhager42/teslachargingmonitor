@@ -26,7 +26,7 @@ Copyright (C) 2026 Brad Hager and contributors
     <a href="/settings/security" {{if eq .Nav "security"}}aria-current="page"{{end}}>Security</a>
     <a href="/about" {{if eq .Nav "about"}}aria-current="page"{{end}}>About</a>
     <form method="post" action="/logout" class="inline">
-      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <input type="hidden" name="csrf_token" value="{{.CSRF}}">
       <button type="submit" class="link">Sign out</button>
     </form>
   </nav>

@@ -6,6 +6,7 @@ Copyright (C) 2026 Brad Hager and contributors
 <section class="card narrow" aria-labelledby="login-title">
   <h1 id="login-title">Sign in</h1>
   <form method="post" action="/login">
+    <input type="hidden" name="csrf_token" value="{{.FormToken}}">
     <label for="password">Password</label>
     <input id="password" name="password" type="password" autocomplete="current-password" required autofocus maxlength="1024">
     <label class="check"><input type="checkbox" name="remember" value="1"> Keep me signed in on this device for 30 days</label>

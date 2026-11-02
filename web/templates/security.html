@@ -10,7 +10,7 @@ Copyright (C) 2026 Brad Hager and contributors
   <p>The password is set by <code>TCMON_PASSWORD_FILE</code> or <code>TCMON_PASSWORD_HASH</code>. Change it there and restart the app.</p>
   {{- else}}
   <form method="post" action="/settings/password">
-    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <input type="text" name="username" value="tcmon" autocomplete="username" hidden>
     <label for="current">Current password</label>
     <input id="current" name="current" type="password" autocomplete="current-password" required maxlength="1024">
@@ -27,7 +27,7 @@ Copyright (C) 2026 Brad Hager and contributors
   <h2 id="sessions-title">Signed-in devices</h2>
   <p>{{.Sessions}} active session(s), including this one.</p>
   <form method="post" action="/settings/sessions/revoke">
-    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <button type="submit" class="secondary">Sign out all other devices</button>
   </form>
 </section>

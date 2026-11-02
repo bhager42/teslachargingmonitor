@@ -129,7 +129,7 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 			h.Set("Strict-Transport-Security", "max-age=31536000")
 		}
 		if !strings.HasPrefix(r.URL.Path, "/static/") {
-			h.Set("Cache-Control", "no-store")
+			h.Set("Cache-Control", "no-store, no-cache, must-revalidate")
 		}
 		next.ServeHTTP(w, r)
 	})

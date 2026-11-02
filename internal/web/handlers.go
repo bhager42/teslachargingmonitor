@@ -9,6 +9,9 @@
 package web
 
 import (
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"strconv"
@@ -93,7 +96,7 @@ func (s *Server) authed(h authedHandler) http.Handler {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
-		if r.Method != http.MethodGet && r.Method != http.MethodHead && !sess.CheckCSRF(r.PostFormValue("csrf")) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && !sess.CheckCSRF(r.PostFormValue("csrf_token")) {
 			s.renderError(w, r, http.StatusForbidden, "Request blocked", "The form expired or did not come from this app. Reload the page and try again.")
 			return
 		}
@@ -106,6 +109,31 @@ func (s *Server) base(p page, sess auth.Session, nav string) page {
 	return p
 }
 
+// formCookie names the pre-session CSRF cookie used by the login and setup
+// forms (double-submit token, on top of CrossOriginProtection).
+func (s *Server) formCookie() string {
+	if s.cfg.secureCookies() {
+		return "__Host-tcmon_form"
+	}
+	return "tcmon_form"
+}
+
+// issueFormToken sets a fresh pre-session token cookie and returns it for
+// the form's hidden field.
+func (s *Server) issueFormToken(w http.ResponseWriter) string {
+	tok := randomToken()
+	http.SetCookie(w, &http.Cookie{Name: s.formCookie(), Value: tok, Path: "/", MaxAge: 3600, HttpOnly: true, //nolint:gosec // G124: Secure as setCookie
+		Secure: s.cfg.secureCookies(), SameSite: http.SameSiteStrictMode})
+	return tok
+}
+
+// checkFormToken verifies the double-submitted pre-session token.
+func (s *Server) checkFormToken(r *http.Request) bool {
+	c, err := r.Cookie(s.formCookie())
+	sent := r.PostFormValue("csrf_token")
+	return err == nil && len(c.Value) >= 32 && subtle.ConstantTimeCompare([]byte(c.Value), []byte(sent)) == 1
+}
+
 func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.session(r); ok {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -115,21 +143,26 @@ func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/setup", http.StatusSeeOther)
 		return
 	}
-	s.render(w, r, http.StatusOK, "login", page{"Title": "Sign in"})
+	s.render(w, r, http.StatusOK, "login", page{"Title": "Sign in", "FormToken": s.issueFormToken(w)})
 }
 
 func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
+	if !s.checkFormToken(r) {
+		s.render(w, r, http.StatusForbidden, "login", page{"Title": "Sign in", "FormToken": s.issueFormToken(w),
+			"Error": "The sign-in form expired. Please try again."})
+		return
+	}
 	ip := clientIP(r).String()
 	c, err := s.auth.Login(r.Context(), r.PostFormValue("password"), ip, r.UserAgent(), r.PostFormValue("remember") == "1")
 	var te *auth.ThrottledError
 	switch {
 	case errors.As(err, &te):
 		w.Header().Set("Retry-After", strconv.Itoa(int(te.RetryAfter.Seconds())+1))
-		s.render(w, r, http.StatusTooManyRequests, "login", page{"Title": "Sign in", "Error": te.Error()})
+		s.render(w, r, http.StatusTooManyRequests, "login", page{"Title": "Sign in", "Error": te.Error(), "FormToken": s.issueFormToken(w)})
 	case errors.Is(err, auth.ErrNoPassword):
 		http.Redirect(w, r, "/setup", http.StatusSeeOther)
 	case errors.Is(err, auth.ErrBadPassword):
-		s.render(w, r, http.StatusUnauthorized, "login", page{"Title": "Sign in", "Error": "Incorrect password."})
+		s.render(w, r, http.StatusUnauthorized, "login", page{"Title": "Sign in", "Error": "Incorrect password.", "FormToken": s.issueFormToken(w)})
 	case err != nil:
 		s.log.Error("login", "err", err)
 		s.renderError(w, r, http.StatusInternalServerError, "Error", "Sign-in failed because of an internal error. See the container log.")
@@ -148,10 +181,15 @@ func (s *Server) setupPage(w http.ResponseWriter, r *http.Request) {
 		s.render(w, r, http.StatusGone, "setup_closed", page{"Title": "Setup closed"})
 		return
 	}
-	s.render(w, r, http.StatusOK, "setup", page{"Title": "Set your password"})
+	s.render(w, r, http.StatusOK, "setup", page{"Title": "Set your password", "FormToken": s.issueFormToken(w)})
 }
 
 func (s *Server) setupSubmit(w http.ResponseWriter, r *http.Request) {
+	if !s.checkFormToken(r) {
+		s.render(w, r, http.StatusForbidden, "setup", page{"Title": "Set your password", "FormToken": s.issueFormToken(w),
+			"Error": "The setup form expired. Please try again."})
+		return
+	}
 	c, err := s.auth.CompleteSetup(r.Context(), r.PostFormValue("token"), r.PostFormValue("password"),
 		r.PostFormValue("confirm"), clientIP(r).String(), r.UserAgent())
 	var te *auth.ThrottledError
@@ -159,14 +197,14 @@ func (s *Server) setupSubmit(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, auth.ErrSetupClosed):
 		s.render(w, r, http.StatusGone, "setup_closed", page{"Title": "Setup closed"})
 	case errors.As(err, &te):
-		s.render(w, r, http.StatusTooManyRequests, "setup", page{"Title": "Set your password", "Error": te.Error()})
+		s.render(w, r, http.StatusTooManyRequests, "setup", page{"Title": "Set your password", "Error": te.Error(), "FormToken": s.issueFormToken(w)})
 	case err != nil:
 		msg := auth.UserMessage(err)
 		if msg == "" {
 			s.log.Error("setup", "err", err)
 			msg = "Setup failed because of an internal error. See the container log."
 		}
-		s.render(w, r, http.StatusBadRequest, "setup", page{"Title": "Set your password", "Error": msg})
+		s.render(w, r, http.StatusBadRequest, "setup", page{"Title": "Set your password", "Error": msg, "FormToken": s.issueFormToken(w)})
 	default:
 		s.setCookie(w, c)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -274,4 +312,10 @@ func (s *Server) certificate(w http.ResponseWriter, r *http.Request, _ auth.Sess
 	w.Header().Set("Content-Type", "application/x-pem-file")
 	w.Header().Set("Content-Disposition", `attachment; filename="tesla-charger-monitoring.pem"`)
 	_, _ = w.Write(s.certs.PEM())
+}
+
+func randomToken() string {
+	b := make([]byte, 32)
+	_, _ = rand.Read(b) // crypto/rand.Read never returns an error
+	return base64.RawURLEncoding.EncodeToString(b)
 }

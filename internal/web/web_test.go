@@ -128,7 +128,35 @@ func sessionCookie(t *testing.T, r *http.Response) *http.Cookie {
 	return nil
 }
 
-var csrfRE = regexp.MustCompile(`name="csrf" value="([^"]+)"`)
+var csrfRE = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
+
+// formToken fetches the setup or login page and returns the pre-session
+// token cookie and its form value.
+func (h *harness) formToken() (*http.Cookie, string) {
+	h.t.Helper()
+	for _, p := range []string{"/setup", "/login"} {
+		r := h.do("GET", p, nil)
+		if r.StatusCode != http.StatusOK {
+			continue
+		}
+		m := csrfRE.FindStringSubmatch(bodyOf(h.t, r))
+		for _, c := range r.Cookies() {
+			if c.Name == "__Host-tcmon_form" && m != nil {
+				return c, m[1]
+			}
+		}
+	}
+	h.t.Fatal("no form token available")
+	return nil, ""
+}
+
+// formPost posts a pre-session form (login or setup) with a valid token.
+func (h *harness) formPost(path string, f url.Values, opts ...reqOpt) *http.Response {
+	h.t.Helper()
+	c, tok := h.formToken()
+	f.Set("csrf_token", tok)
+	return h.do("POST", path, f, append([]reqOpt{cookie(c)}, opts...)...)
+}
 
 func (h *harness) csrf(c *http.Cookie) string {
 	h.t.Helper()
@@ -142,7 +170,7 @@ func (h *harness) csrf(c *http.Cookie) string {
 // setup completes first-run setup and returns the session cookie.
 func (h *harness) setup() *http.Cookie {
 	h.t.Helper()
-	r := h.do("POST", "/setup", url.Values{"token": {h.token}, "password": {goodPassword}, "confirm": {goodPassword}})
+	r := h.formPost("/setup", url.Values{"token": {h.token}, "password": {goodPassword}, "confirm": {goodPassword}})
 	if r.StatusCode != http.StatusSeeOther {
 		h.t.Fatalf("setup = %d %s", r.StatusCode, bodyOf(h.t, r))
 	}
@@ -154,7 +182,7 @@ func (h *harness) login(pw string, remember bool) *http.Response {
 	if remember {
 		f.Set("remember", "1")
 	}
-	return h.do("POST", "/login", f)
+	return h.formPost("/login", f)
 }
 
 func TestSecurityHeadersEverywhere(t *testing.T) {
@@ -190,7 +218,7 @@ func TestSecurityHeadersEverywhere(t *testing.T) {
 		if r.Header.Get("Strict-Transport-Security") != "" {
 			t.Errorf("%s: HSTS must not be sent with a self-signed certificate", p)
 		}
-		if !strings.HasPrefix(p, "/static/") && r.Header.Get("Cache-Control") != "no-store" {
+		if !strings.HasPrefix(p, "/static/") && r.Header.Get("Cache-Control") != "no-store, no-cache, must-revalidate" {
 			t.Errorf("%s Cache-Control = %q", p, r.Header.Get("Cache-Control"))
 		}
 	}
@@ -273,7 +301,7 @@ func TestSetupFlow(t *testing.T) {
 		{url.Values{"token": {h.token}, "password": {goodPassword}, "confirm": {goodPassword + "x"}}, "do not match"},
 	}
 	for _, b := range bad {
-		r := h.do("POST", "/setup", b.form)
+		r := h.formPost("/setup", b.form)
 		if r.StatusCode != 400 || !strings.Contains(bodyOf(t, r), b.want) {
 			t.Errorf("setup %v = %d, want message %q", b.form["password"], r.StatusCode, b.want)
 		}
@@ -288,7 +316,7 @@ func TestSetupFlow(t *testing.T) {
 	if r := h.do("GET", "/setup", nil); r.Header.Get("Location") != "/login" {
 		t.Error("setup still reachable after a password was set")
 	}
-	if r := h.do("POST", "/setup", url.Values{"token": {h.token}, "password": {goodPassword}, "confirm": {goodPassword}}); r.StatusCode != http.StatusGone {
+	if r := h.formPost("/setup", url.Values{"token": {h.token}, "password": {goodPassword}, "confirm": {goodPassword}}); r.StatusCode != http.StatusGone {
 		t.Errorf("reusing the setup token = %d", r.StatusCode)
 	}
 	// The token expires.
@@ -322,10 +350,10 @@ func TestLoginLogoutAndThrottle(t *testing.T) {
 		t.Errorf("logout without CSRF = %d", r.StatusCode)
 	}
 	token := h.csrf(c)
-	if r := h.do("POST", "/logout", url.Values{"csrf": {token}}, cookie(c), header("Sec-Fetch-Site", "cross-site")); r.StatusCode != 403 {
+	if r := h.do("POST", "/logout", url.Values{"csrf_token": {token}}, cookie(c), header("Sec-Fetch-Site", "cross-site")); r.StatusCode != 403 {
 		t.Errorf("cross-site logout = %d", r.StatusCode)
 	}
-	r = h.do("POST", "/logout", url.Values{"csrf": {token}}, cookie(c))
+	r = h.do("POST", "/logout", url.Values{"csrf_token": {token}}, cookie(c))
 	if r.StatusCode != 303 || !strings.HasPrefix(r.Header.Get("Location"), "/login") {
 		t.Fatalf("logout = %d", r.StatusCode)
 	}
@@ -341,7 +369,7 @@ func TestLoginLogoutAndThrottle(t *testing.T) {
 	if r.StatusCode != http.StatusTooManyRequests || r.Header.Get("Retry-After") == "" {
 		t.Errorf("throttled login = %d", r.StatusCode)
 	}
-	if r := h.do("POST", "/login", url.Values{"password": {goodPassword}}, from("192.168.1.51")); r.StatusCode != 303 {
+	if r := h.formPost("/login", url.Values{"password": {goodPassword}}, from("192.168.1.51")); r.StatusCode != 303 {
 		t.Errorf("other IP blocked: %d", r.StatusCode)
 	}
 	h.clk.add(16 * time.Minute)
@@ -391,11 +419,11 @@ func TestChangePasswordAndRevoke(t *testing.T) {
 	token := h.csrf(me)
 
 	newPW := "granite lantern meadow 42"
-	r := h.do("POST", "/settings/password", url.Values{"csrf": {token}, "current": {"wrong one entirely"}, "password": {newPW}, "confirm": {newPW}}, cookie(me))
+	r := h.do("POST", "/settings/password", url.Values{"csrf_token": {token}, "current": {"wrong one entirely"}, "password": {newPW}, "confirm": {newPW}}, cookie(me))
 	if r.StatusCode != 400 || !strings.Contains(bodyOf(t, r), "incorrect password") {
 		t.Errorf("wrong current = %d", r.StatusCode)
 	}
-	r = h.do("POST", "/settings/password", url.Values{"csrf": {token}, "current": {goodPassword}, "password": {newPW}, "confirm": {newPW}}, cookie(me))
+	r = h.do("POST", "/settings/password", url.Values{"csrf_token": {token}, "current": {goodPassword}, "password": {newPW}, "confirm": {newPW}}, cookie(me))
 	if r.StatusCode != 303 {
 		t.Fatalf("change = %d %s", r.StatusCode, bodyOf(t, r))
 	}
@@ -416,7 +444,7 @@ func TestChangePasswordAndRevoke(t *testing.T) {
 	}
 
 	second := sessionCookie(t, h.login(newPW, false))
-	r = h.do("POST", "/settings/sessions/revoke", url.Values{"csrf": {h.csrf(fresh)}}, cookie(fresh))
+	r = h.do("POST", "/settings/sessions/revoke", url.Values{"csrf_token": {h.csrf(fresh)}}, cookie(fresh))
 	if r.StatusCode != 303 {
 		t.Fatalf("revoke = %d", r.StatusCode)
 	}
@@ -597,5 +625,31 @@ func TestLogSafe(t *testing.T) {
 	}
 	if got := logSafe(strings.Repeat("x", 500)); len(got) > 210 {
 		t.Errorf("logSafe did not truncate: %d", len(got))
+	}
+}
+
+func TestPreSessionFormToken(t *testing.T) {
+	h := newHarness(t, Config{}, auth.Bootstrap{})
+	f := url.Values{"token": {h.token}, "password": {goodPassword}, "confirm": {goodPassword}}
+	if r := h.do("POST", "/setup", f); r.StatusCode != http.StatusForbidden {
+		t.Errorf("setup without form token = %d", r.StatusCode)
+	}
+	c, tok := h.formToken()
+	if !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteStrictMode || c.Path != "/" {
+		t.Errorf("form cookie flags = %+v", c)
+	}
+	bad := url.Values{"token": {h.token}, "password": {goodPassword}, "confirm": {goodPassword}, "csrf_token": {tok + "x"}}
+	if r := h.do("POST", "/setup", bad, cookie(c)); r.StatusCode != http.StatusForbidden {
+		t.Errorf("mismatched form token = %d", r.StatusCode)
+	}
+	f.Set("csrf_token", tok)
+	if r := h.do("POST", "/setup", f); r.StatusCode != http.StatusForbidden {
+		t.Errorf("form token without its cookie = %d", r.StatusCode)
+	}
+	if r := h.do("POST", "/setup", f, cookie(c)); r.StatusCode != http.StatusSeeOther {
+		t.Errorf("valid form token = %d", r.StatusCode)
+	}
+	if r := h.do("POST", "/login", url.Values{"password": {goodPassword}}); r.StatusCode != http.StatusForbidden {
+		t.Errorf("login without form token = %d", r.StatusCode)
 	}
 }

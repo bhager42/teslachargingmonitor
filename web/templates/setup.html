@@ -7,6 +7,7 @@ Copyright (C) 2026 Brad Hager and contributors
   <h1 id="setup-title">Set your password</h1>
   <p>Enter the one-time setup token printed in the container log (TrueNAS: Apps → tcmon → Logs), then choose a password of at least {{.MinLength}} characters. A few unrelated words make a strong, memorable password.</p>
   <form method="post" action="/setup">
+    <input type="hidden" name="csrf_token" value="{{.FormToken}}">
     <label for="token">Setup token</label>
     <input id="token" name="token" autocomplete="off" required spellcheck="false" maxlength="64">
     <label for="password">New password</label>
