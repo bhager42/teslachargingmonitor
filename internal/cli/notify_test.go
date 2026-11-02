@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/bhager42/teslachargingmonitor/internal/notify/smtpmock"
+	"github.com/bhager42/teslachargingmonitor/internal/web"
 )
 
 const appPassword = "abcd efgh ijkl mnop" // as Gmail displays it
@@ -208,6 +209,18 @@ func TestServeWebAndHealthcheck(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+	// The probe verifies the server's own certificate: a different one fails.
+	certPath := filepath.Join(dir, "tls", "cert.pem")
+	orig, _ := os.ReadFile(certPath) //nolint:gosec // test temp file
+	other, err := web.NewAutoCert(filepath.Join(t.TempDir(), "other"), nil, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(certPath, other.PEM(), 0o600)
+	if r := runWith(t, vars, "", "healthcheck"); r.code != 1 || !strings.Contains(r.stderr, "unhealthy") {
+		t.Errorf("healthcheck trusted a different certificate: %+v", r)
+	}
+	_ = os.WriteFile(certPath, orig, 0o600) //nolint:gosec // G703: test temp dir
 	cancel()
 	if code := <-done; code != 0 {
 		t.Errorf("serve exit %d:\n%s", code, out.String())

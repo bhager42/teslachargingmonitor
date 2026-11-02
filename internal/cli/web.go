@@ -12,10 +12,15 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -131,16 +136,15 @@ func runHealthcheck(ctx context.Context, args []string, env Env) int {
 		return fail(env, "bad TCMON_LISTEN: %v", err)
 	}
 	scheme := "https"
+	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12}
 	if cfg.TLSMode == web.TLSOff {
 		scheme = "http"
+	} else if tlsCfg, err = pinnedTLS(cfg, *dir); err != nil {
+		return fail(env, "unhealthy: %v", err)
 	}
 	client := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			Proxy: nil,
-			// Loopback only: the self-signed certificate is not verified here.
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}, //nolint:gosec // loopback liveness probe
-		},
+		Timeout:   5 * time.Second,
+		Transport: &http.Transport{Proxy: nil, TLSClientConfig: tlsCfg},
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, scheme+"://127.0.0.1:"+port+"/healthz", nil)
 	req.Host = "localhost"
@@ -153,4 +157,40 @@ func runHealthcheck(ctx context.Context, args []string, env Env) int {
 		return fail(env, "unhealthy: HTTP %d", resp.StatusCode)
 	}
 	return 0
+}
+
+// pinnedTLS trusts exactly the server's own certificate (the self-signed
+// one in <data-dir>/tls or TCMON_TLS_CERT_FILE) and verifies it against a
+// name it contains, so the loopback probe never disables verification.
+func pinnedTLS(cfg web.Config, dataDir string) (*tls.Config, error) {
+	path := filepath.Join(dataDir, "tls", "cert.pem")
+	if cfg.TLSMode == web.TLSFile {
+		path = cfg.TLSCertFile
+	}
+	raw, err := os.ReadFile(path) //nolint:gosec // operator-configured certificate path
+	if err != nil {
+		return nil, fmt.Errorf("reading server certificate: %w", err)
+	}
+	block, _ := pem.Decode(raw)
+	if block == nil || block.Type != "CERTIFICATE" {
+		return nil, fmt.Errorf("no PEM certificate in %s", path)
+	}
+	leaf, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	name := ""
+	switch {
+	case slices.Contains(leaf.DNSNames, "localhost"):
+		name = "localhost"
+	case len(leaf.DNSNames) > 0:
+		name = leaf.DNSNames[0]
+	case len(leaf.IPAddresses) > 0:
+		name = leaf.IPAddresses[0].String()
+	default:
+		return nil, fmt.Errorf("certificate %s has no DNS or IP names", path)
+	}
+	pool := x509.NewCertPool()
+	pool.AddCert(leaf)
+	return &tls.Config{RootCAs: pool, ServerName: name, MinVersion: tls.VersionTLS12}, nil
 }

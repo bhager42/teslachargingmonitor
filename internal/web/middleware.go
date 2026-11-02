@@ -143,6 +143,17 @@ func limitBody(next http.Handler) http.Handler {
 	})
 }
 
+// logSafe strips line breaks and truncates request-controlled text before
+// it is logged, so a crafted URL cannot forge log entries.
+func logSafe(s string) string {
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\r", "")
+	if len(s) > 200 {
+		s = s[:200] + "…"
+	}
+	return s
+}
+
 type statusWriter struct {
 	http.ResponseWriter
 	status int
@@ -165,14 +176,14 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 				if p == http.ErrAbortHandler { //nolint:errorlint // sentinel compared by identity, as net/http does
 					panic(p)
 				}
-				s.log.Error("panic serving request", "path", r.URL.Path, "panic", p)
+				s.log.Error("panic serving request", "path", logSafe(r.URL.Path), "panic", p)
 				http.Error(sw, "Internal server error", http.StatusInternalServerError)
 			}
 			level := slog.LevelDebug
 			if sw.status >= 400 {
 				level = slog.LevelInfo
 			}
-			s.log.Log(r.Context(), level, "http", "method", r.Method, "path", r.URL.Path, "status", sw.status,
+			s.log.Log(r.Context(), level, "http", "method", logSafe(r.Method), "path", logSafe(r.URL.Path), "status", sw.status,
 				"ms", time.Since(start).Milliseconds(), "ip", clientIP(r).String())
 		}()
 		next.ServeHTTP(sw, r)

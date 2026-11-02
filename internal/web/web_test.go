@@ -590,3 +590,12 @@ func TestConfigValidation(t *testing.T) {
 		t.Error("certificate created with TLS off")
 	}
 }
+
+func TestLogSafe(t *testing.T) {
+	if got := logSafe("/a\r\nFAKE log line"); strings.ContainsAny(got, "\r\n") {
+		t.Errorf("logSafe kept line breaks: %q", got)
+	}
+	if got := logSafe(strings.Repeat("x", 500)); len(got) > 210 {
+		t.Errorf("logSafe did not truncate: %d", len(got))
+	}
+}
