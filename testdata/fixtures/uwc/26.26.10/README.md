@@ -7,6 +7,6 @@ Serial number redacted. Device IP intentionally not recorded.
 |---|---|
 | `version.json` | captured |
 | `lifetime.json` | captured |
-| `vitals.json` (idle) | **missing** |
+| `vitals.json` (idle, no vehicle, ~16 s after boot) | captured |
 | `vitals.charging.json` | **missing** |
 | `wifi_status.json` | **missing** (redact SSID/MAC) |

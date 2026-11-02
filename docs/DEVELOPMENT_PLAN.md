@@ -81,7 +81,7 @@ adapter). Endpoints marked *unverified* below are hypotheses until fixtures exis
 |---|---|---|
 | `/api/1/version` | ✅ verified | Gen 3 fields present **plus** `git_branch` and three IEEE 1547 CRCs: `IEEE1547VfTripsCrc`, `IEEE1547RideThruMomentaryCessationCrc`, `IEEE1547CombinedComplianceCrc` (8-hex-digit strings). `firmware_version` is semver-like with build metadata (`26.26.10+g<git-sha>`) — parse major.minor.patch and keep the full string. |
 | `/api/1/lifetime` | ✅ verified | Field set identical to Gen 3. `avg_startup_temp` reported `0.0` (likely unused — don't alert on it). |
-| `/api/1/vitals` | ⏳ unverified | Need idle + charging captures. |
+| `/api/1/vitals` | ✅ idle verified / ⏳ charging | **Differs from Gen 3:** `relay_coil_v` is absent; the UWC reports **`relay_k1_v` and `relay_k2_v`** (two relays, 0.0 when open). Idle with no vehicle: `evse_state` = 1, `config_status` = 5, `evse_not_ready_reasons` = `[2,4,8]` (so not-ready reasons are **normal when unplugged**), `pilot_high_v`/`pilot_low_v` = 12.0 (no vehicle on the pilot), per-phase `voltageX_v` ≈ 0 while the contactor is open (only `grid_v` is meaningful then). `uptime_s` here is **time since boot** (16 s at capture) whereas `lifetime.uptime_s` is cumulative — don't confuse them. Need a capture **while charging**. |
 | `/api/1/wifi_status` | ⏳ unverified | Need capture. |
 
 Note: the device stores lifetime counters (e.g. `alert_count` was already 3 at
@@ -98,9 +98,10 @@ and only fire on increases afterwards — never on initial import.
 Commonly observed fields (treat as **unverified until Phase 0 captures real
 payloads**; the parser must tolerate unknown/missing fields):
 
-- **vitals:** `contactor_closed`, `vehicle_connected`, `session_s`, `grid_v`,
+- **vitals (idle verified on UWC):** `contactor_closed`, `vehicle_connected`, `session_s`, `grid_v`,
   `grid_hz`, `vehicle_current_a`, `currentA_a`, `currentB_a`, `currentC_a`,
-  `currentN_a`, `voltageA_v`, `voltageB_v`, `voltageC_v`, `relay_coil_v`,
+  `currentN_a`, `voltageA_v`, `voltageB_v`, `voltageC_v`,
+  `relay_k1_v` + `relay_k2_v` (UWC, verified) *or* `relay_coil_v` (Gen 3),
   `pcba_temp_c`, `handle_temp_c`, `mcu_temp_c`, `uptime_s`,
   `input_thermopile_uv`, `prox_v`, `pilot_high_v`, `pilot_low_v`,
   `session_energy_wh`, `config_status`, `evse_state`, `current_alerts[]`,
@@ -125,6 +126,11 @@ Implications for the design:
   "unknown field seen" in the diagnostics page.
 - `evse_state` and alert codes are numeric/opaque. Keep a mapping table in code
   (`internal/wallconnector/codes.go`) that can grow; show raw values when unknown.
+  Seed it only with **observed** meanings (UWC fw 26.26.10: `evse_state` 1 =
+  idle/unplugged; `config_status` 5 = normal configured state; not-ready
+  reasons 2, 4, 8 present while unplugged). Unconfirmed meanings are labelled
+  "unknown (code N)" rather than guessed. The UI should also learn the
+  "normal" code set per device and highlight codes never seen before.
 
 ---
 
@@ -205,7 +211,8 @@ device_info(device_id PK, firmware_version, git_branch, part_number,
         first_seen_at)
 readings_vitals(id, device_id, ts, contactor_closed, vehicle_connected,
         grid_v, grid_hz, vehicle_current_a, currentA_a, currentB_a, currentC_a,
-        currentN_a, voltageA_v, voltageB_v, voltageC_v, relay_coil_v,
+        currentN_a, voltageA_v, voltageB_v, voltageC_v, relay_k1_v,
+        relay_k2_v, relay_coil_v NULL /* Gen 3 only */,
         pcba_temp_c, handle_temp_c, mcu_temp_c, uptime_s, session_s,
         session_energy_wh, evse_state, config_status, alerts_json,
         not_ready_json)                                  -- index (device_id, ts)
@@ -288,13 +295,13 @@ A per-(rule, device) state machine provides:
 | `thermal_foldback` | `lifetime.thermal_foldbacks` increased since last reading | warning |
 | `device_alert_active` | `current_alerts` non-empty | warning (code-dependent) |
 | `device_alert_count_up` | `lifetime.alert_count` increased | warning |
-| `not_ready_reasons` | `evse_not_ready_reasons` non-empty while vehicle connected for > 2 min | warning |
-| `grid_voltage_out_of_range` | `grid_v` outside nominal ± 5 % (warn) / ± 10 % (crit) — nominal 240 V (US split-phase), 208 V, 230 V or 400 V configurable | warning / critical |
+| `not_ready_reasons` | `evse_not_ready_reasons` non-empty while **vehicle connected** for > 2 min (UWC reports `[2,4,8]` routinely when unplugged — never alert on that) | warning |
+| `grid_voltage_out_of_range` | `grid_v` (not per-phase `voltageX_v`, which read ≈ 0 when the contactor is open) outside nominal ± 5 % (warn) / ± 10 % (crit) — nominal 240 V (US split-phase), 208 V, 230 V or 400 V configurable | warning / critical |
 | `grid_freq_out_of_range` | `grid_hz` outside 59.5–60.5 (60 Hz) or 49.5–50.5 (50 Hz) | warning |
 | `phase_current_imbalance` | (3-phase only) max/min phase current deviation > 20 % while charging | info |
 | `overcurrent` | `vehicle_current_a` > configured max current × 1.05 for 30 s | critical |
 | `charging_stalled` | contactor closed & vehicle connected but current < 1 A for 10 min | info |
-| `relay_coil_voltage_abnormal` | `relay_coil_v` outside expected band (band TBD from Phase 0 data) | warning |
+| `relay_voltage_abnormal` | while `contactor_closed`: `relay_k1_v`/`relay_k2_v` (UWC) or `relay_coil_v` (Gen 3) outside expected band, or K1 and K2 disagree significantly; while open: either relay > ~1 V (possible stuck relay). Band TBD from charging capture. | warning |
 | `wifi_weak` | `wifi_rssi` < −75 dBm for 15 min | info |
 | `wifi_no_internet` | `internet == false` for 30 min (affects firmware updates) | info |
 | `unexpected_reboot` | uptime decreased | info |
@@ -805,6 +812,7 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 | D1 | Owner has **only a Universal Wall Connector** (UWC). | 2026-11-02 | UWC is the primary, tested target; Gen 3 is best-effort. Fixtures and simulator scenarios are UWC-first (§2, §13, Phase 0/1). |
 | D2 | The Wall Connector **IP address is configured in the Web GUI** (not env vars/config files). | 2026-11-02 | First-run onboarding + Settings device form with Test connection (§8); `WCMON_DEVICES` env seed removed (§11); poller hot-reloads on address change (§6). |
 | D3 | `/version` and `/lifetime` captured from the UWC (fw 26.26.10), serial redacted. | 2026-11-02 | §2 verification table; extra `/version` fields stored; new `grid_profile_changed` rule; counter rules baseline on first sighting. |
+| D4 | Idle `/vitals` captured from the UWC. | 2026-11-02 | UWC uses `relay_k1_v`/`relay_k2_v` instead of `relay_coil_v`; relay rule reworked; not-ready rule gated on vehicle connected; grid rule uses `grid_v`; boot vs lifetime uptime clarified. |
 
 ### 15.1 Still open
 
@@ -813,9 +821,10 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
    answered: UWC — D1.)*
 2. *(Answered — D2: entered in the Web GUI.)* Please still reserve the UWC's IP
    in your router's DHCP so it doesn't change.
-3. Remaining sample JSON from your UWC: `/version` and `/lifetime` are
-   captured (D3); still needed are **`/api/1/vitals` (once idle and once while
-   charging)** and **`/api/1/wifi_status`**. For reference, the full list: run
+3. Remaining sample JSON from your UWC: `/version`, `/lifetime` and idle
+   `/vitals` are captured (D3, D4); still needed are **`/api/1/vitals` while a
+   car is actively charging** (and ideally plugged-in-but-not-charging) and
+   **`/api/1/wifi_status`**. For reference, the full list: run
    `curl http://<ip>/api/1/vitals`, `/lifetime`, `/wifi_status`, `/version`
    (ideally once idle and once while charging) and share them — redact serial,
    MAC and SSID if you like.
