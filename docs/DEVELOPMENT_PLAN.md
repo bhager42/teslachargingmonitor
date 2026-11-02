@@ -1,13 +1,16 @@
 # Wall Connector Monitor — Development Plan
 
 > **Audience:** Claude Code (and human contributors).
-> **Status:** Draft v1 — 2026-11-02. Open questions are in [§15](#15-open-questions--inputs-needed-from-the-owner); fill them in before starting Phase 1.
+> **Status:** Draft v2 — 2026-11-02. Owner decisions so far are recorded in [§15.0](#150-resolved-decisions); remaining open questions follow it.
 > **License:** AGPL-3.0 (see §12).
 
-A small, self-hosted, containerized web app that polls the local HTTP API of one
-or more **Tesla Wall Connector (Gen 3)** and **Tesla Universal Wall Connector**
-units on a schedule, stores the readings, shows them in a dark-mode-first web
-dashboard, and sends alerts when metrics look concerning. The primary deployment
+A small, self-hosted, containerized web app that polls the local HTTP API of a
+**Tesla Universal Wall Connector** (the owner's only hardware — the primary and
+tested target) on a schedule, stores the readings, shows them in a dark-mode-first web
+dashboard, and sends alerts when metrics look concerning. The Gen 3 Wall
+Connector uses the same `/api/1/*` API family, so it should work too, but it is
+**best-effort/untested** unless a contributor supplies fixtures. The data model
+still supports multiple devices so a second unit can be added later. The primary deployment
 target is **TrueNAS SCALE 25.10 ("Goldeye") or later**, but it must run on any
 OCI/Docker host (Docker Engine, Podman, Compose, Portainer, Unraid, k8s).
 
@@ -63,10 +66,13 @@ Working name in this document: **`wcmon`** (rename freely — see §15).
 
 ## 2. The Wall Connector local API
 
-The Gen 3 Wall Connector exposes an **unauthenticated, read-only JSON API over
-plain HTTP on port 80** on the LAN once it is joined to Wi-Fi. The Universal Wall
-Connector is understood to expose the same `/api/1/*` endpoints — **this must be
-verified against the owner's hardware in Phase 0** (see §15).
+The **Universal Wall Connector (UWC)** — like the Gen 3 Wall Connector it
+descends from — exposes an **unauthenticated, read-only JSON API over plain HTTP
+on port 80** on the LAN once it is joined to Wi-Fi. The endpoint list and field
+names below come from the Gen 3 and are expected to match the UWC, but **they
+must be verified against the owner's UWC in Phase 0** (capture real payloads;
+the UWC may add, omit or rename fields, e.g. because of its built-in NACS/J1772
+adapter). Everything in this section is a hypothesis until fixtures exist.
 
 | Endpoint | Purpose | Suggested poll cadence |
 |---|---|---|
@@ -229,9 +235,14 @@ provided). Never return decrypted secrets to the browser — show "•••• 
 - Per-request timeout 5 s; response body limit 64 KiB; reject non-JSON.
 - Unreachable → exponential backoff (cap 5 min) and emit `device_unreachable`
   signal for the alert engine.
-- Device URL validation: only `http://` or `https://` to a **private/LAN
-  address or hostname** by default (SSRF guard; allow override flag for odd
-  networks). No redirects followed.
+- The device address comes **only from the Web GUI** (see §8 "Device
+  management"); changes take effect immediately — the poller for that device is
+  restarted without restarting the container.
+- Device address validation: IPv4, IPv6 or hostname (optional `:port`),
+  normalised to `http://<host>[:port]`; must resolve to a **private/LAN
+  address** by default (SSRF guard; an "allow non-private address" checkbox
+  exists for odd networks). No redirects followed. Resolved IP is re-checked at
+  connect time (DNS-rebinding safe).
 - Detect reboot (uptime decreased) and firmware change (version differs).
 
 ### Alert rule semantics
@@ -322,10 +333,37 @@ available" with a graceful fallback) as of 2026.
    (collapsible), CSV export.
 4. **Alerts** — active alerts, history, ack/snooze, rule editor, rule preview.
 5. **Notifications** — channels CRUD, test-send, delivery log.
-6. **Settings** — devices (add/edit/test connection), poll intervals, retention,
+6. **Settings** — devices (see "Device management" below), poll intervals, retention,
    units (°C/°F), time zone, theme, change password, sign out all sessions,
    backup download, about/licence/source link (AGPL §13).
 7. **Diagnostics** — poll latency/errors, unknown fields seen, DB size, version.
+
+### Device management (Wall Connector address is set in the GUI)
+The Wall Connector's IP/hostname is **configured only in the Web GUI** and stored
+in the `devices` table — there is no env var or config file for it.
+
+- **First-run onboarding:** after the initial password is set, a short wizard
+  asks for the UWC's IP address or hostname (with a hint: "find it in your
+  router's DHCP list or the Tesla One app; reserve it in your router so it
+  doesn't change"). The dashboard shows an "Add your Wall Connector" empty
+  state until one is saved.
+- **Test connection** button (before saving and any time later): calls
+  `/api/1/version` and `/api/1/vitals` with a 5 s timeout and shows the result —
+  reachable / not reachable / not a Wall Connector (unexpected response), plus
+  detected part number, firmware and a masked serial — so the owner can confirm
+  it's the right device before saving.
+- **Edit address** at any time (e.g. after a DHCP change). The device keeps its
+  history because identity is tied to the device record and its serial number;
+  if the serial reported at the new address differs from the stored one, warn
+  ("this looks like a different Wall Connector") and ask to confirm.
+- Per-device fields editable in the same form: display name, address, enabled,
+  poll interval (and charging-time interval), nominal voltage/frequency,
+  configured max current / breaker size (used by the voltage and overcurrent
+  rules).
+- `device_unreachable` alert text links straight to the edit form, since a
+  changed IP is the most likely cause.
+- All device changes are audit-logged and CSRF-protected like every other
+  settings change.
 
 ### Platform features to use
 - HTML: `<dialog>` for modals, **Popover API** for menus/toasts, `<details>`,
@@ -519,7 +557,6 @@ Static assets are content-hashed and served `immutable` with SRI hashes.
 | `WCMON_PASSWORD_HASH_FILE` / `WCMON_PASSWORD_FILE` | — | §9 |
 | `WCMON_SECRET_KEY_FILE` | `/data/secret.key` | |
 | `WCMON_TRUSTED_PROXIES` | — | CIDRs |
-| `WCMON_DEVICES` | — | Optional seed: `garage=http://192.168.1.50` (UI is source of truth after first start) |
 | `WCMON_LOG_LEVEL` | `info` | |
 | `TZ` | `UTC` | Display & quiet hours |
 
@@ -627,7 +664,8 @@ Deliverables:
 Coverage target ≥ 80 % for `internal/alerts`, `internal/auth`,
 `internal/wallconnector`; ≥ 70 % overall.
 
-Golden fixtures: `testdata/fixtures/<device-model>/<firmware>/{vitals,lifetime,wifi_status,version}.json`
+Golden fixtures: `testdata/fixtures/uwc/<firmware>/{vitals,lifetime,wifi_status,version}.json`
+(plus `gen3/` if a contributor provides them)
 captured from real hardware in Phase 0 (serials/MACs/SSIDs redacted).
 
 ---
@@ -647,7 +685,8 @@ until the previous phase's acceptance criteria pass.
   ADRs in `docs/adr/` (0001 language, 0002 SQLite, 0003 no-build frontend).
 - CI skeleton: lint, test, govulncheck, CodeQL, Scorecard, licence check.
 
-**Accept:** fixtures committed for every hardware model the owner has; CI green
+**Accept:** UWC fixtures (idle + charging) committed and the field list in §2
+updated to match reality; CI green
 on an empty `main` package; licence headers enforced by a CI check.
 
 ### Phase 1 — Wall Connector client + simulator
@@ -741,11 +780,21 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 
 ## 15. Open questions / inputs needed from the owner
 
+### 15.0 Resolved decisions
+| # | Decision | Date | Effect on plan |
+|---|---|---|---|
+| D1 | Owner has **only a Universal Wall Connector** (UWC). | 2026-11-02 | UWC is the primary, tested target; Gen 3 is best-effort. Fixtures and simulator scenarios are UWC-first (§2, §13, Phase 0/1). |
+| D2 | The Wall Connector **IP address is configured in the Web GUI** (not env vars/config files). | 2026-11-02 | First-run onboarding + Settings device form with Test connection (§8); `WCMON_DEVICES` env seed removed (§11); poller hot-reloads on address change (§6). |
+
+### 15.1 Still open
+
 **Hardware & network**
-1. Which units do you have — Gen 3 Wall Connector, Universal Wall Connector, or
-   both? How many? Are any in a **power-sharing** group?
-2. Their LAN IPs/hostnames (reserve them via DHCP so they don't change).
-3. Sample JSON from each unit: run
+1. How many UWCs (just one?) and is it in a **power-sharing** group? *(Model
+   answered: UWC — D1.)*
+2. *(Answered — D2: entered in the Web GUI.)* Please still reserve the UWC's IP
+   in your router's DHCP so it doesn't change.
+3. Sample JSON from your UWC — the most important remaining input, since the
+   UWC API is unverified: run
    `curl http://<ip>/api/1/vitals`, `/lifetime`, `/wifi_status`, `/version`
    (ideally once idle and once while charging) and share them — redact serial,
    MAC and SSID if you like.
