@@ -30,7 +30,9 @@ sending email via Gmail. Finalised in Phase 8.
 | T2 | Tampered container image | Signed images, SBOM, provenance, digest pinning (§10, §11) |
 | R1 | Settings changed without trace | Audit log of auth and settings changes (§10) |
 | I1 | XSS via device strings (SSID, codes) | `html/template` escaping, strict CSP, Trusted Types (§8, §10) |
-| I2 | Secrets in DB/backups | Channel credentials encrypted with a separate key file, 0600 (§5) |
+| I2 | Secrets in DB/backups | Channel credentials encrypted (AES-256-GCM) with a separate `secret.key` (0600); `Secret` type redacted in logs/JSON; passwords never on the command line (Phase 4) |
+| I4 | Alerts or credentials sent in clear over SMTP | STARTTLS required (plaintext refused) or implicit TLS; certificate verification always on (Phase 4) |
+| T3 | Header injection via device/rule text into email | Addresses parsed with `net/mail`, subject flattened and RFC 2047-encoded, HTML template auto-escaping (Phase 4) |
 | I3 | Identifiers committed to the public repo | Redacting capture script + fixture test (Phase 0) |
 | D1 | Poll storms overload the device | Min interval, single in-flight request, backoff (§6) |
 | D2 | Email flood | Batching per poll, cooldowns, repeat limits (§6, §7) |

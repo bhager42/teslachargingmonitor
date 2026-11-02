@@ -4,10 +4,10 @@ Self-hosted monitoring and email alerting for the **Tesla Universal Wall
 Connector**, packaged as a small, hardened container for **TrueNAS SCALE
 25.10+** or any Docker host.
 
-> **Status: early development (Phase 3 complete — storage, polling and
-> alert engine).** `tcmon serve` polls, stores readings and evaluates alert
-> rules headlessly; alerts are logged until email delivery (Phase 4) and the
-> web UI (Phases 5–6) land. See the
+> **Status: early development (Phase 4 complete — polling, storage, alert
+> engine and email).** `tcmon serve` polls, stores readings, evaluates alert
+> rules and emails alerts. The web UI (Phases 5–6) and the container image
+> (Phase 7) are next; until then use the CLI below. See the
 > [development plan](docs/DEVELOPMENT_PLAN.md) for scope and roadmap.
 
 ## What it will do
@@ -56,6 +56,17 @@ make sim SCENARIO=charging SPEED=60 &
 go run ./cmd/tcmon device add -data-dir ./data -address 127.0.0.1:8099 -breaker 60
 go run ./cmd/tcmon serve -data-dir ./data
 ```
+
+Email alerts via Gmail (create an app password at
+<https://myaccount.google.com/apppasswords> — it needs 2-Step Verification):
+
+```bash
+go run ./cmd/tcmon notify add-email -data-dir ./data -username you@gmail.com -to you@gmail.com -password-stdin
+```
+
+The password is read from standard input (or `-password-file`), encrypted
+with the key in `./data/secret.key`, and a test email is sent. Back up
+`secret.key` together with the database.
 
 Fuzzing: `make fuzz FUZZTIME=60s`. Soak test: `make soak`.
 

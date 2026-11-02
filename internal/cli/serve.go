@@ -18,7 +18,9 @@ import (
 
 	"github.com/bhager42/teslachargingmonitor/internal/alerts"
 	"github.com/bhager42/teslachargingmonitor/internal/buildinfo"
+	"github.com/bhager42/teslachargingmonitor/internal/notify"
 	"github.com/bhager42/teslachargingmonitor/internal/poller"
+	"github.com/bhager42/teslachargingmonitor/internal/secrets"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
 )
 
@@ -75,11 +77,36 @@ func runServe(ctx context.Context, args []string, env Env) int {
 	defer unsubUpdates()
 	notifications, unsubNotes := engine.Subscribe(32)
 	defer unsubNotes()
+	toDeliver, unsubDeliver := engine.Subscribe(32)
+	defer unsubDeliver()
+
+	keyPath := secretKeyPath(env, *dir)
+	key, err := secrets.LoadOrCreateKey(keyPath, func(m string) { log.Warn(m) })
+	if err != nil {
+		log.Error("loading credential encryption key", "path", keyPath, "err", err)
+		return 1
+	}
+	box, err := secrets.NewBox(key)
+	if err != nil {
+		log.Error("credential encryption key", "err", err)
+		return 1
+	}
+	roots, err := smtpRoots(env)
+	if err != nil {
+		log.Error("SMTP CA bundle", "err", err)
+		return 1
+	}
+	dispatcher := notify.New(st, box, notify.Config{Logger: log, RootCAs: roots})
+	if chs, err := dispatcher.Channels(ctx); err == nil && len(chs) == 0 {
+		log.Warn("no notification channel configured; alerts are only logged. Add Gmail with " +
+			"`tcmon notify add-email -username you@gmail.com -to you@gmail.com -password-stdin`")
+	}
 
 	var wg sync.WaitGroup
 	wg.Go(func() { runMaintenance(ctx, st, log, time.Now) })
 	wg.Go(func() { engine.Run(ctx, updates) })
 	wg.Go(func() { logNotifications(ctx, log, notifications) })
+	wg.Go(func() { dispatcher.Run(ctx, toDeliver) })
 	_ = m.Run(ctx)
 	wg.Wait()
 	log.Info("stopped")
@@ -123,8 +150,8 @@ func runMaintenance(ctx context.Context, st *store.Store, log *slog.Logger, now 
 	}
 }
 
-// logNotifications records alert notifications until delivery channels
-// (email, Phase 4) exist.
+// logNotifications records every alert notification in the log (delivery
+// itself is done by the notify.Dispatcher).
 func logNotifications(ctx context.Context, log *slog.Logger, ch <-chan []alerts.Notification) {
 	for {
 		select {

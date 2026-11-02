@@ -972,6 +972,35 @@ repeat, resolve, snooze, quiet hours; simulator "overheat" scenario fires and
 resolves exactly once.
 
 ### Phase 4 — Notifications
+
+> **Status (2026-11-02): implemented.** `internal/secrets` (AES-256-GCM
+> with a 32-byte key in `secret.key` — `TCMON_SECRET_KEY_FILE`, created 0600
+> on first start, warns if group/world-readable; `Secret` type redacted in
+> fmt, slog and JSON). `internal/notify`: email via the Go standard library's
+> `net/smtp` (no new dependency) with the Gmail preset (smtp.gmail.com:587
+> STARTTLS, app password), implicit TLS on 465, TLS ≥ 1.2 with certificate
+> verification always on (optional private CA via `TCMON_SMTP_CA_FILE`),
+> **plaintext refused** if STARTTLS is not offered. Errors are classified
+> permanent vs transient with plain-English hints (Gmail 534 5.7.9 →
+> app-password instructions, 535, rejected recipient, certificate, DNS,
+> timeout). Messages: one `multipart/alternative` email per poll batch per
+> channel (text + escaped HTML templates, dark-mode friendly,
+> `Auto-Submitted`, header-injection safe, trademark notice in the footer).
+> Persistent queue `notify_deliveries` with backoff 1 m / 5 m / 15 m / 1 h
+> (repeating) and give-up after 24 h; permanent errors fail immediately;
+> per-channel minimum severity and quiet hours (non-critical notices during
+> quiet hours are **dropped from email but kept in the alert history**, not
+> deferred); channel health (last success, consecutive failures, last
+> error) for the future UI banner. Interim CLI: `tcmon notify add-email|
+> update|list|test|remove|log` (password only via `-password-stdin` or
+> `-password-file`, never argv). `tcmon serve` delivers alerts by email.
+> Tests: mock SMTP server (`internal/notify/smtpmock`) covering STARTTLS,
+> implicit TLS, wrong password, Gmail app-password error, rejected
+> recipient, plaintext refusal, untrusted certificate, transient 421 with
+> retry; the password is checked absent from the DB file, WAL, logs and
+> API structs; a simulator alert arrives as exactly one batched email, and
+> `tcmon serve` emails an overcurrent alert end to end. Other channels
+> (ntfy, webhook, …) remain future work behind the same queue.
 - Delivery queue, retries, `Channel` interface, **email (SMTP) channel
   complete** (§7), templates, batching, test-send, encrypted channel secrets.
   Other channels are follow-up PRs.

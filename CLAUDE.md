@@ -34,6 +34,10 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
   `Report` (fields in `Report.Invalid` must not drive alerts as if valid).
 - Alert rules live in `internal/alerts/rules.go`; state transitions only in `step()`
   (engine.go) — keep it pure so table tests and `Preview` stay valid.
+- Credentials: store only via `secrets.Box` (AES-GCM) and pass them around as
+  `secrets.Secret`; never accept passwords as CLI arguments or log/return them.
+- Never send email without TLS (STARTTLS required or implicit TLS); tests use
+  `internal/notify/smtpmock`.
 - Schema changes go in a new `internal/store/migrations/NNNN_*.sql` file (numbered
   consecutively); never edit an applied migration.
 - Only add status-code meanings to `internal/wallconnector/codes.go` that were

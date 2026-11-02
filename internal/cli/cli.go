@@ -24,12 +24,15 @@ import (
 // Env is the process environment, injectable for tests.
 type Env struct {
 	Getenv func(string) string
+	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
 }
 
 // OSEnv returns the real process environment.
-func OSEnv() Env { return Env{Getenv: os.Getenv, Stdout: os.Stdout, Stderr: os.Stderr} }
+func OSEnv() Env {
+	return Env{Getenv: os.Getenv, Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr}
+}
 
 // DefaultDataDir is where the container stores its state.
 const DefaultDataDir = "/data"
@@ -54,6 +57,8 @@ func Run(ctx context.Context, args []string, env Env) int {
 		return runDevice(ctx, rest, env)
 	case "alerts":
 		return runAlerts(ctx, rest, env)
+	case "notify":
+		return runNotify(ctx, rest, env)
 	case "backup":
 		return runBackup(ctx, rest, env)
 	case "migrate":
@@ -74,13 +79,16 @@ Commands:
             — interim CLI until the web UI exists; the web UI is the
               primary way to configure the device address
   alerts    Show alert rules and alert history (read-only)
+  notify    Manage email notifications (add-email, update, list, test, remove, log)
   backup    Write a consistent copy of the database
   migrate   Apply database migrations and print the schema version
   version   Print version, license and source-code information
   help      Show this help
 
 Every command that touches data accepts -data-dir (default $TCMON_DATA_DIR
-or /data).
+or /data). Notification credentials are encrypted with the key in
+$TCMON_SECRET_KEY_FILE (default <data-dir>/secret.key) — back it up together
+with the database.
 `)
 }
 
@@ -140,4 +148,12 @@ func runMigrate(ctx context.Context, args []string, env Env) int {
 	}
 	_, _ = fmt.Fprintf(env.Stdout, "Database schema version %d\n", v)
 	return 0
+}
+
+// secretKeyPath returns the encryption key location.
+func secretKeyPath(env Env, dataDir string) string {
+	if p := env.Getenv("TCMON_SECRET_KEY_FILE"); p != "" {
+		return p
+	}
+	return filepath.Join(dataDir, "secret.key")
 }

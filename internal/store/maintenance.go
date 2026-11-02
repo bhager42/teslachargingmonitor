@@ -95,6 +95,7 @@ func (s *Store) Prune(ctx context.Context, now time.Time, r Retention) (PruneRes
 		{"device_events", "ts", r.EventsDays},
 		{"alert_events", "ts", r.EventsDays},
 		{"poll_log", "ts", r.PollLogDays},
+		{"notify_deliveries", "created_at", r.PollLogDays},
 	}
 	for _, t := range targets {
 		if t.days == KeepForever {
@@ -116,7 +117,11 @@ func (s *Store) Prune(ctx context.Context, now time.Time, r Retention) (PruneRes
 func (s *Store) deleteOlder(ctx context.Context, table, col string, cutoff int64) (int64, error) {
 	// table and col come from the constant list in Prune, never from input.
 	q := `DELETE FROM ` + table + ` WHERE rowid IN (SELECT rowid FROM ` + table + ` WHERE ` + col + ` < ? LIMIT ?)` //nolint:gosec // G202: constants
-	if table == "rollups_1h" {                                                                                      // WITHOUT ROWID: delete by primary key
+	if table == "notify_deliveries" {                                                                               // never drop messages still waiting to be sent
+		q = `DELETE FROM notify_deliveries WHERE id IN
+			(SELECT id FROM notify_deliveries WHERE created_at < ? AND status != 'pending' LIMIT ?)`
+	}
+	if table == "rollups_1h" { // WITHOUT ROWID: delete by primary key
 		q = `DELETE FROM rollups_1h WHERE (device_id, bucket_ts, metric) IN
 			(SELECT device_id, bucket_ts, metric FROM rollups_1h WHERE bucket_ts < ? LIMIT ?)`
 	}
@@ -192,7 +197,7 @@ type Stats struct {
 // StatsTables are the tables counted by Stats.
 var StatsTables = []string{
 	"devices", "readings_vitals", "readings_lifetime", "readings_wifi", "raw_payloads",
-	"rollups_1h", "device_events", "poll_log", "alert_events",
+	"rollups_1h", "device_events", "poll_log", "alert_events", "notify_channels", "notify_deliveries",
 }
 
 // Stats returns database size and row counts.

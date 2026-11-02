@@ -54,8 +54,8 @@ type Retention struct {
 	ReadingsDays    int `json:"readings_days"`
 	RawPayloadsDays int `json:"raw_payloads_days"`
 	RollupsDays     int `json:"rollups_days"`
-	EventsDays      int `json:"events_days"` // device events and alert history
-	PollLogDays     int `json:"poll_log_days"`
+	EventsDays      int `json:"events_days"`   // device events and alert history
+	PollLogDays     int `json:"poll_log_days"` // poll log and notification delivery log
 }
 
 // DefaultRetention is used until the owner changes it.
