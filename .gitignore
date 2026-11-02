@@ -12,6 +12,8 @@ coverage.out
 *.key
 *.pem
 *password*.txt
+# ...but the embedded common-password blocklist is source, not a secret
+!/internal/auth/data/common-passwords.txt
 .env
 .env.*
 
