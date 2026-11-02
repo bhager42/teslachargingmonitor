@@ -38,6 +38,9 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
   `secrets.Secret`; never accept passwords as CLI arguments or log/return them.
 - Never send email without TLS (STARTTLS required or implicit TLS); tests use
   `internal/notify/smtpmock`.
+- Web: every page must work under the strict CSP (no inline script/style,
+  Trusted Types); state-changing routes go through `authed` (session + CSRF);
+  show only `auth.UserMessage` text to users. Templates live in `web/templates`.
 - Schema changes go in a new `internal/store/migrations/NNNN_*.sql` file (numbered
   consecutively); never edit an applied migration.
 - Only add status-code meanings to `internal/wallconnector/codes.go` that were

@@ -11,9 +11,11 @@ package cli
 import (
 	"bytes"
 	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -120,7 +122,7 @@ func TestServeEmailsAlerts(t *testing.T) {
 	defer srv.Close()
 	ca := filepath.Join(dir, "ca.pem")
 	_ = os.WriteFile(ca, srv.CAPEM, 0o600)
-	vars := map[string]string{"TCMON_DATA_DIR": dir, "TCMON_SMTP_CA_FILE": ca}
+	vars := map[string]string{"TCMON_DATA_DIR": dir, "TCMON_SMTP_CA_FILE": ca, "TCMON_LISTEN": "127.0.0.1:0"}
 	port := strings.TrimPrefix(srv.Addr, "127.0.0.1:")
 	if r := runWith(t, vars, appPassword, "notify", "add-email", "-username", "owner@gmail.com", "-to", "me@example.com",
 		"-host", "localhost", "-port", port, "-password-stdin", "-skip-test"); r.code != 0 {
@@ -152,3 +154,91 @@ func TestServeEmailsAlerts(t *testing.T) {
 		t.Errorf("serve = %d\nemail: %s\nlog: %s", r.code, msg, r.stdout)
 	}
 }
+
+func TestPasswordCommands(t *testing.T) {
+	dir := t.TempDir()
+	vars := map[string]string{"TCMON_DATA_DIR": dir}
+	r := runWith(t, vars, "purple otter kayak sunrise\n", "hash-password")
+	if r.code != 0 || !strings.HasPrefix(r.stdout, "$argon2id$v=19$m=65536,t=3,p=1$") {
+		t.Fatalf("hash-password: %+v", r)
+	}
+	if r := runWith(t, vars, "short\n", "hash-password"); r.code != 1 || !strings.Contains(r.stderr, "at least 12") {
+		t.Errorf("weak hash-password: %+v", r)
+	}
+	if r := runWith(t, vars, "", "hash-password", "extra"); r.code != 2 {
+		t.Errorf("args: %+v", r)
+	}
+	r = runWith(t, vars, "granite lantern meadow 42\n", "reset-password")
+	if r.code != 0 || !strings.Contains(r.stdout, "signed out") {
+		t.Fatalf("reset-password: %+v", r)
+	}
+	if r := runWith(t, vars, "password1234\n", "reset-password"); r.code != 1 || !strings.Contains(r.stderr, "commonly used") {
+		t.Errorf("weak reset: %+v", r)
+	}
+	envVars := map[string]string{"TCMON_DATA_DIR": dir, "TCMON_PASSWORD_FILE": "/run/secrets/x"} //nolint:gosec // G101: a path, not a credential
+	if r := runWith(t, envVars, "granite lantern meadow 43\n", "reset-password"); !strings.Contains(r.stdout, "will replace this password") {
+		t.Errorf("env warning missing: %+v", r)
+	}
+}
+
+func TestServeWebAndHealthcheck(t *testing.T) {
+	dir := t.TempDir()
+	l, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	_ = l.Close()
+	vars := map[string]string{"TCMON_DATA_DIR": dir, "TCMON_LISTEN": addr}
+
+	if r := runWith(t, vars, "", "healthcheck"); r.code != 1 || !strings.Contains(r.stderr, "unhealthy") {
+		t.Errorf("healthcheck with no server: %+v", r)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	var out syncBuffer
+	done := make(chan int, 1)
+	go func() {
+		done <- Run(ctx, []string{"serve"}, Env{Getenv: func(k string) string { return vars[k] }, Stdout: &out, Stderr: &out})
+	}()
+	deadline := time.Now().Add(10 * time.Second)
+	for runWith(t, vars, "", "healthcheck").code != 0 {
+		if time.Now().After(deadline) {
+			cancel()
+			t.Fatalf("server never became healthy:\n%s", out.String())
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	cancel()
+	if code := <-done; code != 0 {
+		t.Errorf("serve exit %d:\n%s", code, out.String())
+	}
+	logs := out.String()
+	for _, want := range []string{"FIRST-RUN SETUP", `"setup_token":"`, `"msg":"HTTPS certificate"`, `"sha256":"`, "web UI listening"} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("serve log missing %q", want)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tls", "cert.pem")); err != nil {
+		t.Errorf("certificate not created: %v", err)
+	}
+	if r := runWith(t, map[string]string{"TCMON_DATA_DIR": dir, "TCMON_PASSWORD": "x", "TCMON_LISTEN": addr}, "", "serve"); r.code != 1 ||
+		!strings.Contains(r.stdout, "docker inspect") {
+		t.Errorf("TCMON_PASSWORD accepted: %+v", r)
+	}
+	if r := runWith(t, map[string]string{"TCMON_DATA_DIR": dir, "TCMON_TLS": "off", "TCMON_LISTEN": addr}, "", "serve"); r.code != 1 ||
+		!strings.Contains(r.stdout, "unencrypted") {
+		t.Errorf("plain HTTP without opt-in accepted: %+v", r)
+	}
+}
+
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+func (s *syncBuffer) String() string { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }

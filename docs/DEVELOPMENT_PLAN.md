@@ -1011,6 +1011,27 @@ an alert raised by the simulator arrives as one batched email; secrets never app
 logs, API responses, or DB plaintext (test asserts).
 
 ### Phase 5 — Web server, auth, security middleware
+
+> **Status (2026-11-02): implemented.** `internal/auth`: Argon2id
+> (m=64 MiB, t=3, p=1, PHC strings, transparent rehash; `golang.org/x/crypto`
+> v0.58.0), NFKC password policy (12–128 chars, 46k common passwords from the
+> NCSC list via SecLists (MIT), context words), one-time setup token (log,
+> 30 min, single use), `TCMON_PASSWORD_FILE` / `TCMON_PASSWORD_HASH(_FILE)`
+> (env-managed password; **plaintext `TCMON_PASSWORD` is refused** —
+> assumption for §15 Q13), sessions (256-bit IDs, SHA-256 at rest, 12 h idle
+> / 7 d absolute / 30 d remember-me, rotation, revoke others), per-IP and
+> global throttling, audit log (migration 0004, `AuditDays` retention 1 y).
+> `internal/web`: TLS auto (self-signed ECDSA P-256, 0600, 825 d, renewed
+> 30 d before expiry or when `TCMON_PUBLIC_HOSTNAMES` change, fingerprint in
+> log and About page, downloadable cert) / file / off (proxy or explicit
+> opt-in with banner), TLS 1.3 minimum, LAN-only client allowlist, Host
+> check against DNS rebinding, all §10 headers, `http.CrossOriginProtection`
+> + per-session CSRF tokens, 64 KiB bodies, server timeouts. Pages: setup,
+> login, minimal dashboard (devices, recent alerts), Security (change
+> password, sign out others, audit), About (version, AGPL source, cert
+> fingerprint). Assets embedded from `web/` (package `webui`), content-hashed.
+> CLI: `healthcheck`, `reset-password`, `hash-password`. ZAP baseline scan
+> in CI; ASVS checklist in `docs/security/asvs.md`.
 - HTTPS (auto/file/off), security headers, CSRF, sessions, login throttling,
   setup-token flow, `reset-password`/`hash-password` CLI, audit log.
 
@@ -1123,9 +1144,9 @@ records the assumption in the PR that relies on it.
 **Access & security**
 11. *(Answered — D12: LAN only.)*
 12. *(Answered — D12/D16: self-signed HTTPS, one-time browser warning.)*
-13. Password provisioning preference: first-run setup token (default), Docker
-    secret file, or pre-hashed value? Should a plaintext env var be refused
-    entirely?
+13. *(Default applied in Phase 5: all three supported — setup token,
+    `TCMON_PASSWORD_FILE`, `TCMON_PASSWORD_HASH`; plaintext `TCMON_PASSWORD`
+    is refused.)* Tell us if you want a different default.
 14. Session lifetime preferences (default 12 h idle / 7 d absolute)?
 
 **Data**

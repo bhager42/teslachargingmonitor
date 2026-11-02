@@ -1,0 +1,43 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-or-later
+Copyright (C) 2026 Brad Hager and contributors
+*/ -}}
+{{define "content"}}
+<h1>Security</h1>
+<section class="card" aria-labelledby="pw-title">
+  <h2 id="pw-title">Change password</h2>
+  {{- if .EnvManaged}}
+  <p>The password is set by <code>TCMON_PASSWORD_FILE</code> or <code>TCMON_PASSWORD_HASH</code>. Change it there and restart the app.</p>
+  {{- else}}
+  <form method="post" action="/settings/password">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="text" name="username" value="tcmon" autocomplete="username" hidden>
+    <label for="current">Current password</label>
+    <input id="current" name="current" type="password" autocomplete="current-password" required maxlength="1024">
+    <label for="password">New password (at least {{.MinLength}} characters)</label>
+    <input id="password" name="password" type="password" autocomplete="new-password" required minlength="{{.MinLength}}" maxlength="1024">
+    <label for="confirm">Repeat new password</label>
+    <input id="confirm" name="confirm" type="password" autocomplete="new-password" required minlength="{{.MinLength}}" maxlength="1024">
+    <button type="submit">Change password</button>
+  </form>
+  <p class="hint">Changing the password signs out every other device.</p>
+  {{- end}}
+</section>
+<section class="card" aria-labelledby="sessions-title">
+  <h2 id="sessions-title">Signed-in devices</h2>
+  <p>{{.Sessions}} active session(s), including this one.</p>
+  <form method="post" action="/settings/sessions/revoke">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <button type="submit" class="secondary">Sign out all other devices</button>
+  </form>
+</section>
+<section class="card" aria-labelledby="audit-title">
+  <h2 id="audit-title">Recent security events</h2>
+  <table>
+    <thead><tr><th scope="col">Time</th><th scope="col">Event</th><th scope="col">From</th></tr></thead>
+    <tbody>
+    {{- range .Audit}}<tr><td>{{.When}}</td><td>{{.Action}}</td><td>{{.IP}}</td></tr>{{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}

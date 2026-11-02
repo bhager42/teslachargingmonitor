@@ -31,8 +31,11 @@ func runCLI(t *testing.T, ctx context.Context, dataDir string, args ...string) r
 	var out, errOut bytes.Buffer
 	env := Env{
 		Getenv: func(k string) string {
-			if k == "TCMON_DATA_DIR" {
+			switch k {
+			case "TCMON_DATA_DIR":
 				return dataDir
+			case "TCMON_LISTEN":
+				return "127.0.0.1:0"
 			}
 			return ""
 		},
@@ -66,7 +69,7 @@ func TestBasicCommands(t *testing.T) {
 		{[]string{"help"}, 0, "Usage: tcmon", ""},
 		{nil, 2, "", "Usage: tcmon"},
 		{[]string{"bogus"}, 2, "", `unknown command "bogus"`},
-		{[]string{"migrate"}, 0, "schema version 3", ""},
+		{[]string{"migrate"}, 0, "schema version 4", ""},
 		{[]string{"device"}, 2, "", "tcmon device add"},
 		{[]string{"device", "list"}, 0, "No devices", ""},
 		{[]string{"device", "add"}, 2, "", "-address is required"},

@@ -63,6 +63,12 @@ func Run(ctx context.Context, args []string, env Env) int {
 		return runBackup(ctx, rest, env)
 	case "migrate":
 		return runMigrate(ctx, rest, env)
+	case "healthcheck":
+		return runHealthcheck(ctx, rest, env)
+	case "reset-password":
+		return runResetPassword(ctx, rest, env)
+	case "hash-password":
+		return runHashPassword(ctx, rest, env)
 	default:
 		_, _ = fmt.Fprintf(env.Stderr, "tcmon: unknown command %q\n\n", cmd)
 		usage(env.Stderr)
@@ -74,7 +80,10 @@ func usage(w io.Writer) {
 	_, _ = fmt.Fprint(w, `Usage: tcmon <command> [flags]
 
 Commands:
-  serve     Poll the configured Wall Connector(s) and run maintenance
+  serve     Run the web UI (HTTPS, default :8443), polling, alerts and email
+  healthcheck     Exit 0 if the local web server answers (container HEALTHCHECK)
+  reset-password  Set a new web UI password (read from stdin); signs out all sessions
+  hash-password   Print an Argon2id hash for TCMON_PASSWORD_HASH (password from stdin)
   device    Manage Wall Connectors (add, list, update, remove, test)
             — interim CLI until the web UI exists; the web UI is the
               primary way to configure the device address

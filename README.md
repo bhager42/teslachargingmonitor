@@ -4,10 +4,11 @@ Self-hosted monitoring and email alerting for the **Tesla Universal Wall
 Connector**, packaged as a small, hardened container for **TrueNAS SCALE
 25.10+** or any Docker host.
 
-> **Status: early development (Phase 4 complete — polling, storage, alert
-> engine and email).** `tcmon serve` polls, stores readings, evaluates alert
-> rules and emails alerts. The web UI (Phases 5–6) and the container image
-> (Phase 7) are next; until then use the CLI below. See the
+> **Status: early development (Phase 5 complete — polling, storage, alerts,
+> email and the secure web server).** `tcmon serve` runs everything and
+> serves HTTPS on port 8443 with first-run setup, sign-in and a minimal
+> dashboard. The full dashboard (Phase 6) and the container image (Phase 7)
+> are next. See the
 > [development plan](docs/DEVELOPMENT_PLAN.md) for scope and roadmap.
 
 ## What it will do
@@ -48,6 +49,11 @@ make sim SCENARIO=charging SPEED=60     # 1 simulated minute per second
 go run ./cmd/wcsim -list                 # all scenarios
 curl -d name=overheat http://127.0.0.1:8099/_sim/scenario
 ```
+
+First run: `tcmon serve` prints a **one-time setup token** in its log; open
+`https://<host>:8443/setup`, accept the self-signed certificate warning
+(compare the SHA-256 fingerprint shown in the log), enter the token and choose
+a password. Forgot it? `tcmon reset-password` in the container shell.
 
 Headless end-to-end run against the simulator:
 

@@ -96,6 +96,7 @@ func (s *Store) Prune(ctx context.Context, now time.Time, r Retention) (PruneRes
 		{"alert_events", "ts", r.EventsDays},
 		{"poll_log", "ts", r.PollLogDays},
 		{"notify_deliveries", "created_at", r.PollLogDays},
+		{"audit_log", "ts", r.AuditDays},
 	}
 	for _, t := range targets {
 		if t.days == KeepForever {
@@ -162,6 +163,9 @@ func (s *Store) Maintain(ctx context.Context, now time.Time) (MaintenanceResult,
 	if out.Pruned, err = s.Prune(ctx, now, r); err != nil {
 		return out, err
 	}
+	if err := s.DeleteExpiredSessions(ctx, now); err != nil {
+		return out, fmt.Errorf("store: removing expired sessions: %w", err)
+	}
 	if _, err := s.db.ExecContext(ctx, "DELETE FROM alert_snoozes WHERE until_ts < ?", ms(now)); err != nil {
 		return out, fmt.Errorf("store: removing expired snoozes: %w", err)
 	}
@@ -197,7 +201,7 @@ type Stats struct {
 // StatsTables are the tables counted by Stats.
 var StatsTables = []string{
 	"devices", "readings_vitals", "readings_lifetime", "readings_wifi", "raw_payloads",
-	"rollups_1h", "device_events", "poll_log", "alert_events", "notify_channels", "notify_deliveries",
+	"rollups_1h", "device_events", "poll_log", "alert_events", "notify_channels", "notify_deliveries", "audit_log",
 }
 
 // Stats returns database size and row counts.

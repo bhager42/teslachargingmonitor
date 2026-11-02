@@ -26,6 +26,8 @@ sending email via Gmail. Finalised in Phase 8.
 |---|---|---|
 | S1 | Password guessing from the LAN | Argon2id, per-IP + global throttling, audit log (§9) |
 | S2 | Session theft via sniffing | HTTPS by default, `__Host-` Secure HttpOnly SameSite=Strict cookie (§9, §10) |
+| S3 | DNS rebinding from a malicious website to the LAN app | Host header allowlist (IP literals, localhost, `TCMON_PUBLIC_HOSTNAMES`) → 421 (Phase 5) |
+| S4 | Setup hijack before the owner sets a password | Setup needs a one-time token visible only in the container log; expires after 30 min (Phase 5) |
 | T1 | LAN attacker spoofs Wall Connector responses | Strict decoding, size/time limits, range checks; data can't trigger code execution (§2, §6) |
 | T2 | Tampered container image | Signed images, SBOM, provenance, digest pinning (§10, §11) |
 | R1 | Settings changed without trace | Audit log of auth and settings changes (§10) |

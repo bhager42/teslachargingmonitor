@@ -1,0 +1,16 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-or-later
+Copyright (C) 2026 Brad Hager and contributors
+*/ -}}
+{{define "content"}}
+<section class="card narrow" aria-labelledby="login-title">
+  <h1 id="login-title">Sign in</h1>
+  <form method="post" action="/login">
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required autofocus maxlength="1024">
+    <label class="check"><input type="checkbox" name="remember" value="1"> Keep me signed in on this device for 30 days</label>
+    <button type="submit">Sign in</button>
+  </form>
+  <p class="hint">Forgot it? Run <code>tcmon reset-password</code> in the container shell (TrueNAS: Apps → tcmon → Shell).</p>
+</section>
+{{end}}

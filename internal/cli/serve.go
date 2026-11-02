@@ -17,11 +17,13 @@ import (
 	"time"
 
 	"github.com/bhager42/teslachargingmonitor/internal/alerts"
+	"github.com/bhager42/teslachargingmonitor/internal/auth"
 	"github.com/bhager42/teslachargingmonitor/internal/buildinfo"
 	"github.com/bhager42/teslachargingmonitor/internal/notify"
 	"github.com/bhager42/teslachargingmonitor/internal/poller"
 	"github.com/bhager42/teslachargingmonitor/internal/secrets"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
+	"github.com/bhager42/teslachargingmonitor/internal/web"
 )
 
 // maintenanceAt is the local time of day for nightly maintenance.
@@ -102,7 +104,36 @@ func runServe(ctx context.Context, args []string, env Env) int {
 			"`tcmon notify add-email -username you@gmail.com -to you@gmail.com -password-stdin`")
 	}
 
+	webCfg, err := webConfig(env, *dir)
+	if err != nil {
+		log.Error("web configuration", "err", err)
+		return 1
+	}
+	authMgr := auth.NewManager(st, auth.Config{Logger: log})
+	token, err := authMgr.Init(ctx, bootstrapFromEnv(env))
+	if err != nil {
+		log.Error("password configuration", "err", err)
+		return 1
+	}
+	if token != "" {
+		log.Warn("FIRST-RUN SETUP: open the web UI at https://<this-host>"+portSuffix(webCfg.Listen)+"/setup and enter this one-time token",
+			"setup_token", token, "valid_for", "30m")
+	}
+	webSrv, err := web.New(webCfg, web.Options{Store: st, Auth: authMgr, Logger: log})
+	if err != nil {
+		log.Error("starting web server", "err", err)
+		return 1
+	}
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+
 	var wg sync.WaitGroup
+	wg.Go(func() {
+		if err := webSrv.Run(ctx); err != nil {
+			log.Error("web server stopped", "err", err)
+			stop()
+		}
+	})
 	wg.Go(func() { runMaintenance(ctx, st, log, time.Now) })
 	wg.Go(func() { engine.Run(ctx, updates) })
 	wg.Go(func() { logNotifications(ctx, log, notifications) })
@@ -167,4 +198,11 @@ func logNotifications(ctx context.Context, log *slog.Logger, ch <-chan []alerts.
 			}
 		}
 	}
+}
+
+func portSuffix(listen string) string {
+	if i := strings.LastIndexByte(listen, ':'); i >= 0 {
+		return listen[i:]
+	}
+	return ""
 }

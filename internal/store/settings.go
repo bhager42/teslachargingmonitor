@@ -56,6 +56,7 @@ type Retention struct {
 	RollupsDays     int `json:"rollups_days"`
 	EventsDays      int `json:"events_days"`   // device events and alert history
 	PollLogDays     int `json:"poll_log_days"` // poll log and notification delivery log
+	AuditDays       int `json:"audit_days"`
 }
 
 // DefaultRetention is used until the owner changes it.
@@ -66,6 +67,7 @@ func DefaultRetention() Retention {
 		RollupsDays:     KeepForever,
 		EventsDays:      730,
 		PollLogDays:     90,
+		AuditDays:       365,
 	}
 }
 
@@ -76,7 +78,7 @@ const MaxRetentionDays = 36500
 func (r Retention) Validate() error {
 	for name, d := range map[string]int{
 		"readings": r.ReadingsDays, "raw payloads": r.RawPayloadsDays, "rollups": r.RollupsDays,
-		"events": r.EventsDays, "poll log": r.PollLogDays,
+		"events": r.EventsDays, "poll log": r.PollLogDays, "audit log": r.AuditDays,
 	} {
 		if d < 0 || d > MaxRetentionDays {
 			return fmt.Errorf("%s retention must be 0 (keep forever) or 1-%d days", name, MaxRetentionDays)
@@ -88,7 +90,7 @@ func (r Retention) Validate() error {
 // Retention returns the stored policy, or the default.
 func (s *Store) Retention(ctx context.Context) (Retention, error) {
 	r := DefaultRetention()
-	err := s.GetSetting(ctx, retentionKey, &r)
+	err := s.GetSetting(ctx, retentionKey, &r) // fields added later keep their defaults
 	if errors.Is(err, ErrNotFound) {
 		return DefaultRetention(), nil
 	}
