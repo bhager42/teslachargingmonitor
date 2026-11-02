@@ -72,7 +72,21 @@ on port 80** on the LAN once it is joined to Wi-Fi. The endpoint list and field
 names below come from the Gen 3 and are expected to match the UWC, but **they
 must be verified against the owner's UWC in Phase 0** (capture real payloads;
 the UWC may add, omit or rename fields, e.g. because of its built-in NACS/J1772
-adapter). Everything in this section is a hypothesis until fixtures exist.
+adapter). Endpoints marked *unverified* below are hypotheses until fixtures exist.
+
+**Verification status (owner's UWC, part `1734412-52-F`, firmware `26.26.10`)**
+— fixtures in `testdata/fixtures/uwc/26.26.10/`:
+
+| Endpoint | Status | Findings |
+|---|---|---|
+| `/api/1/version` | ✅ verified | Gen 3 fields present **plus** `git_branch` and three IEEE 1547 CRCs: `IEEE1547VfTripsCrc`, `IEEE1547RideThruMomentaryCessationCrc`, `IEEE1547CombinedComplianceCrc` (8-hex-digit strings). `firmware_version` is semver-like with build metadata (`26.26.10+g<git-sha>`) — parse major.minor.patch and keep the full string. |
+| `/api/1/lifetime` | ✅ verified | Field set identical to Gen 3. `avg_startup_temp` reported `0.0` (likely unused — don't alert on it). |
+| `/api/1/vitals` | ⏳ unverified | Need idle + charging captures. |
+| `/api/1/wifi_status` | ⏳ unverified | Need capture. |
+
+Note: the device stores lifetime counters (e.g. `alert_count` was already 3 at
+first capture). Counter-based rules must take a **baseline on first sighting**
+and only fire on increases afterwards — never on initial import.
 
 | Endpoint | Purpose | Suggested poll cadence |
 |---|---|---|
@@ -91,12 +105,14 @@ payloads**; the parser must tolerate unknown/missing fields):
   `input_thermopile_uv`, `prox_v`, `pilot_high_v`, `pilot_low_v`,
   `session_energy_wh`, `config_status`, `evse_state`, `current_alerts[]`,
   `evse_not_ready_reasons[]`.
-- **lifetime:** `contactor_cycles`, `contactor_cycles_loaded`, `alert_count`,
+- **lifetime (verified on UWC):** `contactor_cycles`, `contactor_cycles_loaded`, `alert_count`,
   `thermal_foldbacks`, `avg_startup_temp`, `charge_starts`, `energy_wh`,
   `connector_cycles`, `uptime_s`, `charging_time_s`.
 - **wifi_status:** `wifi_ssid` (base64), `wifi_signal_strength`, `wifi_rssi`,
   `wifi_snr`, `wifi_connected`, `wifi_infra_ip`, `internet`, `wifi_mac`.
-- **version:** `firmware_version`, `part_number`, `serial_number`, `web_service`.
+- **version (verified on UWC):** `firmware_version`, `git_branch`,
+  `part_number`, `serial_number`, `web_service`, `IEEE1547VfTripsCrc`,
+  `IEEE1547RideThruMomentaryCessationCrc`, `IEEE1547CombinedComplianceCrc`.
 
 Implications for the design:
 - The device is a small embedded controller: **never poll faster than every
@@ -183,8 +199,10 @@ SQLite, WAL, `foreign_keys=ON`, `busy_timeout=5000`. All timestamps UTC epoch ms
 ```
 devices(id, name, base_url, enabled, poll_interval_s, nominal_voltage_v,
         breaker_a, phase_config, created_at, updated_at)
-device_info(device_id PK, firmware_version, part_number, serial_number,
-        last_seen_at, first_seen_at)
+device_info(device_id PK, firmware_version, git_branch, part_number,
+        serial_number, web_service, ieee1547_vf_trips_crc,
+        ieee1547_ride_thru_crc, ieee1547_combined_crc, last_seen_at,
+        first_seen_at)
 readings_vitals(id, device_id, ts, contactor_closed, vehicle_connected,
         grid_v, grid_hz, vehicle_current_a, currentA_a, currentB_a, currentC_a,
         currentN_a, voltageA_v, voltageB_v, voltageC_v, relay_coil_v,
@@ -281,6 +299,7 @@ A per-(rule, device) state machine provides:
 | `wifi_no_internet` | `internet == false` for 30 min (affects firmware updates) | info |
 | `unexpected_reboot` | uptime decreased | info |
 | `firmware_changed` | firmware version changed | info |
+| `grid_profile_changed` | any IEEE 1547 CRC in `/version` changed (grid-interconnection/trip settings altered, e.g. by a firmware update or remote config) | warning |
 | `contactor_wear` | `contactor_cycles_loaded` crosses configurable milestones | info |
 
 Rules are stored as data (`alert_rules`) with typed params; the UI provides a
@@ -785,6 +804,7 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 |---|---|---|---|
 | D1 | Owner has **only a Universal Wall Connector** (UWC). | 2026-11-02 | UWC is the primary, tested target; Gen 3 is best-effort. Fixtures and simulator scenarios are UWC-first (§2, §13, Phase 0/1). |
 | D2 | The Wall Connector **IP address is configured in the Web GUI** (not env vars/config files). | 2026-11-02 | First-run onboarding + Settings device form with Test connection (§8); `WCMON_DEVICES` env seed removed (§11); poller hot-reloads on address change (§6). |
+| D3 | `/version` and `/lifetime` captured from the UWC (fw 26.26.10), serial redacted. | 2026-11-02 | §2 verification table; extra `/version` fields stored; new `grid_profile_changed` rule; counter rules baseline on first sighting. |
 
 ### 15.1 Still open
 
@@ -793,8 +813,9 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
    answered: UWC — D1.)*
 2. *(Answered — D2: entered in the Web GUI.)* Please still reserve the UWC's IP
    in your router's DHCP so it doesn't change.
-3. Sample JSON from your UWC — the most important remaining input, since the
-   UWC API is unverified: run
+3. Remaining sample JSON from your UWC: `/version` and `/lifetime` are
+   captured (D3); still needed are **`/api/1/vitals` (once idle and once while
+   charging)** and **`/api/1/wifi_status`**. For reference, the full list: run
    `curl http://<ip>/api/1/vitals`, `/lifetime`, `/wifi_status`, `/version`
    (ideally once idle and once while charging) and share them — redact serial,
    MAC and SSID if you like.
