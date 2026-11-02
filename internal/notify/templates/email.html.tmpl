@@ -1,0 +1,31 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-or-later
+Copyright (C) 2026 Brad Hager and contributors
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License as published by the
+Free Software Foundation, either version 3 of the License, or (at your
+option) any later version. See the LICENSE file for details.
+*/ -}}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{.Subject}}</title>
+</head>
+<body style="margin:0;padding:16px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.45">
+{{- range .Items}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;margin:0 0 12px;border-left:4px solid {{.Color}};border-collapse:separate">
+<tr><td style="padding:8px 12px">
+<p style="margin:0 0 4px;font-weight:600">{{.SeverityIcon}} {{upper .Severity}} · {{.RuleTitle}} <span style="font-weight:400">— {{.KindLabel}}</span></p>
+<p style="margin:0 0 4px">{{.Message}}</p>
+<p style="margin:0;font-size:13px;opacity:.75">{{.DeviceName}} · {{.When}}</p>
+</td></tr>
+</table>
+{{- end}}
+<p style="max-width:640px;margin:16px 0 0;font-size:12px;opacity:.7">{{.Footer}}</p>
+</body>
+</html>

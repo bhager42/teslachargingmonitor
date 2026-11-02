@@ -1,0 +1,29 @@
+# Build output
+/bin/
+/dist/
+coverage.out
+*.test
+
+# Local runtime data — never commit databases, keys, certificates or secrets
+/data/
+*.db
+*.db-wal
+*.db-shm
+*.key
+*.pem
+*password*.txt
+# ...but the embedded common-password blocklist is source, not a secret
+!/internal/auth/data/common-passwords.txt
+.env
+.env.*
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# E2E (Phase 6)
+/e2e/node_modules/
+/e2e/test-results/
+/e2e/playwright-report/

@@ -1,0 +1,33 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-or-later
+Copyright (C) 2026 Brad Hager and contributors
+*/ -}}
+{{define "content"}}
+<h1>Dashboard</h1>
+<p class="hint">The full dashboard arrives in the next release. Polling, alerts and email are already running.</p>
+<section class="card" aria-labelledby="devices-title">
+  <h2 id="devices-title">Wall Connectors</h2>
+  {{- if .Devices}}
+  <table>
+    <thead><tr><th scope="col">Name</th><th scope="col">Address</th><th scope="col">Last poll</th><th scope="col">Firmware</th></tr></thead>
+    <tbody>
+    {{- range .Devices}}
+      <tr><td>{{.Name}}</td><td>{{.Address}}</td><td>{{.LastPoll}}</td><td>{{.Firmware}}</td></tr>
+    {{- end}}
+    </tbody>
+  </table>
+  {{- else}}
+  <p>No Wall Connector configured yet. Until the settings page exists, add one in the container shell: <code>tcmon device add -address &lt;ip&gt; -breaker 60</code></p>
+  {{- end}}
+</section>
+<section class="card" aria-labelledby="alerts-title">
+  <h2 id="alerts-title">Recent alerts</h2>
+  {{- if .Alerts}}
+  <ul class="alerts">
+  {{- range .Alerts}}
+    <li class="sev-{{.Severity}}"><span class="badge">{{.Severity}}</span> {{.When}} — {{.Message}}</li>
+  {{- end}}
+  </ul>
+  {{- else}}<p>No alerts recorded.</p>{{end}}
+</section>
+{{end}}

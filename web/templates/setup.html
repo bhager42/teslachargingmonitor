@@ -1,0 +1,20 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-or-later
+Copyright (C) 2026 Brad Hager and contributors
+*/ -}}
+{{define "content"}}
+<section class="card narrow" aria-labelledby="setup-title">
+  <h1 id="setup-title">Set your password</h1>
+  <p>Enter the one-time setup token printed in the container log (TrueNAS: Apps → tcmon → Logs), then choose a password of at least {{.MinLength}} characters. A few unrelated words make a strong, memorable password.</p>
+  <form method="post" action="/setup">
+    <input type="hidden" name="csrf_token" value="{{.FormToken}}">
+    <label for="token">Setup token</label>
+    <input id="token" name="token" autocomplete="off" required spellcheck="false" maxlength="64">
+    <label for="password">New password</label>
+    <input id="password" name="password" type="password" autocomplete="new-password" required minlength="{{.MinLength}}" maxlength="1024">
+    <label for="confirm">Repeat new password</label>
+    <input id="confirm" name="confirm" type="password" autocomplete="new-password" required minlength="{{.MinLength}}" maxlength="1024">
+    <button type="submit">Save password and sign in</button>
+  </form>
+</section>
+{{end}}

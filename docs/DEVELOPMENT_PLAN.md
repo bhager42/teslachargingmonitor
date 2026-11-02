@@ -1,17 +1,23 @@
-# Wall Connector Monitor — Development Plan
+# Tesla Charger Monitoring — Development Plan
 
 > **Audience:** Claude Code (and human contributors).
-> **Status:** Draft v1 — 2026-11-02. Open questions are in [§15](#15-open-questions--inputs-needed-from-the-owner); fill them in before starting Phase 1.
-> **License:** AGPL-3.0 (see §12).
+> **Status:** Draft v2 — 2026-11-02. Owner decisions so far are recorded in [§15.0](#150-resolved-decisions); remaining open questions follow it.
+> **License:** AGPL-3.0-or-later (see §12).
 
-A small, self-hosted, containerized web app that polls the local HTTP API of one
-or more **Tesla Wall Connector (Gen 3)** and **Tesla Universal Wall Connector**
-units on a schedule, stores the readings, shows them in a dark-mode-first web
-dashboard, and sends alerts when metrics look concerning. The primary deployment
+A small, self-hosted, containerized web app that polls the local HTTP API of a
+**Tesla Universal Wall Connector** (the owner's only hardware — the primary and
+tested target) on a schedule, stores the readings, shows them in a dark-mode-first web
+dashboard, and sends alerts when metrics look concerning. The Gen 3 Wall
+Connector uses the same `/api/1/*` API family, so it should work too, but it is
+**best-effort/untested** unless a contributor supplies fixtures. The data model
+still supports multiple devices so a second unit can be added later. The primary deployment
 target is **TrueNAS SCALE 25.10 ("Goldeye") or later**, but it must run on any
 OCI/Docker host (Docker Engine, Podman, Compose, Portainer, Unraid, k8s).
 
-Working name in this document: **`wcmon`** (rename freely — see §15).
+Project name: **Tesla Charger Monitoring** (shown in the UI, README, OCI
+labels). Short identifier used for the binary, env-var prefix, cookie names and
+container name: **`tcmon`**. Repo/image: `bhager42/teslachargingmonitor` /
+`ghcr.io/bhager42/teslachargingmonitor`. The repository is **public**.
 
 ---
 
@@ -63,34 +69,57 @@ Working name in this document: **`wcmon`** (rename freely — see §15).
 
 ## 2. The Wall Connector local API
 
-The Gen 3 Wall Connector exposes an **unauthenticated, read-only JSON API over
-plain HTTP on port 80** on the LAN once it is joined to Wi-Fi. The Universal Wall
-Connector is understood to expose the same `/api/1/*` endpoints — **this must be
-verified against the owner's hardware in Phase 0** (see §15).
+The **Universal Wall Connector (UWC)** — like the Gen 3 Wall Connector it
+descends from — exposes an **unauthenticated, read-only JSON API over plain HTTP
+on port 80** on the LAN once it is joined to Wi-Fi. The endpoint list and field
+names below come from the Gen 3 and are expected to match the UWC, but **they
+must be verified against the owner's UWC in Phase 0** (capture real payloads;
+the UWC may add, omit or rename fields, e.g. because of its built-in NACS/J1772
+adapter). Endpoints marked *unverified* below are hypotheses until fixtures exist.
+
+**Verification status (owner's UWC, part `1734412-52-F`, firmware `26.26.10`)**
+— fixtures in `testdata/fixtures/uwc/26.26.10/`:
+
+| Endpoint | Status | Findings |
+|---|---|---|
+| `/api/1/version` | ✅ verified | Gen 3 fields present **plus** `git_branch` and three IEEE 1547 CRCs: `IEEE1547VfTripsCrc`, `IEEE1547RideThruMomentaryCessationCrc`, `IEEE1547CombinedComplianceCrc` (8-hex-digit strings). `firmware_version` is semver-like with build metadata (`26.26.10+g<git-sha>`) — parse major.minor.patch and keep the full string. |
+| `/api/1/lifetime` | ✅ verified | Field set identical to Gen 3. `avg_startup_temp` reported `0.0` (likely unused — don't alert on it). |
+| `/api/1/vitals` | ✅ idle verified / ⏳ charging | **Differs from Gen 3:** `relay_coil_v` is absent; the UWC reports **`relay_k1_v` and `relay_k2_v`** (two relays, 0.0 when open). Idle with no vehicle: `evse_state` = 1, `config_status` = 5, `evse_not_ready_reasons` = `[2,4,8]` (so not-ready reasons are **normal when unplugged**), `pilot_high_v`/`pilot_low_v` = 12.0 (no vehicle on the pilot), per-phase `voltageX_v` ≈ 0 while the contactor is open (only `grid_v` is meaningful then). `uptime_s` here is **time since boot** (16 s at capture) whereas `lifetime.uptime_s` is cumulative — don't confuse them. Need a capture **while charging**. |
+| `/api/1/wifi_status` | ✅ verified | Field set identical to Gen 3. `wifi_ssid` is base64 (decode, then HTML-escape — it is attacker-controllable text). `wifi_infra_ip` reports the device's own IP: show it next to the configured address and warn if they differ. `wifi_mac` and SSID are treated as sensitive (masked in UI by default, never logged). |
+
+Note: the device stores lifetime counters (e.g. `alert_count` was already 3 at
+first capture). Counter-based rules must take a **baseline on first sighting**
+and only fire on increases afterwards — never on initial import.
 
 | Endpoint | Purpose | Suggested poll cadence |
 |---|---|---|
-| `GET /api/1/vitals` | Live electrical/thermal state, alerts, EVSE state | every poll (default 30 s) |
-| `GET /api/1/lifetime` | Lifetime counters (energy, contactor cycles, thermal foldbacks, alert count) | every 5 min |
-| `GET /api/1/wifi_status` | RSSI, SNR, signal strength, connectivity | every 5 min |
-| `GET /api/1/version` | Firmware version, part/serial number | on start + hourly |
+| `GET /api/1/vitals` | Live electrical/thermal state, alerts, EVSE state | every poll |
+| `GET /api/1/lifetime` | Lifetime counters (energy, contactor cycles, thermal foldbacks, alert count) | every poll |
+| `GET /api/1/wifi_status` | RSSI, SNR, signal strength, connectivity | every poll |
+| `GET /api/1/version` | Firmware version, part/serial number, IEEE 1547 CRCs | every poll |
+
+A "poll" fetches all four endpoints sequentially. Default poll interval is
+**60 minutes** (owner decision D6, configurable in the GUI — see §6).
 
 Commonly observed fields (treat as **unverified until Phase 0 captures real
 payloads**; the parser must tolerate unknown/missing fields):
 
-- **vitals:** `contactor_closed`, `vehicle_connected`, `session_s`, `grid_v`,
+- **vitals (idle verified on UWC):** `contactor_closed`, `vehicle_connected`, `session_s`, `grid_v`,
   `grid_hz`, `vehicle_current_a`, `currentA_a`, `currentB_a`, `currentC_a`,
-  `currentN_a`, `voltageA_v`, `voltageB_v`, `voltageC_v`, `relay_coil_v`,
+  `currentN_a`, `voltageA_v`, `voltageB_v`, `voltageC_v`,
+  `relay_k1_v` + `relay_k2_v` (UWC, verified) *or* `relay_coil_v` (Gen 3),
   `pcba_temp_c`, `handle_temp_c`, `mcu_temp_c`, `uptime_s`,
   `input_thermopile_uv`, `prox_v`, `pilot_high_v`, `pilot_low_v`,
   `session_energy_wh`, `config_status`, `evse_state`, `current_alerts[]`,
   `evse_not_ready_reasons[]`.
-- **lifetime:** `contactor_cycles`, `contactor_cycles_loaded`, `alert_count`,
+- **lifetime (verified on UWC):** `contactor_cycles`, `contactor_cycles_loaded`, `alert_count`,
   `thermal_foldbacks`, `avg_startup_temp`, `charge_starts`, `energy_wh`,
   `connector_cycles`, `uptime_s`, `charging_time_s`.
-- **wifi_status:** `wifi_ssid` (base64), `wifi_signal_strength`, `wifi_rssi`,
+- **wifi_status (verified on UWC):** `wifi_ssid` (base64), `wifi_signal_strength`, `wifi_rssi`,
   `wifi_snr`, `wifi_connected`, `wifi_infra_ip`, `internet`, `wifi_mac`.
-- **version:** `firmware_version`, `part_number`, `serial_number`, `web_service`.
+- **version (verified on UWC):** `firmware_version`, `git_branch`,
+  `part_number`, `serial_number`, `web_service`, `IEEE1547VfTripsCrc`,
+  `IEEE1547RideThruMomentaryCessationCrc`, `IEEE1547CombinedComplianceCrc`.
 
 Implications for the design:
 - The device is a small embedded controller: **never poll faster than every
@@ -103,6 +132,11 @@ Implications for the design:
   "unknown field seen" in the diagnostics page.
 - `evse_state` and alert codes are numeric/opaque. Keep a mapping table in code
   (`internal/wallconnector/codes.go`) that can grow; show raw values when unknown.
+  Seed it only with **observed** meanings (UWC fw 26.26.10: `evse_state` 1 =
+  idle/unplugged; `config_status` 5 = normal configured state; not-ready
+  reasons 2, 4, 8 present while unplugged). Unconfirmed meanings are labelled
+  "unknown (code N)" rather than guessed. The UI should also learn the
+  "normal" code set per device and highlight codes never seen before.
 
 ---
 
@@ -111,7 +145,7 @@ Implications for the design:
 Single process, single container, no external services required.
 
 ```
-                ┌──────────────────────────── wcmon container ────────────────────────────┐
+                ┌──────────────────────────── tcmon container ────────────────────────────┐
                 │                                                                          │
  Wall           │  ┌───────────┐   readings   ┌──────────────┐  events  ┌───────────────┐ │
  Connector(s) ◄─┼──│  Poller   │─────────────►│ Alert engine │─────────►│ Notifier queue│─┼─► ntfy / email /
@@ -119,7 +153,7 @@ Single process, single container, no external services required.
                 │  └─────┬─────┘              │  machine)    │          └───────────────┘ │
                 │        │                    └──────┬───────┘                            │
                 │        ▼                           ▼                                    │
-                │  ┌──────────────────────── SQLite (WAL) /data/wcmon.db ───────────────┐ │
+                │  ┌──────────────────────── SQLite (WAL) /data/tcmon.db ───────────────┐ │
                 │  └─────────────────────────────────▲───────────────────────────────────┘ │
                 │                                    │                                    │
                 │  ┌──────────────────── HTTP(S) server :8443 ──────────────────────────┐ │
@@ -177,11 +211,14 @@ SQLite, WAL, `foreign_keys=ON`, `busy_timeout=5000`. All timestamps UTC epoch ms
 ```
 devices(id, name, base_url, enabled, poll_interval_s, nominal_voltage_v,
         breaker_a, phase_config, created_at, updated_at)
-device_info(device_id PK, firmware_version, part_number, serial_number,
-        last_seen_at, first_seen_at)
+device_info(device_id PK, firmware_version, git_branch, part_number,
+        serial_number, web_service, ieee1547_vf_trips_crc,
+        ieee1547_ride_thru_crc, ieee1547_combined_crc, last_seen_at,
+        first_seen_at)
 readings_vitals(id, device_id, ts, contactor_closed, vehicle_connected,
         grid_v, grid_hz, vehicle_current_a, currentA_a, currentB_a, currentC_a,
-        currentN_a, voltageA_v, voltageB_v, voltageC_v, relay_coil_v,
+        currentN_a, voltageA_v, voltageB_v, voltageC_v, relay_k1_v,
+        relay_k2_v, relay_coil_v NULL /* Gen 3 only */,
         pcba_temp_c, handle_temp_c, mcu_temp_c, uptime_s, session_s,
         session_energy_wh, evse_state, config_status, alerts_json,
         not_ready_json)                                  -- index (device_id, ts)
@@ -207,13 +244,33 @@ login_attempts(ip, ts)                                   -- for throttling
 audit_log(id, ts, actor_ip, action, details_json)
 ```
 
-Retention defaults (all configurable): raw vitals 30 d → 5-min rollups 1 y →
-1-h rollups forever; raw payloads 7 d; alert events 2 y; audit log 1 y. Nightly
+**Retention is adjustable in the Web GUI (owner decision D15); default 2 years
+for readings.** Settings → Data retention offers, per data class, presets
+(30 d, 90 d, 6 months, 1 y, **2 y**, 5 y, Keep forever) or a custom number of
+days; it shows the current DB size and an estimated size for the chosen
+setting. Shortening retention shows a confirmation ("this permanently deletes
+data older than …") and suggests downloading a backup first; pruning runs
+nightly and on demand. At the default hourly cadence one device produces
+~8,800 rows/year per table, so 2 years of raw readings is small and no
+rollups are needed for that data.
+
+**Measured storage (Phase 2 soak, 3,000 polls):** ≈ 1.9 KB per poll
+including raw payloads, i.e. **≈ 16 MiB/year** at hourly polling and
+**≈ 31 MiB/year** with ~2 h/day plugged in at the 5-min cadence — an upper
+bound, since raw payloads (≈ 70 % of that) are pruned after 90 days.
+Implementation: only **1-hour rollups** (`rollups_1h`) are kept; 5-minute
+rollups were dropped because 5 min is already the finest sampling cadence.
+Fields the decoder flags invalid are stored as SQL NULL and listed in each
+row's `invalid_json`, so rollups and alerts never consume them. Rollups (5-min → 1-h) are generated only for data
+sampled more often than hourly (e.g. if the owner shortens the interval or
+enables faster polling while charging, which is on by default) and are kept
+indefinitely. Raw payloads
+90 d; alert events 2 y; audit log 1 y. Nightly
 `VACUUM`/`PRAGMA optimize`; online backup via `VACUUM INTO` exposed as a
 downloadable backup in Settings.
 
 **Secrets at rest:** notification channel credentials are encrypted with
-AES-256-GCM (or XChaCha20-Poly1305) using a key from `WCMON_SECRET_KEY_FILE`
+AES-256-GCM (or XChaCha20-Poly1305) using a key from `TCMON_SECRET_KEY_FILE`
 (auto-generated into `/data/secret.key` with `0600` on first start if not
 provided). Never return decrypted secrets to the browser — show "•••• set".
 
@@ -222,17 +279,54 @@ provided). Never return decrypted secrets to the browser — show "•••• 
 ## 6. Polling and the alert engine
 
 ### Poller
-- One goroutine per enabled device; `time.Ticker` at `poll_interval_s`
-  (default **30 s**, min 10 s, max 3600 s) with ±10 % jitter.
-- Optional "active charging" cadence: poll faster (e.g. 15 s) while
-  `vehicle_connected || contactor_closed`, slower (e.g. 60 s) when idle.
+- One goroutine per enabled device; schedule at `poll_interval`
+  — **default 60 min**, configurable in the GUI (Settings → device) from
+  **1 min to 24 h** with presets (5, 15, 30, 60 min, 6 h, custom). Small jitter
+  (±2 % , max 60 s). Changing it takes effect immediately.
+- An immediate poll on startup and after a device is added/edited, plus a
+  **"Poll now"** button on the dashboard and device page (rate-limited to once
+  per 10 s).
+- **"Poll more often while a car is plugged in"** — **on by default** (owner
+  decision D10): every **5 min** while `vehicle_connected || contactor_closed`,
+  back to the normal interval once unplugged; both intervals and the toggle are
+  editable in the GUI. This is what makes
+  the instantaneous rules (temperature, current, voltage) useful during a
+  session; the GUI explains the trade-off next to the setting.
 - Per-request timeout 5 s; response body limit 64 KiB; reject non-JSON.
-- Unreachable → exponential backoff (cap 5 min) and emit `device_unreachable`
-  signal for the alert engine.
-- Device URL validation: only `http://` or `https://` to a **private/LAN
-  address or hostname** by default (SSRF guard; allow override flag for odd
-  networks). No redirects followed.
-- Detect reboot (uptime decreased) and firmware change (version differs).
+- **Failure handling:** a failed poll is retried after 30 s, 2 min and 5 min
+  before it counts as failed (so one Wi-Fi blip doesn't alert). A failed poll
+  emits `device_unreachable` to the alert engine.
+- The UI always shows **"last updated N min ago"** and marks data stale after
+  1.5 × interval.
+- The device address comes **only from the Web GUI** (see §8 "Device
+  management"); changes take effect immediately — the poller for that device is
+  restarted without restarting the container.
+- Device address validation: IPv4, IPv6 or hostname (optional `:port`),
+  normalised to `http://<host>[:port]`; must resolve to a **private/LAN
+  address** by default (SSRF guard; an "allow non-private address" checkbox
+  exists for odd networks). No redirects followed. Resolved IP is re-checked at
+  connect time (DNS-rebinding safe).
+- Detect reboot (`vitals.uptime_s` < time since previous successful poll, which
+  works even with hourly polling) and firmware change (version differs).
+
+### What a 60-minute default means for alerting
+Hourly polling sees **snapshots**, not continuous data. The plan handles this:
+
+- **Cumulative counters catch everything between polls** — `thermal_foldbacks`,
+  `alert_count`, `charge_starts`, `energy_wh`, `contactor_cycles*`,
+  `charging_time_s` (from `/lifetime`). Rules built on their deltas are reliable
+  at any interval, so they are the backbone of the default rule set.
+- **Instantaneous rules** (temperatures, current, voltage, frequency,
+  `current_alerts`) only see the moment of the poll. They stay enabled but the
+  rule UI notes "checked once per poll". Because faster polling while plugged
+  in is on by default, they are sampled every 5 min during charging — when
+  they matter most.
+- Rule durations ("for 60 s") are evaluated as "for at least this long **or**
+  one sample, whichever is longer", so at hourly cadence a single breaching
+  sample fires (except where noted below).
+- Charging sessions are derived from counter deltas (`charge_starts`,
+  `energy_wh`, `charging_time_s`) per interval, with start/end times
+  approximate to the poll interval.
 
 ### Alert rule semantics
 Each rule produces a boolean "breaching" condition per device per evaluation.
@@ -252,24 +346,27 @@ A per-(rule, device) state machine provides:
 
 | Key | Condition | Default severity |
 |---|---|---|
-| `device_unreachable` | No successful poll for ≥ 3 consecutive attempts / 5 min | warning → critical after 30 min |
+| `device_unreachable` | A poll failed after its retries (§6 Poller) | warning → critical after 3 consecutive failed polls |
+| `identity_mismatch` | serial number at the configured address changed | warning |
 | `handle_temp_high` | `handle_temp_c` ≥ 55 °C (warn), ≥ 70 °C (crit), for 60 s | warning / critical |
 | `pcba_temp_high` | `pcba_temp_c` ≥ 70 °C (warn), ≥ 85 °C (crit) | warning / critical |
 | `mcu_temp_high` | `mcu_temp_c` ≥ 70 °C (warn), ≥ 85 °C (crit) | warning / critical |
 | `thermal_foldback` | `lifetime.thermal_foldbacks` increased since last reading | warning |
 | `device_alert_active` | `current_alerts` non-empty | warning (code-dependent) |
 | `device_alert_count_up` | `lifetime.alert_count` increased | warning |
-| `not_ready_reasons` | `evse_not_ready_reasons` non-empty while vehicle connected for > 2 min | warning |
-| `grid_voltage_out_of_range` | `grid_v` outside nominal ± 5 % (warn) / ± 10 % (crit) — nominal 240 V (US split-phase), 208 V, 230 V or 400 V configurable | warning / critical |
+| `not_ready_reasons` | `evse_not_ready_reasons` non-empty while **vehicle connected** for > 2 min (UWC reports `[2,4,8]` routinely when unplugged — never alert on that) | warning |
+| `grid_voltage_out_of_range` | `grid_v` (not per-phase `voltageX_v`, which read ≈ 0 when the contactor is open) outside nominal ± 5 % (warn) / ± 10 % (crit) — nominal 240 V (US split-phase), 208 V, 230 V or 400 V configurable | warning / critical |
 | `grid_freq_out_of_range` | `grid_hz` outside 59.5–60.5 (60 Hz) or 49.5–50.5 (50 Hz) | warning |
 | `phase_current_imbalance` | (3-phase only) max/min phase current deviation > 20 % while charging | info |
-| `overcurrent` | `vehicle_current_a` > configured max current × 1.05 for 30 s | critical |
-| `charging_stalled` | contactor closed & vehicle connected but current < 1 A for 10 min | info |
-| `relay_coil_voltage_abnormal` | `relay_coil_v` outside expected band (band TBD from Phase 0 data) | warning |
-| `wifi_weak` | `wifi_rssi` < −75 dBm for 15 min | info |
-| `wifi_no_internet` | `internet == false` for 30 min (affects firmware updates) | info |
+| `overcurrent` | `vehicle_current_a` (or any phase current) > configured max current × 1.05 for 30 s — owner's setup: **> 50.4 A** (48 A × 1.05) | critical |
+| `current_near_limit` | `vehicle_current_a` ≥ max current but ≤ 1.05 × max for 2 consecutive polls (owner: 48–50.4 A) — informational, confirms full-rate charging is at the ceiling | info (disabled by default) |
+| `charging_stalled` | contactor closed & vehicle connected but current < 1 A on 2 consecutive polls | info |
+| `relay_voltage_abnormal` | while `contactor_closed`: `relay_k1_v`/`relay_k2_v` (UWC) or `relay_coil_v` (Gen 3) outside expected band, or K1 and K2 disagree significantly; while open: either relay > ~1 V (possible stuck relay). Band TBD from charging capture. | warning |
+| `wifi_weak` | `wifi_rssi` < −75 dBm on 2 consecutive polls | info |
+| `wifi_no_internet` | `internet == false` on 2 consecutive polls (affects firmware updates) | info |
 | `unexpected_reboot` | uptime decreased | info |
 | `firmware_changed` | firmware version changed | info |
+| `grid_profile_changed` | any IEEE 1547 CRC in `/version` changed (grid-interconnection/trip settings altered, e.g. by a firmware update or remote config) | warning |
 | `contactor_wear` | `contactor_cycles_loaded` crosses configurable milestones | info |
 
 Rules are stored as data (`alert_rules`) with typed params; the UI provides a
@@ -283,20 +380,54 @@ shows when it *would* have fired.
 - Daily/weekly optional **digest** (energy used, sessions, max temps, alerts).
 - Optional **dead-man's switch**: ping an external URL (e.g. healthchecks.io /
   Uptime Kuma push) after every successful poll cycle so the owner learns if
-  `wcmon` itself stops.
+  `tcmon` itself stops.
 
 ---
 
 ## 7. Notifications
 
-Channel types (v1 candidates; owner picks which matter, §15):
+**Email is the primary channel (owner decision D7)** and ships first. All
+channels implement one small `Channel` interface so more can be added later
+without touching the alert engine.
 
-- **ntfy** (self-hosted or ntfy.sh) — recommended default for TrueNAS users.
-- **Email (SMTP)** — STARTTLS/implicit TLS required, TLS ≥ 1.2, auth.
+### Email (SMTP) — v1, required
+- Settings: SMTP host, port, security mode (**STARTTLS** on 587 or **implicit
+  TLS** on 465; plaintext SMTP refused), TLS ≥ 1.2 with certificate
+  verification (custom CA mountable), username, password / app password
+  (encrypted at rest, §5), From address + display name, **one or more To
+  addresses**, subject prefix (default `[Tesla Charger Monitoring]`).
+- **Gmail is the owner's provider (D11) and the default preset**:
+  `smtp.gmail.com`, port **587 STARTTLS** (465 implicit TLS selectable),
+  username = full Gmail address, password = a **Google app password**
+  (requires 2-Step Verification; the regular account password will not work).
+  The settings page links to Google's app-password page and explains this.
+  The From address must be the Gmail address or a verified "Send mail as"
+  alias, so default From = username. Gmail's sending limits are far above this
+  app's volume; batching (below) keeps it that way. Errors such as
+  `534 5.7.9 Application-specific password required` are translated into
+  plain-English hints in the test-email result.
+- Other presets: Google Workspace, iCloud (also app password), Outlook.com /
+  Microsoft 365, Fastmail, Proton Mail Bridge, self-hosted/relay, custom.
+  OAuth2 (XOAUTH2) for Gmail is a stretch goal; the app password is the v1
+  method.
+- Messages: `multipart/alternative` plain-text + simple HTML (inline CSS only,
+  no remote images, no tracking), readable in dark-mode mail clients; correct
+  `Date`, `Message-ID`, `Auto-Submitted: auto-generated` headers; link back to
+  the alert in the UI if a public URL is configured.
+- **Batching:** all alerts raised by the same poll go out in **one email**;
+  resolved notices batched the same way. Optional daily/weekly digest email.
+- Header-injection safe: addresses parsed with `net/mail`, CR/LF stripped from
+  subject/name fields, templates fed only typed data.
+- "Send test email" button with a clear error report (DNS, TLS, auth, rejected
+  recipient).
+- Library: `github.com/wneessen/go-mail` (MIT, actively maintained) or stdlib
+  `net/smtp` — decide in Phase 4 after dependency review.
+
+### Additional channels — later phases, in suggested order
+- **ntfy** (self-hosted or ntfy.sh) — good push option for TrueNAS users.
 - **Generic webhook** (JSON POST, optional HMAC-SHA256 signature header).
 - **Home Assistant** (webhook trigger).
-- **Gotify**, **Pushover**, **Discord**, **Slack**, **Telegram**, **Matrix**
-  (add in later phases as needed).
+- **Gotify**, **Pushover**, **Discord**, **Slack**, **Telegram**, **Matrix**.
 
 Common features: per-channel minimum severity, quiet hours, message templates
 (Go `text/template` with a restricted data struct), "Send test notification"
@@ -322,10 +453,41 @@ available" with a graceful fallback) as of 2026.
    (collapsible), CSV export.
 4. **Alerts** — active alerts, history, ack/snooze, rule editor, rule preview.
 5. **Notifications** — channels CRUD, test-send, delivery log.
-6. **Settings** — devices (add/edit/test connection), poll intervals, retention,
+6. **Settings** — devices (see "Device management" below), poll intervals, retention,
    units (°C/°F), time zone, theme, change password, sign out all sessions,
    backup download, about/licence/source link (AGPL §13).
 7. **Diagnostics** — poll latency/errors, unknown fields seen, DB size, version.
+
+### Device management (Wall Connector address is set in the GUI)
+The Wall Connector's IP/hostname is **configured only in the Web GUI** and stored
+in the `devices` table — there is no env var or config file for it.
+
+- **First-run onboarding:** after the initial password is set, a short wizard
+  asks for the UWC's IP address or hostname (with a hint: "find it in your
+  router's DHCP list or the Tesla One app; reserve it in your router so it
+  doesn't change"). The dashboard shows an "Add your Wall Connector" empty
+  state until one is saved.
+- **Test connection** button (before saving and any time later): calls
+  `/api/1/version` and `/api/1/vitals` with a 5 s timeout and shows the result —
+  reachable / not reachable / not a Wall Connector (unexpected response), plus
+  detected part number, firmware and a masked serial — so the owner can confirm
+  it's the right device before saving.
+- **Edit address** at any time (e.g. after a DHCP change). The device keeps its
+  history because identity is tied to the device record and its serial number;
+  if the serial reported at the new address differs from the stored one, warn
+  ("this looks like a different Wall Connector") and ask to confirm.
+- Per-device fields editable in the same form: display name, address, enabled,
+  poll interval (and charging-time interval), nominal voltage/frequency,
+  breaker size and max charging current (used by the voltage and overcurrent
+  rules). The form asks for the **breaker size** and pre-fills max current as
+  **80 % of it** (NEC continuous-load rule), editable to match what was set at
+  commissioning. Defaults: 240 V / 60 Hz split-phase. Owner's values (D17):
+  60 A breaker → **48 A max**, i.e. ≈ 11.5 kW at 240 V; the dashboard shows
+  live current as a fraction of 48 A.
+- `device_unreachable` alert text links straight to the edit form, since a
+  changed IP is the most likely cause.
+- All device changes are audit-logged and CSRF-protected like every other
+  settings change.
 
 ### Platform features to use
 - HTML: `<dialog>` for modals, **Popover API** for menus/toasts, `<details>`,
@@ -342,7 +504,9 @@ available" with a graceful fallback) as of 2026.
   required) for gauges/charts. **No inline scripts/styles** (CSP), **Trusted
   Types** enforced.
 - PWA: Web App Manifest + minimal service worker (offline shell only; never
-  cache API responses containing data after logout).
+  cache API responses containing data after logout). Optional: with the
+  default self-signed cert, browsers won't register the service worker, so
+  nothing may depend on it.
 
 ### Dark mode
 - Default follows `prefers-color-scheme`, **dark styling designed first**.
@@ -366,15 +530,15 @@ available" with a graceful fallback) as of 2026.
 
 ### Bootstrap (first run)
 Order of precedence:
-1. `WCMON_PASSWORD_HASH` / `WCMON_PASSWORD_HASH_FILE` — pre-computed Argon2id
-   PHC string (produced by `wcmon hash-password`).
-2. `WCMON_PASSWORD_FILE` — plaintext in a Docker/TrueNAS secret file; hashed on
+1. `TCMON_PASSWORD_HASH` / `TCMON_PASSWORD_HASH_FILE` — pre-computed Argon2id
+   PHC string (produced by `tcmon hash-password`).
+2. `TCMON_PASSWORD_FILE` — plaintext in a Docker/TrueNAS secret file; hashed on
    start, plaintext never stored or logged.
 3. Neither set → **setup mode**: a random one-time setup token is printed to the
    container log; the UI requires that token to set the initial password. Setup
    mode expires after 30 min (restart to regenerate).
 
-Avoid plaintext `WCMON_PASSWORD` env vars (visible in `docker inspect`); accept
+Avoid plaintext `TCMON_PASSWORD` env vars (visible in `docker inspect`); accept
 it only with a loud startup warning, or not at all (decide §15).
 
 ### Password policy (NIST SP 800-63B-4 aligned)
@@ -393,7 +557,7 @@ it only with a loud startup warning, or not at all (decide §15).
 
 ### Sessions
 - 256-bit random session ID; only its SHA-256 is stored server-side.
-- Cookie: `__Host-wcmon_session`, `Secure`, `HttpOnly`, `SameSite=Strict`,
+- Cookie: `__Host-tcmon_session`, `Secure`, `HttpOnly`, `SameSite=Strict`,
   `Path=/`, no `Domain`. (When serving plain HTTP on a trusted LAN — strongly
   discouraged — fall back to a non-`__Host-` name with a UI warning banner.)
 - Idle timeout 12 h, absolute lifetime 7 d ("remember me" optional, 30 d).
@@ -403,10 +567,10 @@ it only with a loud startup warning, or not at all (decide §15).
 ### Brute-force protection
 - Per-IP and global login throttling (e.g. 5 attempts / 15 min / IP with
   exponential delay; global 50 / 15 min), uniform error messages, audit-logged.
-- Respect `X-Forwarded-For` **only** from configured `WCMON_TRUSTED_PROXIES`.
+- Respect `X-Forwarded-For` **only** from configured `TCMON_TRUSTED_PROXIES`.
 
 ### Recovery
-- `docker exec <ctr> /wcmon reset-password` (prompts, or reads from stdin) —
+- `docker exec <ctr> /tcmon reset-password` (prompts, or reads from stdin) —
   TrueNAS: "Shell" button on the app container.
 
 ---
@@ -421,21 +585,49 @@ Scorecard**, **SLSA v1.x Build L3** (via GitHub-hosted reusable workflows).
 - Built-in HTTPS on by default, **TLS 1.3 only** (TLS 1.2 opt-in), modern
   curve preferences incl. the hybrid post-quantum `X25519MLKEM768` that Go
   enables by default.
-- Certificate: user-supplied (`WCMON_TLS_CERT_FILE` / `_KEY_FILE`, e.g. from
-  TrueNAS cert store mount) **or** auto-generated self-signed ECDSA P-256 cert
-  persisted in `/data/tls/` with SANs from `WCMON_PUBLIC_HOSTNAMES`.
-- `WCMON_TLS=off` for deployments behind a TLS-terminating reverse proxy
-  (Traefik, Caddy, Nginx Proxy Manager, TrueNAS-hosted proxy); then require
-  `WCMON_TRUSTED_PROXIES` and `X-Forwarded-Proto=https` to set Secure cookies.
-- HSTS (`max-age=31536000`) only when serving TLS directly with a non-self-signed
-  cert or when explicitly enabled.
+- **Default for this owner (D12): LAN only, no CA-validated certificate →
+  `TCMON_TLS=auto`.** The app generates a **self-signed ECDSA P-256
+  certificate** on first start, persisted in `/data/tls/` (0600), valid 825
+  days, auto-regenerated 30 days before expiry, SANs from
+  `TCMON_PUBLIC_HOSTNAMES` (e.g. the TrueNAS IP/hostname) plus `localhost`.
+  - The browser shows a one-time "not secure / not private" warning that the
+    owner accepts; traffic (including the password) is still encrypted.
+  - The SHA-256 fingerprint is printed in the container log and on the About
+    page so the owner can confirm it matches what the browser shows.
+  - Settings offers **"Download certificate"** so it can optionally be trusted
+    on the owner's devices to remove the warning.
+  - Known limitation: browsers refuse **service workers** on pages with
+    untrusted certificates, so PWA install/offline shell silently degrade
+    (the app must work fully without them).
+- Alternatives: user-supplied cert (`TCMON_TLS=file`, `TCMON_TLS_CERT_FILE` /
+  `_KEY_FILE`, e.g. exported from the TrueNAS cert store) or `TCMON_TLS=off`.
+- **Plain HTTP (`TCMON_TLS=off`) is not the default** even on the LAN: anyone
+  on the network could capture the password and session cookie. It is allowed
+  only behind a TLS-terminating proxy or with an explicit
+  `TCMON_ALLOW_INSECURE_HTTP=true`, which shows a permanent warning banner and
+  drops the `__Host-` cookie prefix.
+- **LAN-only access control (D12):** by default the server only accepts
+  client connections from loopback, RFC 1918 (10/8, 172.16/12, 192.168/16),
+  link-local and IPv6 ULA (fc00::/7) addresses; anything else gets 403 before
+  authentication. Configurable via `TCMON_ALLOWED_CLIENT_CIDRS` (e.g. narrow
+  it to `192.168.1.0/24`). This is defence in depth — the README still tells
+  the owner not to port-forward the app.
+- With `TCMON_TLS=off` behind a TLS-terminating reverse proxy
+  (Traefik, Caddy, Nginx Proxy Manager, TrueNAS-hosted proxy), require
+  `TCMON_TRUSTED_PROXIES` and `X-Forwarded-Proto=https` to set Secure cookies.
+- HSTS is **not** sent with the self-signed default (it would make the
+  certificate warning un-bypassable in some browsers); only with a
+  CA-validated cert or when explicitly enabled.
+- Outbound TLS is unaffected by D12: the Gmail SMTP connection **always
+  validates** Google's certificate. (The Wall Connector itself only speaks
+  plain HTTP on the LAN; nothing to validate there.)
 
 ### HTTP response headers (all responses)
 ```
 Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self';
   img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self';
   worker-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none';
-  require-trusted-types-for 'script'; trusted-types wcmon; upgrade-insecure-requests
+  require-trusted-types-for 'script'; trusted-types tcmon; upgrade-insecure-requests
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 Cross-Origin-Resource-Policy: same-origin
@@ -475,6 +667,9 @@ Static assets are content-hashed and served `immutable` with SRI hashes.
   provenance**, **cosign keyless signing** of images in GHCR; document
   verification (`cosign verify ...`).
 - `SECURITY.md` with private vulnerability reporting enabled on GitHub.
+- The repo is **public**: enable GitHub secret scanning + push protection,
+  Dependabot alerts, and OpenSSF Scorecard publishing; GHCR package visibility
+  public; never commit owner identifiers (serial, MAC, SSID, IPs).
 - Branch protection, required reviews/checks, signed commits recommended.
 
 ### Threat model (summary — expand in `docs/THREAT_MODEL.md` in Phase 1)
@@ -495,15 +690,15 @@ Static assets are content-hashed and served `immutable` with SRI hashes.
 ### Image
 - Multi-stage `Dockerfile`: `golang:<ver>-alpine@sha256:…` builder →
   `gcr.io/distroless/static-debian12:nonroot@sha256:…` runtime.
-- Binary at `/wcmon`, entrypoint `["/wcmon", "serve"]`.
+- Binary at `/tcmon`, entrypoint `["/tcmon", "serve"]`.
 - **Runs as UID/GID 568:568 by default** (TrueNAS `apps` user) — overridable
   with `user:`; image must work with any arbitrary UID that owns `/data`.
 - Volumes: `/data` (DB, secret key, TLS) — the only writable path. `/tmp` via
   tmpfs if needed.
-- Port: `8443` (HTTPS) or `8080` (HTTP when `WCMON_TLS=off`).
-- `HEALTHCHECK` uses `/wcmon healthcheck` (no curl in image) hitting
+- Port: `8443` (HTTPS) or `8080` (HTTP when `TCMON_TLS=off`).
+- `HEALTHCHECK` uses `/tcmon healthcheck` (no curl in image) hitting
   `/healthz` (unauthenticated, returns only `ok`) — `/readyz` checks DB.
-- OCI labels: `org.opencontainers.image.source/licenses=AGPL-3.0-only/version/revision`.
+- OCI labels: `org.opencontainers.image.source/licenses=AGPL-3.0-or-later/version/revision`.
 - Platforms: `linux/amd64`, `linux/arm64`. Published to
   `ghcr.io/bhager42/teslachargingmonitor` with tags `X.Y.Z`, `X.Y`, `latest`,
   plus digest pinning documented.
@@ -512,15 +707,16 @@ Static assets are content-hashed and served `immutable` with SRI hashes.
 ### Configuration (environment)
 | Variable | Default | Notes |
 |---|---|---|
-| `WCMON_LISTEN` | `:8443` | |
-| `WCMON_TLS` | `auto` | `auto` (self-signed) / `file` / `off` |
-| `WCMON_TLS_CERT_FILE`, `WCMON_TLS_KEY_FILE` | — | |
-| `WCMON_PUBLIC_HOSTNAMES` | — | SANs for self-signed cert, allowed `Host` values |
-| `WCMON_PASSWORD_HASH_FILE` / `WCMON_PASSWORD_FILE` | — | §9 |
-| `WCMON_SECRET_KEY_FILE` | `/data/secret.key` | |
-| `WCMON_TRUSTED_PROXIES` | — | CIDRs |
-| `WCMON_DEVICES` | — | Optional seed: `garage=http://192.168.1.50` (UI is source of truth after first start) |
-| `WCMON_LOG_LEVEL` | `info` | |
+| `TCMON_LISTEN` | `:8443` | |
+| `TCMON_TLS` | `auto` | `auto` (self-signed) / `file` / `off` |
+| `TCMON_TLS_CERT_FILE`, `TCMON_TLS_KEY_FILE` | — | |
+| `TCMON_PUBLIC_HOSTNAMES` | — | SANs for self-signed cert, allowed `Host` values |
+| `TCMON_PASSWORD_HASH_FILE` / `TCMON_PASSWORD_FILE` | — | §9 |
+| `TCMON_SECRET_KEY_FILE` | `/data/secret.key` | |
+| `TCMON_TRUSTED_PROXIES` | — | CIDRs |
+| `TCMON_ALLOWED_CLIENT_CIDRS` | private + loopback ranges | LAN-only enforcement (§10) |
+| `TCMON_ALLOW_INSECURE_HTTP` | `false` | Required to run `TCMON_TLS=off` without a proxy |
+| `TCMON_LOG_LEVEL` | `info` | |
 | `TZ` | `UTC` | Display & quiet hours |
 
 Every secret supports a `*_FILE` variant (Docker secrets / TrueNAS mounted files).
@@ -528,9 +724,9 @@ Every secret supports a `*_FILE` variant (Docker secrets / TrueNAS mounted files
 ### Generic Docker Compose (`deploy/compose.yaml`)
 ```yaml
 services:
-  wcmon:
+  tcmon:
     image: ghcr.io/bhager42/teslachargingmonitor:1   # pin digest in production
-    container_name: wcmon
+    container_name: tcmon
     restart: unless-stopped
     user: "568:568"
     read_only: true
@@ -540,13 +736,14 @@ services:
     ports: ["8443:8443"]
     environment:
       TZ: America/Chicago
-      WCMON_PUBLIC_HOSTNAMES: wcmon.lan,truenas.lan
-      WCMON_PASSWORD_FILE: /run/secrets/wcmon_password
-    secrets: [wcmon_password]
+      TCMON_TLS: auto                     # self-signed, LAN only (D12)
+      TCMON_PUBLIC_HOSTNAMES: truenas.lan,192.168.1.10   # your TrueNAS name/IP
+      TCMON_PASSWORD_FILE: /run/secrets/tcmon_password
+    secrets: [tcmon_password]
     volumes:
       - ./data:/data
     healthcheck:
-      test: ["CMD", "/wcmon", "healthcheck"]
+      test: ["CMD", "/tcmon", "healthcheck"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -558,8 +755,8 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 secrets:
-  wcmon_password:
-    file: ./wcmon_password.txt
+  tcmon_password:
+    file: ./tcmon_password.txt
 ```
 
 ### TrueNAS SCALE 25.10+ (`deploy/truenas/`)
@@ -568,15 +765,15 @@ TrueNAS SCALE 24.10+ runs apps on Docker Compose; 25.10 supports
 
 Deliverables:
 1. `deploy/truenas/custom-app.yaml` — Compose YAML ready to paste, using a host
-   path such as `/mnt/<pool>/apps/wcmon/data` mounted at `/data`, `user: 568:568`.
+   path such as `/mnt/<pool>/apps/tcmon/data` mounted at `/data`, `user: 568:568`.
 2. `docs/INSTALL_TRUENAS.md` step-by-step:
-   - Create dataset `<pool>/apps/wcmon` (preset *Apps*), owner `apps` (568).
+   - Create dataset `<pool>/apps/tcmon` (preset *Apps*), owner `apps` (568).
    - Option A: Install via YAML (paste file, edit pool path & TZ).
    - Option B: Apps → Custom App form (image, port, env, host-path storage,
      run as 568, read-only rootfs toggle if available).
    - Using a TrueNAS-managed certificate (export to the dataset) or putting the
      app behind a reverse proxy app.
-   - Retrieving the setup token from **Apps → wcmon → Logs**; password reset via
+   - Retrieving the setup token from **Apps → tcmon → Logs**; password reset via
      **Shell**.
    - Updating (image tag bump), backups (snapshot the dataset; app also offers
      DB backup download), restore.
@@ -593,8 +790,11 @@ Deliverables:
 
 - `LICENSE` containing the full **GNU AGPL v3** text (verbatim from gnu.org).
 - SPDX header in every source file:
-  `// SPDX-License-Identifier: AGPL-3.0-only` (or `-or-later`, see §15) and a
-  copyright line `// Copyright (C) 2026 <owner name>`.
+  `// SPDX-License-Identifier: AGPL-3.0-or-later` (owner decision D13) and a
+  copyright line `// Copyright (C) 2026 Brad Hager and contributors`
+  (owner decision D14). The README and About page use the
+  standard "either version 3 of the License, or (at your option) any later
+  version" wording.
 - **AGPL §13 compliance:** because users interact over a network, the web UI
   footer and the About page show "Source code" linking to the exact
   version/commit (`/about` shows version, commit SHA, build date, and a link to
@@ -605,13 +805,31 @@ Deliverables:
   "non-commercial" licences). Vendored JS licences included.
 - `CONTRIBUTING.md` with DCO sign-off (`Signed-off-by:`) — no CLA unless owner
   wants dual licensing (§15).
-- Trademark note in README: "Tesla" and "Wall Connector" are trademarks of
-  Tesla, Inc.; this project is not affiliated with or endorsed by Tesla. Do not
-  use Tesla logos in the UI/icon.
+- Trademark note in README, the About page and the login page footer:
+  "Tesla" and "Wall Connector" are trademarks of Tesla, Inc.; Tesla Charger
+  Monitoring is an independent project, not affiliated with or endorsed by
+  Tesla. Use the word "Tesla" only descriptively; no Tesla logos, fonts or
+  "T" mark in the UI, icon or social preview image.
 
 ---
 
 ## 13. Testing strategy
+
+Every phase ships its own tests in the same PRs as the code — tests are part of
+each phase's acceptance criteria, not a later phase. CI runs all of them on
+every push and pull request.
+
+| Phase | Tests that must exist when the phase is done |
+|---|---|
+| 0 | Unit (CLI, build info), fixture-redaction check, SPDX header check |
+| 1 | Unit + **fuzz** (decoder, URL validation) against real UWC fixtures; simulator self-tests |
+| 2 | Unit (store, migrations, retention) + **integration** (poller ⇄ simulator ⇄ SQLite) + 24 h soak |
+| 3 | Table-driven unit tests per rule and state transition; **integration** with simulator scenarios |
+| 4 | **Integration** with an in-process mock SMTP server (STARTTLS, implicit TLS, auth failure, Gmail error codes) |
+| 5 | Unit (hashing, sessions, throttling) + **HTTP integration** (headers, CSRF, LAN-only allowlist) + ZAP baseline scan |
+| 6 | **End-to-end** Playwright (Chromium, Firefox, WebKit) + axe accessibility in both themes + Lighthouse budget |
+| 7 | Container structure tests (non-root, read-only, healthcheck, size) + compose smoke test |
+| 8 | Full regression, extended fuzz corpus, ASVS checklist review |
 
 | Layer | Tooling | What |
 |---|---|---|
@@ -627,7 +845,8 @@ Deliverables:
 Coverage target ≥ 80 % for `internal/alerts`, `internal/auth`,
 `internal/wallconnector`; ≥ 70 % overall.
 
-Golden fixtures: `testdata/fixtures/<device-model>/<firmware>/{vitals,lifetime,wifi_status,version}.json`
+Golden fixtures: `testdata/fixtures/uwc/<firmware>/{vitals,lifetime,wifi_status,version}.json`
+(plus `gen3/` if a contributor provides them)
 captured from real hardware in Phase 0 (serials/MACs/SSIDs redacted).
 
 ---
@@ -638,6 +857,15 @@ Each phase = one or more small PRs, CI green, docs updated. Do not start a phase
 until the previous phase's acceptance criteria pass.
 
 ### Phase 0 — Discovery & repo bootstrap
+
+> **Status (2026-11-02): implemented** on `claude/awesome-cori-yon2g6` — LICENSE,
+> README, SECURITY, CONTRIBUTING (DCO), CODE_OF_CONDUCT, ADRs 0001–0004, draft
+> threat model, `scripts/capture.sh` (redacting), `scripts/check-headers.sh`,
+> Makefile, golangci-lint v2 config, Dependabot, CI/CodeQL/Scorecard workflows
+> (actions pinned by SHA), `tcmon version` with tests, fixture-redaction test.
+> Charging fixture deferred (D16, tracking issue). Owner to enable on GitHub:
+> private vulnerability reporting, secret scanning + push protection, branch
+> protection on `main` requiring CI.
 - Capture real payloads from the owner's device(s) (script
   `scripts/capture.sh <ip>` that curls the four endpoints, redacts serial/MAC/SSID,
   writes fixtures). **Needs owner input.**
@@ -647,27 +875,96 @@ until the previous phase's acceptance criteria pass.
   ADRs in `docs/adr/` (0001 language, 0002 SQLite, 0003 no-build frontend).
 - CI skeleton: lint, test, govulncheck, CodeQL, Scorecard, licence check.
 
-**Accept:** fixtures committed for every hardware model the owner has; CI green
+**Accept:** UWC idle fixtures committed and the field list in §2 updated to
+match reality (done for version/lifetime/wifi_status/idle vitals). The
+**charging `/vitals` capture is deferred** (owner's car unavailable — D16): do
+not block on it. Open a tracking issue "Add UWC charging vitals fixture"; until
+it lands, the simulator's charging scenario is synthesised from the Gen 3 field
+semantics and labelled provisional, and `relay_voltage_abnormal` ships
+**disabled by default** with a UI note "needs calibration from a charging
+capture". (`overcurrent` does **not** need the capture — its threshold comes
+from the configured 48 A max (D17) — so it ships enabled.) CI green
 on an empty `main` package; licence headers enforced by a CI check.
 
 ### Phase 1 — Wall Connector client + simulator
+
+> **Status (2026-11-02): implemented.** `internal/netguard` (LAN address
+> rules + connect-time dial guard), `internal/wallconnector` (models with
+> plausibility ranges, reflection-based tolerant decoder producing a
+> `Report` of unknown/missing/invalid fields, firmware parsing, observed-only
+> code tables, GUI address parsing, client: no proxy, no redirects, no
+> keep-alive, 5 s timeout, 64 KiB cap, one request at a time, `Snapshot` and
+> `Probe` for "Test connection"), `internal/wcsim` + `cmd/wcsim` (13
+> scenarios — idle, charging*, overheat*, thermal-foldback*, device-alert,
+> grid-low-voltage, overcurrent*, reboot, firmware-change, wifi-weak,
+> offline, slow, malformed; *provisional until issue #1; selectable by flag,
+> env or `POST /_sim/scenario`; `-speed` time acceleration). Three fuzz
+> targets run 60 s each in CI; the address fuzzer found and fixed a
+> trailing-dot / numeric-hostname bypass of the LAN check (regression seeds
+> in `internal/wallconnector/testdata/fuzz`). Coverage: wallconnector 92 %,
+> wcsim 94 %, netguard 100 %.
 - `internal/wallconnector`: typed models, tolerant decoder, code tables,
   client with timeouts/size limits/no redirects.
-- `cmd/wcsim` with scenario files.
+- `cmd/wcsim` with scenarios (implemented in Go rather than data files so
+  they can evolve with simulated time).
 - Fuzz tests on the decoder.
 
 **Accept:** client parses all fixtures; fuzzers run 60 s clean in CI;
 simulator scenarios selectable via flag/env.
 
 ### Phase 2 — Storage + poller
+
+> **Status (2026-11-02): implemented.** `internal/store` (SQLite via
+> modernc.org/sqlite v1.60.1, WAL, incremental auto-vacuum, 0600 file,
+> embedded consecutive migrations with downgrade refusal; devices with
+> 80 %-of-breaker max current, readings/raw payloads/events/poll log,
+> hourly rollups with watermark, batched retention pruning that never drops
+> un-rolled data, `VACUUM INTO` backups, stats). `internal/poller`
+> (worker per device, 60 min / 5 min plugged-in cadence with ±2 % jitter,
+> retries at 30 s / 2 min / 5 min, poll-now with 10 s rate limit, hot
+> reload via `Sync` every minute, reboot / firmware / grid-profile /
+> identity-mismatch detection with first-sighting baselines, update
+> fan-out for Phase 3). `tcmon serve` (JSON logs, nightly 03:17
+> maintenance) plus an **interim admin CLI** `tcmon device add|update|list|
+> remove|test`, `backup`, `migrate`. The CLI writes the same `devices`
+> table the web UI will own; D2 (address configured in the GUI, never env
+> vars) still holds — the CLI is an operator fallback, not configuration.
+> Soak: 3,000 back-to-back polls, goroutines and heap flat (CI runs it on
+> every build). Coverage: store 81 %, poller 93 %, cli 83 %.
 - SQLite store, migrations, retention + rollup jobs, backup (`VACUUM INTO`).
 - Poller with jitter/backoff/active-cadence; reboot & firmware-change detection.
-- `wcmon serve` runs headless and logs readings.
+- `tcmon serve` runs headless and logs readings.
 
 **Accept:** 24 h soak against simulator with no goroutine/memory growth; DB
 size within estimate (document MB/day/device); retention verified by test.
 
 ### Phase 3 — Alert engine
+
+> **Status (2026-11-02): implemented.** `internal/alerts`: 22 built-in rules
+> (all of §6 plus `identity_mismatch`), each with typed parameter specs
+> (bounds used for validation and, later, the rule editor), defaults in code
+> and owner overrides in `alert_rule_overrides` (all devices or one device).
+> One pure `step` function drives the per-(rule, device) state machine:
+> debounce (`for`, satisfied by a single sample when sampling is slower than
+> `for`), minimum consecutive samples, hysteresis, escalation (sent
+> immediately), silent de-escalation, cooldown (a held-back firing notice is
+> sent once the cooldown ends if still firing), repeat **only while
+> critical** (default 6 h on safety rules), optional resolved notices,
+> per-device / per-rule snoozes (max 30 days). Event rules (counters, firmware,
+> grid profile, reboot, identity) baseline on first sighting and re-baseline
+> on counter decreases. Fields flagged invalid skip evaluation. State is
+> persisted (no re-alerting after restart); every notice is recorded in
+> `alert_events` with a `notified` flag (suppressed ones are kept for the
+> history page) and can be acknowledged. `Preview` replays stored history
+> through one rule with a candidate config (not possible for
+> `device_unreachable`, as failed polls store no readings). Notices from one
+> poll are published as one batch so Phase 4 sends one email per poll.
+> `QuietHours` (non-critical muting, midnight-spanning windows) is
+> implemented here for Phase 4's channels. `tcmon serve` runs the engine and
+> logs alerts until email exists; `tcmon alerts rules|history` show config and
+> history. Acceptance test: the simulator's overheat scenario produces
+> exactly firing → escalated → resolved through the real poller and engine.
+> Coverage: alerts 91 %, store 84 %.
 - Rule types from §6, state machine, alert events, preview against history.
 
 **Accept:** table tests for every rule incl. debounce, hysteresis, cooldown,
@@ -675,13 +972,66 @@ repeat, resolve, snooze, quiet hours; simulator "overheat" scenario fires and
 resolves exactly once.
 
 ### Phase 4 — Notifications
-- Delivery queue, retries, channel implementations (owner's chosen set first),
-  templates, test-send, encrypted channel secrets.
 
-**Accept:** integration tests with mock receivers; secrets never appear in
+> **Status (2026-11-02): implemented.** `internal/secrets` (AES-256-GCM
+> with a 32-byte key in `secret.key` — `TCMON_SECRET_KEY_FILE`, created 0600
+> on first start, warns if group/world-readable; `Secret` type redacted in
+> fmt, slog and JSON). `internal/notify`: email via the Go standard library's
+> `net/smtp` (no new dependency) with the Gmail preset (smtp.gmail.com:587
+> STARTTLS, app password), implicit TLS on 465, TLS ≥ 1.2 with certificate
+> verification always on (optional private CA via `TCMON_SMTP_CA_FILE`),
+> **plaintext refused** if STARTTLS is not offered. Errors are classified
+> permanent vs transient with plain-English hints (Gmail 534 5.7.9 →
+> app-password instructions, 535, rejected recipient, certificate, DNS,
+> timeout). Messages: one `multipart/alternative` email per poll batch per
+> channel (text + escaped HTML templates, dark-mode friendly,
+> `Auto-Submitted`, header-injection safe, trademark notice in the footer).
+> Persistent queue `notify_deliveries` with backoff 1 m / 5 m / 15 m / 1 h
+> (repeating) and give-up after 24 h; permanent errors fail immediately;
+> per-channel minimum severity and quiet hours (non-critical notices during
+> quiet hours are **dropped from email but kept in the alert history**, not
+> deferred); channel health (last success, consecutive failures, last
+> error) for the future UI banner. Interim CLI: `tcmon notify add-email|
+> update|list|test|remove|log` (password only via `-password-stdin` or
+> `-password-file`, never argv). `tcmon serve` delivers alerts by email.
+> Tests: mock SMTP server (`internal/notify/smtpmock`) covering STARTTLS,
+> implicit TLS, wrong password, Gmail app-password error, rejected
+> recipient, plaintext refusal, untrusted certificate, transient 421 with
+> retry; the password is checked absent from the DB file, WAL, logs and
+> API structs; a simulator alert arrives as exactly one batched email, and
+> `tcmon serve` emails an overcurrent alert end to end. Other channels
+> (ntfy, webhook, …) remain future work behind the same queue.
+- Delivery queue, retries, `Channel` interface, **email (SMTP) channel
+  complete** (§7), templates, batching, test-send, encrypted channel secrets.
+  Other channels are follow-up PRs.
+
+**Accept:** integration tests against an in-process mock SMTP server covering
+STARTTLS, implicit TLS, auth failure, rejected recipient and plaintext refusal;
+an alert raised by the simulator arrives as one batched email; secrets never appear in
 logs, API responses, or DB plaintext (test asserts).
 
 ### Phase 5 — Web server, auth, security middleware
+
+> **Status (2026-11-02): implemented.** `internal/auth`: Argon2id
+> (m=64 MiB, t=3, p=1, PHC strings, transparent rehash; `golang.org/x/crypto`
+> v0.58.0), NFKC password policy (12–128 chars, 46k common passwords from the
+> NCSC list via SecLists (MIT), context words), one-time setup token (log,
+> 30 min, single use), `TCMON_PASSWORD_FILE` / `TCMON_PASSWORD_HASH(_FILE)`
+> (env-managed password; **plaintext `TCMON_PASSWORD` is refused** —
+> assumption for §15 Q13), sessions (256-bit IDs, SHA-256 at rest, 12 h idle
+> / 7 d absolute / 30 d remember-me, rotation, revoke others), per-IP and
+> global throttling, audit log (migration 0004, `AuditDays` retention 1 y).
+> `internal/web`: TLS auto (self-signed ECDSA P-256, 0600, 825 d, renewed
+> 30 d before expiry or when `TCMON_PUBLIC_HOSTNAMES` change, fingerprint in
+> log and About page, downloadable cert) / file / off (proxy or explicit
+> opt-in with banner), TLS 1.3 minimum, LAN-only client allowlist, Host
+> check against DNS rebinding, all §10 headers, `http.CrossOriginProtection`
+> + per-session CSRF tokens, 64 KiB bodies, server timeouts. Pages: setup,
+> login, minimal dashboard (devices, recent alerts), Security (change
+> password, sign out others, audit), About (version, AGPL source, cert
+> fingerprint). Assets embedded from `web/` (package `webui`), content-hashed.
+> CLI: `healthcheck`, `reset-password`, `hash-password`. ZAP baseline scan
+> in CI; ASVS checklist in `docs/security/asvs.md`.
 - HTTPS (auto/file/off), security headers, CSRF, sessions, login throttling,
   setup-token flow, `reset-password`/`hash-password` CLI, audit log.
 
@@ -722,7 +1072,7 @@ cost tracking with utility rates; multi-connector power-sharing view; passkey
 
 ### Proposed repository layout
 ```
-cmd/wcmon/            main entrypoint + CLI subcommands
+cmd/tcmon/            main entrypoint + CLI subcommands
 cmd/wcsim/            Wall Connector simulator
 internal/{config,wallconnector,poller,store,alerts,notify,auth,web,cli}/
 internal/store/migrations/*.sql
@@ -741,53 +1091,77 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 
 ## 15. Open questions / inputs needed from the owner
 
+### 15.0 Resolved decisions
+| # | Decision | Date | Effect on plan |
+|---|---|---|---|
+| D1 | Owner has **only a Universal Wall Connector** (UWC). | 2026-11-02 | UWC is the primary, tested target; Gen 3 is best-effort. Fixtures and simulator scenarios are UWC-first (§2, §13, Phase 0/1). |
+| D2 | The Wall Connector **IP address is configured in the Web GUI** (not env vars/config files). | 2026-11-02 | First-run onboarding + Settings device form with Test connection (§8); `TCMON_DEVICES` env seed removed (§11); poller hot-reloads on address change (§6). |
+| D3 | `/version` and `/lifetime` captured from the UWC (fw 26.26.10), serial redacted. | 2026-11-02 | §2 verification table; extra `/version` fields stored; new `grid_profile_changed` rule; counter rules baseline on first sighting. |
+| D4 | Idle `/vitals` captured from the UWC. | 2026-11-02 | UWC uses `relay_k1_v`/`relay_k2_v` instead of `relay_coil_v`; relay rule reworked; not-ready rule gated on vehicle connected; grid rule uses `grid_v`; boot vs lifetime uptime clarified. |
+| D5 | `/wifi_status` captured from the UWC (SSID, MAC, IP redacted in fixture). | 2026-11-02 | §2 marks it verified; `wifi_infra_ip` used to detect address drift; SSID/MAC masked. Only a charging `/vitals` capture remains. |
+| D6 | Polling interval configurable in the GUI; **default 60 min**. | 2026-11-02 | §6 rewritten for hourly snapshots: counter-delta rules as backbone, retries before unreachable alert, poll-now button, optional faster polling while plugged in; retention simplified (§5). |
+| D7 | **Email is the primary notification channel**; others may follow. | 2026-11-02 | §7 + Phase 4: full SMTP channel first, batching, provider presets; other channels later. |
+| D8 | Project name **Tesla Charger Monitoring**; repo is **public**. | 2026-11-02 | Short id `tcmon` (binary, `TCMON_*` env vars, cookie); trademark disclaimer strengthened (§12); public-repo hardening (§10). |
+| D9 | **Go** confirmed as the language. | 2026-11-02 | §4 stands. |
+| D10 | Faster polling while a car is plugged in: **on by default** (5 min). The 16 s uptime in the idle `/vitals` capture was an intentional restart. | 2026-11-02 | §6 Poller; fixture README annotated. |
+| D11 | Email provider is **Gmail**. | 2026-11-02 | §7: Gmail default preset, app-password guidance, Gmail error hints. |
+| D12 | **LAN only**; no CA-validated HTTPS certificate. | 2026-11-02 | §10: self-signed cert by default with fingerprint + download; client-IP allowlist of private ranges; HSTS off; plain HTTP only by explicit opt-in. |
+| D13 | License **AGPL-3.0-or-later**. | 2026-11-02 | §12 SPDX headers, OCI label, README wording. |
+| D14 | Copyright holder: **Brad Hager**. | 2026-11-02 | §12 header line. |
+| D15 | Data retention **adjustable in the Web GUI**, default **2 years**. | 2026-11-02 | §5 retention UI with presets, size estimate, confirmation before deleting. |
+| D16 | Charging `/vitals` capture **deferred** (car not available). HTTPS with a self-signed cert and one-time browser warning **confirmed** (D12). | 2026-11-02 | Phase 0 no longer blocks on it; charging-dependent rules ship disabled until calibrated. |
+| D17 | **60 A circuit → 48 A max charging current**; 240 V / 60 Hz split-phase (confirmed by idle capture: `grid_v` 240.1, `grid_hz` 59.8). | 2026-11-02 | §8 device form (breaker → 80 % max), `overcurrent` threshold 50.4 A and enabled by default, new optional `current_near_limit` rule. |
+
+### 15.1 Still open
+
+Anything below that is not answered uses the documented default; Claude Code
+records the assumption in the PR that relies on it.
+
 **Hardware & network**
-1. Which units do you have — Gen 3 Wall Connector, Universal Wall Connector, or
-   both? How many? Are any in a **power-sharing** group?
-2. Their LAN IPs/hostnames (reserve them via DHCP so they don't change).
-3. Sample JSON from each unit: run
+1. How many UWCs (just one?) and is it in a **power-sharing** group? *(Model
+   answered: UWC — D1.)*
+2. *(Answered — D2: entered in the Web GUI.)* Please still reserve the UWC's IP
+   in your router's DHCP so it doesn't change.
+3. **Deferred (D16):** `/api/1/vitals` while a car is actively charging (and
+   ideally plugged-in-but-not-charging) — send it when the car is back. For reference, the full list: run
    `curl http://<ip>/api/1/vitals`, `/lifetime`, `/wifi_status`, `/version`
    (ideally once idle and once while charging) and share them — redact serial,
-   MAC and SSID if you like.
-4. Electrical setup: country/region, nominal voltage (240 V split-phase, 208 V,
-   230 V single-phase, 400 V three-phase), frequency, **breaker size and the
-   max current configured during commissioning**.
+   MAC and SSID if you like. *(The restart that produced 16 s uptime was
+   intentional — D10.)*
+4. *(Answered — D17: 60 A breaker, 48 A max, 240 V / 60 Hz.)*
 5. Is TrueNAS on the same VLAN/subnet as the chargers, or will traffic cross a
    firewall?
 
 **Alerting**
-6. Which notification channels do you want in v1 (ntfy, email/SMTP, Pushover,
-   Gotify, Discord, Slack, Telegram, Home Assistant, generic webhook)?
+6. *(Answered — D7/D11: email via Gmail.)* Which second channel, if any,
+   would you want next (ntfy, Pushover, Home Assistant, …)?
 7. Confirm or adjust the default thresholds in §6 (especially temperatures and
    voltage band). Any rules to add/remove?
 8. Quiet hours? Daily/weekly summary digest wanted?
-9. Default poll interval OK at 30 s (15 s while charging)?
+9. *(Answered — D6/D10: 60 min default, 5 min while plugged in.)*
 10. Do you want an external dead-man's-switch ping (healthchecks.io / Uptime Kuma)?
 
 **Access & security**
-11. How will you reach the UI: LAN only, via VPN (Tailscale/WireGuard), or via a
-    reverse proxy? Which proxy, if any?
-12. TLS: use a TrueNAS-managed certificate, let the app self-sign, or terminate
-    TLS at a reverse proxy?
-13. Password provisioning preference: first-run setup token (default), Docker
-    secret file, or pre-hashed value? Should a plaintext env var be refused
-    entirely?
+11. *(Answered — D12: LAN only.)*
+12. *(Answered — D12/D16: self-signed HTTPS, one-time browser warning.)*
+13. *(Default applied in Phase 5: all three supported — setup token,
+    `TCMON_PASSWORD_FILE`, `TCMON_PASSWORD_HASH`; plaintext `TCMON_PASSWORD`
+    is refused.)* Tell us if you want a different default.
 14. Session lifetime preferences (default 12 h idle / 7 d absolute)?
 
 **Data**
-15. Retention preferences (defaults in §5)? Which dataset/pool path on TrueNAS?
+15. *(Answered — D15: adjustable in GUI, 2-year default.)* Which dataset/pool
+    path on TrueNAS? (Default in docs: `/mnt/<pool>/apps/tcmon/data`.)
 16. Prometheus/Grafana or InfluxDB export wanted? Home Assistant/MQTT integration?
 17. Units: °C or °F; time zone.
 
 **Project / legal**
-18. Project and image name (default `wcmon` / `ghcr.io/bhager42/teslachargingmonitor`).
-19. **AGPL-3.0-only** or **AGPL-3.0-or-later**? Copyright holder name for headers.
-20. Will the repo be public? (Affects GHCR visibility, Scorecard, private
-    vulnerability reporting, and the AGPL source link.)
+18. *(Answered — D8: Tesla Charger Monitoring, short id `tcmon`.)*
+19. *(Answered — D13/D14: AGPL-3.0-or-later, © Brad Hager.)*
+20. *(Answered — D8: public.)*
 21. Contributions: DCO sign-off OK, or do you want a CLA (only needed if you may
     ever relicense)?
-22. Language preference: is Go acceptable, or do you prefer Python or
-    TypeScript for maintainability?
+22. *(Answered — D9: Go.)*
 23. Should we target submission to the official TrueNAS community app catalog?
 
 ---

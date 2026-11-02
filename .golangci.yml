@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Brad Hager and contributors
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gosec
+    - misspell
+    - noctx
+    - revive
+    - unconvert
+    - unparam
+    - usestdlibvars
+  settings:
+    misspell:
+      locale: US
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+
+  exclusions:
+    rules:
+      # Tests may use literal status codes, plain requests and unclosed
+      # httptest bodies; production code is held to these rules.
+      - path: _test\.go
+        linters: [usestdlibvars, noctx, bodyclose]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
