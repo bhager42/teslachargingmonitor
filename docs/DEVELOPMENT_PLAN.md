@@ -2,7 +2,7 @@
 
 > **Audience:** Claude Code (and human contributors).
 > **Status:** Draft v2 — 2026-11-02. Owner decisions so far are recorded in [§15.0](#150-resolved-decisions); remaining open questions follow it.
-> **License:** AGPL-3.0 (see §12).
+> **License:** AGPL-3.0-or-later (see §12).
 
 A small, self-hosted, containerized web app that polls the local HTTP API of a
 **Tesla Universal Wall Connector** (the owner's only hardware — the primary and
@@ -248,7 +248,8 @@ Retention defaults (all configurable): at the default hourly cadence one
 device produces ~8,800 rows/year per table, so **raw readings are kept 2 years**
 and no rollups are needed. Rollups (5-min → 1-h) are generated only for data
 sampled more often than hourly (e.g. if the owner shortens the interval or
-enables faster polling while charging) and are kept indefinitely. Raw payloads
+enables faster polling while charging, which is on by default) and are kept
+indefinitely. Raw payloads
 90 d; alert events 2 y; audit log 1 y. Nightly
 `VACUUM`/`PRAGMA optimize`; online backup via `VACUUM INTO` exposed as a
 downloadable backup in Settings.
@@ -270,8 +271,10 @@ provided). Never return decrypted secrets to the browser — show "•••• 
 - An immediate poll on startup and after a device is added/edited, plus a
   **"Poll now"** button on the dashboard and device page (rate-limited to once
   per 10 s).
-- Optional **"poll more often while a car is plugged in"** (off by default;
-  e.g. 5 min while `vehicle_connected || contactor_closed`). This is what makes
+- **"Poll more often while a car is plugged in"** — **on by default** (owner
+  decision D10): every **5 min** while `vehicle_connected || contactor_closed`,
+  back to the normal interval once unplugged; both intervals and the toggle are
+  editable in the GUI. This is what makes
   the instantaneous rules (temperature, current, voltage) useful during a
   session; the GUI explains the trade-off next to the setting.
 - Per-request timeout 5 s; response body limit 64 KiB; reject non-JSON.
@@ -300,8 +303,9 @@ Hourly polling sees **snapshots**, not continuous data. The plan handles this:
   at any interval, so they are the backbone of the default rule set.
 - **Instantaneous rules** (temperatures, current, voltage, frequency,
   `current_alerts`) only see the moment of the poll. They stay enabled but the
-  rule UI notes "checked once per poll"; enabling faster polling while plugged
-  in improves them.
+  rule UI notes "checked once per poll". Because faster polling while plugged
+  in is on by default, they are sampled every 5 min during charging — when
+  they matter most.
 - Rule durations ("for 60 s") are evaluated as "for at least this long **or**
   one sample, whichever is longer", so at hourly cadence a single breaching
   sample fires (except where noted below).
@@ -375,10 +379,20 @@ without touching the alert engine.
   verification (custom CA mountable), username, password / app password
   (encrypted at rest, §5), From address + display name, **one or more To
   addresses**, subject prefix (default `[Tesla Charger Monitoring]`).
-- Provider presets with help text: Gmail / Google Workspace and iCloud (need an
-  **app password** with 2-step verification on), Outlook.com / Microsoft 365,
-  Fastmail, Proton Mail Bridge, self-hosted/relay, custom. OAuth2 (XOAUTH2)
-  is a stretch goal.
+- **Gmail is the owner's provider (D11) and the default preset**:
+  `smtp.gmail.com`, port **587 STARTTLS** (465 implicit TLS selectable),
+  username = full Gmail address, password = a **Google app password**
+  (requires 2-Step Verification; the regular account password will not work).
+  The settings page links to Google's app-password page and explains this.
+  The From address must be the Gmail address or a verified "Send mail as"
+  alias, so default From = username. Gmail's sending limits are far above this
+  app's volume; batching (below) keeps it that way. Errors such as
+  `534 5.7.9 Application-specific password required` are translated into
+  plain-English hints in the test-email result.
+- Other presets: Google Workspace, iCloud (also app password), Outlook.com /
+  Microsoft 365, Fastmail, Proton Mail Bridge, self-hosted/relay, custom.
+  OAuth2 (XOAUTH2) for Gmail is a stretch goal; the app password is the v1
+  method.
 - Messages: `multipart/alternative` plain-text + simple HTML (inline CSS only,
   no remote images, no tracking), readable in dark-mode mail clients; correct
   `Date`, `Message-ID`, `Auto-Submitted: auto-generated` headers; link back to
@@ -469,7 +483,9 @@ in the `devices` table — there is no env var or config file for it.
   required) for gauges/charts. **No inline scripts/styles** (CSP), **Trusted
   Types** enforced.
 - PWA: Web App Manifest + minimal service worker (offline shell only; never
-  cache API responses containing data after logout).
+  cache API responses containing data after logout). Optional: with the
+  default self-signed cert, browsers won't register the service worker, so
+  nothing may depend on it.
 
 ### Dark mode
 - Default follows `prefers-color-scheme`, **dark styling designed first**.
@@ -548,14 +564,42 @@ Scorecard**, **SLSA v1.x Build L3** (via GitHub-hosted reusable workflows).
 - Built-in HTTPS on by default, **TLS 1.3 only** (TLS 1.2 opt-in), modern
   curve preferences incl. the hybrid post-quantum `X25519MLKEM768` that Go
   enables by default.
-- Certificate: user-supplied (`TCMON_TLS_CERT_FILE` / `_KEY_FILE`, e.g. from
-  TrueNAS cert store mount) **or** auto-generated self-signed ECDSA P-256 cert
-  persisted in `/data/tls/` with SANs from `TCMON_PUBLIC_HOSTNAMES`.
-- `TCMON_TLS=off` for deployments behind a TLS-terminating reverse proxy
-  (Traefik, Caddy, Nginx Proxy Manager, TrueNAS-hosted proxy); then require
+- **Default for this owner (D12): LAN only, no CA-validated certificate →
+  `TCMON_TLS=auto`.** The app generates a **self-signed ECDSA P-256
+  certificate** on first start, persisted in `/data/tls/` (0600), valid 825
+  days, auto-regenerated 30 days before expiry, SANs from
+  `TCMON_PUBLIC_HOSTNAMES` (e.g. the TrueNAS IP/hostname) plus `localhost`.
+  - The browser shows a one-time "not secure / not private" warning that the
+    owner accepts; traffic (including the password) is still encrypted.
+  - The SHA-256 fingerprint is printed in the container log and on the About
+    page so the owner can confirm it matches what the browser shows.
+  - Settings offers **"Download certificate"** so it can optionally be trusted
+    on the owner's devices to remove the warning.
+  - Known limitation: browsers refuse **service workers** on pages with
+    untrusted certificates, so PWA install/offline shell silently degrade
+    (the app must work fully without them).
+- Alternatives: user-supplied cert (`TCMON_TLS=file`, `TCMON_TLS_CERT_FILE` /
+  `_KEY_FILE`, e.g. exported from the TrueNAS cert store) or `TCMON_TLS=off`.
+- **Plain HTTP (`TCMON_TLS=off`) is not the default** even on the LAN: anyone
+  on the network could capture the password and session cookie. It is allowed
+  only behind a TLS-terminating proxy or with an explicit
+  `TCMON_ALLOW_INSECURE_HTTP=true`, which shows a permanent warning banner and
+  drops the `__Host-` cookie prefix.
+- **LAN-only access control (D12):** by default the server only accepts
+  client connections from loopback, RFC 1918 (10/8, 172.16/12, 192.168/16),
+  link-local and IPv6 ULA (fc00::/7) addresses; anything else gets 403 before
+  authentication. Configurable via `TCMON_ALLOWED_CLIENT_CIDRS` (e.g. narrow
+  it to `192.168.1.0/24`). This is defence in depth — the README still tells
+  the owner not to port-forward the app.
+- With `TCMON_TLS=off` behind a TLS-terminating reverse proxy
+  (Traefik, Caddy, Nginx Proxy Manager, TrueNAS-hosted proxy), require
   `TCMON_TRUSTED_PROXIES` and `X-Forwarded-Proto=https` to set Secure cookies.
-- HSTS (`max-age=31536000`) only when serving TLS directly with a non-self-signed
-  cert or when explicitly enabled.
+- HSTS is **not** sent with the self-signed default (it would make the
+  certificate warning un-bypassable in some browsers); only with a
+  CA-validated cert or when explicitly enabled.
+- Outbound TLS is unaffected by D12: the Gmail SMTP connection **always
+  validates** Google's certificate. (The Wall Connector itself only speaks
+  plain HTTP on the LAN; nothing to validate there.)
 
 ### HTTP response headers (all responses)
 ```
@@ -633,7 +677,7 @@ Static assets are content-hashed and served `immutable` with SRI hashes.
 - Port: `8443` (HTTPS) or `8080` (HTTP when `TCMON_TLS=off`).
 - `HEALTHCHECK` uses `/tcmon healthcheck` (no curl in image) hitting
   `/healthz` (unauthenticated, returns only `ok`) — `/readyz` checks DB.
-- OCI labels: `org.opencontainers.image.source/licenses=AGPL-3.0-only/version/revision`.
+- OCI labels: `org.opencontainers.image.source/licenses=AGPL-3.0-or-later/version/revision`.
 - Platforms: `linux/amd64`, `linux/arm64`. Published to
   `ghcr.io/bhager42/teslachargingmonitor` with tags `X.Y.Z`, `X.Y`, `latest`,
   plus digest pinning documented.
@@ -649,6 +693,8 @@ Static assets are content-hashed and served `immutable` with SRI hashes.
 | `TCMON_PASSWORD_HASH_FILE` / `TCMON_PASSWORD_FILE` | — | §9 |
 | `TCMON_SECRET_KEY_FILE` | `/data/secret.key` | |
 | `TCMON_TRUSTED_PROXIES` | — | CIDRs |
+| `TCMON_ALLOWED_CLIENT_CIDRS` | private + loopback ranges | LAN-only enforcement (§10) |
+| `TCMON_ALLOW_INSECURE_HTTP` | `false` | Required to run `TCMON_TLS=off` without a proxy |
 | `TCMON_LOG_LEVEL` | `info` | |
 | `TZ` | `UTC` | Display & quiet hours |
 
@@ -669,7 +715,8 @@ services:
     ports: ["8443:8443"]
     environment:
       TZ: America/Chicago
-      TCMON_PUBLIC_HOSTNAMES: tcmon.lan,truenas.lan
+      TCMON_TLS: auto                     # self-signed, LAN only (D12)
+      TCMON_PUBLIC_HOSTNAMES: truenas.lan,192.168.1.10   # your TrueNAS name/IP
       TCMON_PASSWORD_FILE: /run/secrets/tcmon_password
     secrets: [tcmon_password]
     volumes:
@@ -722,8 +769,11 @@ Deliverables:
 
 - `LICENSE` containing the full **GNU AGPL v3** text (verbatim from gnu.org).
 - SPDX header in every source file:
-  `// SPDX-License-Identifier: AGPL-3.0-only` (or `-or-later`, see §15) and a
-  copyright line `// Copyright (C) 2026 <owner name>`.
+  `// SPDX-License-Identifier: AGPL-3.0-or-later` (owner decision D13) and a
+  copyright line `// Copyright (C) 2026 <copyright holder> and contributors`
+  (holder name still open, §15 Q19). The README and About page use the
+  standard "either version 3 of the License, or (at your option) any later
+  version" wording.
 - **AGPL §13 compliance:** because users interact over a network, the web UI
   footer and the About page show "Source code" linking to the exact
   version/commit (`/about` shows version, commit SHA, build date, and a link to
@@ -889,6 +939,10 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 | D7 | **Email is the primary notification channel**; others may follow. | 2026-11-02 | §7 + Phase 4: full SMTP channel first, batching, provider presets; other channels later. |
 | D8 | Project name **Tesla Charger Monitoring**; repo is **public**. | 2026-11-02 | Short id `tcmon` (binary, `TCMON_*` env vars, cookie); trademark disclaimer strengthened (§12); public-repo hardening (§10). |
 | D9 | **Go** confirmed as the language. | 2026-11-02 | §4 stands. |
+| D10 | Faster polling while a car is plugged in: **on by default** (5 min). The 16 s uptime in the idle `/vitals` capture was an intentional restart. | 2026-11-02 | §6 Poller; fixture README annotated. |
+| D11 | Email provider is **Gmail**. | 2026-11-02 | §7: Gmail default preset, app-password guidance, Gmail error hints. |
+| D12 | **LAN only**; no CA-validated HTTPS certificate. | 2026-11-02 | §10: self-signed cert by default with fingerprint + download; client-IP allowlist of private ranges; HSTS off; plain HTTP only by explicit opt-in. |
+| D13 | License **AGPL-3.0-or-later**. | 2026-11-02 | §12 SPDX headers, OCI label, README wording. |
 
 ### 15.1 Still open
 
@@ -903,7 +957,8 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
    the last missing capture. For reference, the full list: run
    `curl http://<ip>/api/1/vitals`, `/lifetime`, `/wifi_status`, `/version`
    (ideally once idle and once while charging) and share them — redact serial,
-   MAC and SSID if you like.
+   MAC and SSID if you like. *(The restart that produced 16 s uptime was
+   intentional — D10.)*
 4. Electrical setup: country/region, nominal voltage (240 V split-phase, 208 V,
    230 V single-phase, 400 V three-phase), frequency, **breaker size and the
    max current configured during commissioning**.
@@ -911,21 +966,19 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
    firewall?
 
 **Alerting**
-6. *(Answered — D7: email first.)* Which email provider/SMTP server will you
-   use (Gmail, iCloud, Outlook, Fastmail, your own)? Which second channel, if
-   any, would you want next (ntfy, Pushover, Home Assistant, …)?
+6. *(Answered — D7/D11: email via Gmail.)* Which second channel, if any,
+   would you want next (ntfy, Pushover, Home Assistant, …)?
 7. Confirm or adjust the default thresholds in §6 (especially temperatures and
    voltage band). Any rules to add/remove?
 8. Quiet hours? Daily/weekly summary digest wanted?
-9. *(Answered — D6: 60 min default.)* Turn on "poll more often while a car is
-   plugged in" by default, or leave it off?
+9. *(Answered — D6/D10: 60 min default, 5 min while plugged in.)*
 10. Do you want an external dead-man's-switch ping (healthchecks.io / Uptime Kuma)?
 
 **Access & security**
-11. How will you reach the UI: LAN only, via VPN (Tailscale/WireGuard), or via a
-    reverse proxy? Which proxy, if any?
-12. TLS: use a TrueNAS-managed certificate, let the app self-sign, or terminate
-    TLS at a reverse proxy?
+11. *(Answered — D12: LAN only.)*
+12. *(Answered — D12: no validated certificate → app self-signs.)* Please
+    confirm you're OK with HTTPS using a self-signed certificate (one-time
+    browser warning) rather than plain HTTP.
 13. Password provisioning preference: first-run setup token (default), Docker
     secret file, or pre-hashed value? Should a plaintext env var be refused
     entirely?
@@ -938,7 +991,8 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 
 **Project / legal**
 18. *(Answered — D8: Tesla Charger Monitoring, short id `tcmon`.)*
-19. **AGPL-3.0-only** or **AGPL-3.0-or-later**? Copyright holder name for headers.
+19. *(Answered — D13: AGPL-3.0-or-later.)* Copyright holder name for file
+    headers (your real name, or your GitHub handle `bhager42`)?
 20. *(Answered — D8: public.)*
 21. Contributions: DCO sign-off OK, or do you want a CLA (only needed if you may
     ever relicense)?
