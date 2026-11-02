@@ -9,4 +9,4 @@ Serial number redacted. Device IP intentionally not recorded.
 | `lifetime.json` | captured |
 | `vitals.json` (idle, no vehicle, ~16 s after boot) | captured |
 | `vitals.charging.json` | **missing** |
-| `wifi_status.json` | **missing** (redact SSID/MAC) |
+| `wifi_status.json` | captured (SSID → base64 "REDACTED", MAC → 02:00:00:00:00:00, IP → 192.0.2.17 documentation range) |

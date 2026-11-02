@@ -82,7 +82,7 @@ adapter). Endpoints marked *unverified* below are hypotheses until fixtures exis
 | `/api/1/version` | ✅ verified | Gen 3 fields present **plus** `git_branch` and three IEEE 1547 CRCs: `IEEE1547VfTripsCrc`, `IEEE1547RideThruMomentaryCessationCrc`, `IEEE1547CombinedComplianceCrc` (8-hex-digit strings). `firmware_version` is semver-like with build metadata (`26.26.10+g<git-sha>`) — parse major.minor.patch and keep the full string. |
 | `/api/1/lifetime` | ✅ verified | Field set identical to Gen 3. `avg_startup_temp` reported `0.0` (likely unused — don't alert on it). |
 | `/api/1/vitals` | ✅ idle verified / ⏳ charging | **Differs from Gen 3:** `relay_coil_v` is absent; the UWC reports **`relay_k1_v` and `relay_k2_v`** (two relays, 0.0 when open). Idle with no vehicle: `evse_state` = 1, `config_status` = 5, `evse_not_ready_reasons` = `[2,4,8]` (so not-ready reasons are **normal when unplugged**), `pilot_high_v`/`pilot_low_v` = 12.0 (no vehicle on the pilot), per-phase `voltageX_v` ≈ 0 while the contactor is open (only `grid_v` is meaningful then). `uptime_s` here is **time since boot** (16 s at capture) whereas `lifetime.uptime_s` is cumulative — don't confuse them. Need a capture **while charging**. |
-| `/api/1/wifi_status` | ⏳ unverified | Need capture. |
+| `/api/1/wifi_status` | ✅ verified | Field set identical to Gen 3. `wifi_ssid` is base64 (decode, then HTML-escape — it is attacker-controllable text). `wifi_infra_ip` reports the device's own IP: show it next to the configured address and warn if they differ. `wifi_mac` and SSID are treated as sensitive (masked in UI by default, never logged). |
 
 Note: the device stores lifetime counters (e.g. `alert_count` was already 3 at
 first capture). Counter-based rules must take a **baseline on first sighting**
@@ -109,7 +109,7 @@ payloads**; the parser must tolerate unknown/missing fields):
 - **lifetime (verified on UWC):** `contactor_cycles`, `contactor_cycles_loaded`, `alert_count`,
   `thermal_foldbacks`, `avg_startup_temp`, `charge_starts`, `energy_wh`,
   `connector_cycles`, `uptime_s`, `charging_time_s`.
-- **wifi_status:** `wifi_ssid` (base64), `wifi_signal_strength`, `wifi_rssi`,
+- **wifi_status (verified on UWC):** `wifi_ssid` (base64), `wifi_signal_strength`, `wifi_rssi`,
   `wifi_snr`, `wifi_connected`, `wifi_infra_ip`, `internet`, `wifi_mac`.
 - **version (verified on UWC):** `firmware_version`, `git_branch`,
   `part_number`, `serial_number`, `web_service`, `IEEE1547VfTripsCrc`,
@@ -813,6 +813,7 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 | D2 | The Wall Connector **IP address is configured in the Web GUI** (not env vars/config files). | 2026-11-02 | First-run onboarding + Settings device form with Test connection (§8); `WCMON_DEVICES` env seed removed (§11); poller hot-reloads on address change (§6). |
 | D3 | `/version` and `/lifetime` captured from the UWC (fw 26.26.10), serial redacted. | 2026-11-02 | §2 verification table; extra `/version` fields stored; new `grid_profile_changed` rule; counter rules baseline on first sighting. |
 | D4 | Idle `/vitals` captured from the UWC. | 2026-11-02 | UWC uses `relay_k1_v`/`relay_k2_v` instead of `relay_coil_v`; relay rule reworked; not-ready rule gated on vehicle connected; grid rule uses `grid_v`; boot vs lifetime uptime clarified. |
+| D5 | `/wifi_status` captured from the UWC (SSID, MAC, IP redacted in fixture). | 2026-11-02 | §2 marks it verified; `wifi_infra_ip` used to detect address drift; SSID/MAC masked. Only a charging `/vitals` capture remains. |
 
 ### 15.1 Still open
 
@@ -823,8 +824,8 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
    in your router's DHCP so it doesn't change.
 3. Remaining sample JSON from your UWC: `/version`, `/lifetime` and idle
    `/vitals` are captured (D3, D4); still needed are **`/api/1/vitals` while a
-   car is actively charging** (and ideally plugged-in-but-not-charging) and
-   **`/api/1/wifi_status`**. For reference, the full list: run
+   car is actively charging** (and ideally plugged-in-but-not-charging) —
+   the last missing capture. For reference, the full list: run
    `curl http://<ip>/api/1/vitals`, `/lifetime`, `/wifi_status`, `/version`
    (ideally once idle and once while charging) and share them — redact serial,
    MAC and SSID if you like.
