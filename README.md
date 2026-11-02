@@ -4,9 +4,10 @@ Self-hosted monitoring and email alerting for the **Tesla Universal Wall
 Connector**, packaged as a small, hardened container for **TrueNAS SCALE
 25.10+** or any Docker host.
 
-> **Status: early development (Phase 2 complete — storage and polling).**
-> `tcmon serve` polls and stores readings headlessly; there is no web UI or
-> alerting yet. See the
+> **Status: early development (Phase 3 complete — storage, polling and
+> alert engine).** `tcmon serve` polls, stores readings and evaluates alert
+> rules headlessly; alerts are logged until email delivery (Phase 4) and the
+> web UI (Phases 5–6) land. See the
 > [development plan](docs/DEVELOPMENT_PLAN.md) for scope and roadmap.
 
 ## What it will do

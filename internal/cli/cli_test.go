@@ -66,13 +66,16 @@ func TestBasicCommands(t *testing.T) {
 		{[]string{"help"}, 0, "Usage: tcmon", ""},
 		{nil, 2, "", "Usage: tcmon"},
 		{[]string{"bogus"}, 2, "", `unknown command "bogus"`},
-		{[]string{"migrate"}, 0, "schema version 1", ""},
+		{[]string{"migrate"}, 0, "schema version 2", ""},
 		{[]string{"device"}, 2, "", "tcmon device add"},
 		{[]string{"device", "list"}, 0, "No devices", ""},
 		{[]string{"device", "add"}, 2, "", "-address is required"},
 		{[]string{"device", "add", "-address", "8.8.8.8"}, 1, "", "not a local network address"},
 		{[]string{"device", "remove", "1"}, 1, "", "-yes"},
 		{[]string{"backup"}, 2, "", "Usage: tcmon backup"},
+		{[]string{"alerts"}, 2, "", "tcmon alerts rules"},
+		{[]string{"alerts", "rules"}, 0, "false (needs calibration)", ""},
+		{[]string{"alerts", "history"}, 0, "No alerts recorded", ""},
 	}
 	for _, tc := range tests {
 		r := runCLI(t, ctx, dir, tc.args...)
@@ -149,8 +152,8 @@ func TestDeviceLifecycle(t *testing.T) {
 
 func TestServePollsAndStops(t *testing.T) {
 	dir := t.TempDir()
-	url := simURL(t, "charging")
-	if r := runCLI(t, context.Background(), dir, "device", "add", "-address", url, "-skip-test"); r.code != 0 {
+	url := simURL(t, "overcurrent")
+	if r := runCLI(t, context.Background(), dir, "device", "add", "-address", url, "-skip-test", "-breaker", "60"); r.code != 0 {
 		t.Fatal(r)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -173,10 +176,25 @@ func TestServePollsAndStops(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+	// Wait for the alert engine to record the overcurrent alert.
+	for {
+		evs, _ := st.AlertEvents(context.Background(), store.AlertEventFilter{})
+		if len(evs) > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("no alert recorded")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if r := runCLI(t, context.Background(), dir, "alerts", "history"); !strings.Contains(r.stdout, "overcurrent") {
+		t.Errorf("alerts history: %+v", r)
+	}
 	cancel()
 	select {
 	case r := <-done:
 		if r.code != 0 || !strings.Contains(r.stdout, `"msg":"polled wall connector"`) ||
+			!strings.Contains(r.stdout, `"msg":"ALERT"`) || !strings.Contains(r.stdout, `"rule":"Overcurrent"`) ||
 			!strings.Contains(r.stdout, `"source":"https://github.com/bhager42/teslachargingmonitor`) {
 			t.Errorf("serve: %+v", r)
 		}

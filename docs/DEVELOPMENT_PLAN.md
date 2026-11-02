@@ -347,6 +347,7 @@ A per-(rule, device) state machine provides:
 | Key | Condition | Default severity |
 |---|---|---|
 | `device_unreachable` | A poll failed after its retries (§6 Poller) | warning → critical after 3 consecutive failed polls |
+| `identity_mismatch` | serial number at the configured address changed | warning |
 | `handle_temp_high` | `handle_temp_c` ≥ 55 °C (warn), ≥ 70 °C (crit), for 60 s | warning / critical |
 | `pcba_temp_high` | `pcba_temp_c` ≥ 70 °C (warn), ≥ 85 °C (crit) | warning / critical |
 | `mcu_temp_high` | `mcu_temp_c` ≥ 70 °C (warn), ≥ 85 °C (crit) | warning / critical |
@@ -938,6 +939,32 @@ simulator scenarios selectable via flag/env.
 size within estimate (document MB/day/device); retention verified by test.
 
 ### Phase 3 — Alert engine
+
+> **Status (2026-11-02): implemented.** `internal/alerts`: 22 built-in rules
+> (all of §6 plus `identity_mismatch`), each with typed parameter specs
+> (bounds used for validation and, later, the rule editor), defaults in code
+> and owner overrides in `alert_rule_overrides` (all devices or one device).
+> One pure `step` function drives the per-(rule, device) state machine:
+> debounce (`for`, satisfied by a single sample when sampling is slower than
+> `for`), minimum consecutive samples, hysteresis, escalation (sent
+> immediately), silent de-escalation, cooldown (a held-back firing notice is
+> sent once the cooldown ends if still firing), repeat **only while
+> critical** (default 6 h on safety rules), optional resolved notices,
+> per-device / per-rule snoozes (max 30 days). Event rules (counters, firmware,
+> grid profile, reboot, identity) baseline on first sighting and re-baseline
+> on counter decreases. Fields flagged invalid skip evaluation. State is
+> persisted (no re-alerting after restart); every notice is recorded in
+> `alert_events` with a `notified` flag (suppressed ones are kept for the
+> history page) and can be acknowledged. `Preview` replays stored history
+> through one rule with a candidate config (not possible for
+> `device_unreachable`, as failed polls store no readings). Notices from one
+> poll are published as one batch so Phase 4 sends one email per poll.
+> `QuietHours` (non-critical muting, midnight-spanning windows) is
+> implemented here for Phase 4's channels. `tcmon serve` runs the engine and
+> logs alerts until email exists; `tcmon alerts rules|history` show config and
+> history. Acceptance test: the simulator's overheat scenario produces
+> exactly firing → escalated → resolved through the real poller and engine.
+> Coverage: alerts 91 %, store 84 %.
 - Rule types from §6, state machine, alert events, preview against history.
 
 **Accept:** table tests for every rule incl. debounce, hysteresis, cooldown,

@@ -52,6 +52,8 @@ func Run(ctx context.Context, args []string, env Env) int {
 		return runServe(ctx, rest, env)
 	case "device":
 		return runDevice(ctx, rest, env)
+	case "alerts":
+		return runAlerts(ctx, rest, env)
 	case "backup":
 		return runBackup(ctx, rest, env)
 	case "migrate":
@@ -71,6 +73,7 @@ Commands:
   device    Manage Wall Connectors (add, list, update, remove, test)
             — interim CLI until the web UI exists; the web UI is the
               primary way to configure the device address
+  alerts    Show alert rules and alert history (read-only)
   backup    Write a consistent copy of the database
   migrate   Apply database migrations and print the schema version
   version   Print version, license and source-code information

@@ -13,8 +13,10 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/bhager42/teslachargingmonitor/internal/alerts"
 	"github.com/bhager42/teslachargingmonitor/internal/buildinfo"
 	"github.com/bhager42/teslachargingmonitor/internal/poller"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
@@ -64,13 +66,22 @@ func runServe(ctx context.Context, args []string, env Env) int {
 	}
 
 	m := poller.New(st, poller.Config{Logger: log, UserAgent: "tcmon/" + info.Version})
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		runMaintenance(ctx, st, log, time.Now)
-	}()
+	engine := alerts.New(st, log)
+	if err := engine.Load(ctx); err != nil {
+		log.Error("loading alert state", "err", err)
+		return 1
+	}
+	updates, unsubUpdates := m.Subscribe(32)
+	defer unsubUpdates()
+	notifications, unsubNotes := engine.Subscribe(32)
+	defer unsubNotes()
+
+	var wg sync.WaitGroup
+	wg.Go(func() { runMaintenance(ctx, st, log, time.Now) })
+	wg.Go(func() { engine.Run(ctx, updates) })
+	wg.Go(func() { logNotifications(ctx, log, notifications) })
 	_ = m.Run(ctx)
-	<-done
+	wg.Wait()
 	log.Info("stopped")
 	return 0
 }
@@ -109,5 +120,24 @@ func runMaintenance(ctx context.Context, st *store.Store, log *slog.Logger, now 
 		}
 		n := now()
 		wait = nextMaintenance(n).Sub(n)
+	}
+}
+
+// logNotifications records alert notifications until delivery channels
+// (email, Phase 4) exist.
+func logNotifications(ctx context.Context, log *slog.Logger, ch <-chan []alerts.Notification) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case batch, ok := <-ch:
+			if !ok {
+				return
+			}
+			for _, n := range batch {
+				log.Warn("ALERT", "device", n.DeviceName, "rule", n.RuleTitle, "kind", n.Kind,
+					"severity", n.Severity.String(), "message", n.Message)
+			}
+		}
 	}
 }
