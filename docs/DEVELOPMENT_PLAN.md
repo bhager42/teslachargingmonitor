@@ -348,7 +348,8 @@ A per-(rule, device) state machine provides:
 | `grid_voltage_out_of_range` | `grid_v` (not per-phase `voltageX_v`, which read ≈ 0 when the contactor is open) outside nominal ± 5 % (warn) / ± 10 % (crit) — nominal 240 V (US split-phase), 208 V, 230 V or 400 V configurable | warning / critical |
 | `grid_freq_out_of_range` | `grid_hz` outside 59.5–60.5 (60 Hz) or 49.5–50.5 (50 Hz) | warning |
 | `phase_current_imbalance` | (3-phase only) max/min phase current deviation > 20 % while charging | info |
-| `overcurrent` | `vehicle_current_a` > configured max current × 1.05 for 30 s | critical |
+| `overcurrent` | `vehicle_current_a` (or any phase current) > configured max current × 1.05 for 30 s — owner's setup: **> 50.4 A** (48 A × 1.05) | critical |
+| `current_near_limit` | `vehicle_current_a` ≥ max current but ≤ 1.05 × max for 2 consecutive polls (owner: 48–50.4 A) — informational, confirms full-rate charging is at the ceiling | info (disabled by default) |
 | `charging_stalled` | contactor closed & vehicle connected but current < 1 A on 2 consecutive polls | info |
 | `relay_voltage_abnormal` | while `contactor_closed`: `relay_k1_v`/`relay_k2_v` (UWC) or `relay_coil_v` (Gen 3) outside expected band, or K1 and K2 disagree significantly; while open: either relay > ~1 V (possible stuck relay). Band TBD from charging capture. | warning |
 | `wifi_weak` | `wifi_rssi` < −75 dBm on 2 consecutive polls | info |
@@ -467,8 +468,12 @@ in the `devices` table — there is no env var or config file for it.
   ("this looks like a different Wall Connector") and ask to confirm.
 - Per-device fields editable in the same form: display name, address, enabled,
   poll interval (and charging-time interval), nominal voltage/frequency,
-  configured max current / breaker size (used by the voltage and overcurrent
-  rules).
+  breaker size and max charging current (used by the voltage and overcurrent
+  rules). The form asks for the **breaker size** and pre-fills max current as
+  **80 % of it** (NEC continuous-load rule), editable to match what was set at
+  commissioning. Defaults: 240 V / 60 Hz split-phase. Owner's values (D17):
+  60 A breaker → **48 A max**, i.e. ≈ 11.5 kW at 240 V; the dashboard shows
+  live current as a fraction of 48 A.
 - `device_unreachable` alert text links straight to the edit form, since a
   changed IP is the most likely cause.
 - All device changes are audit-logged and CSRF-protected like every other
@@ -840,9 +845,10 @@ match reality (done for version/lifetime/wifi_status/idle vitals). The
 **charging `/vitals` capture is deferred** (owner's car unavailable — D16): do
 not block on it. Open a tracking issue "Add UWC charging vitals fixture"; until
 it lands, the simulator's charging scenario is synthesised from the Gen 3 field
-semantics and labelled provisional, and `relay_voltage_abnormal` and
-`overcurrent` ship **disabled by default** with a UI note "needs calibration
-from a charging capture"; CI green
+semantics and labelled provisional, and `relay_voltage_abnormal` ships
+**disabled by default** with a UI note "needs calibration from a charging
+capture". (`overcurrent` does **not** need the capture — its threshold comes
+from the configured 48 A max (D17) — so it ships enabled.) CI green
 on an empty `main` package; licence headers enforced by a CI check.
 
 ### Phase 1 — Wall Connector client + simulator
@@ -958,6 +964,7 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 | D14 | Copyright holder: **Brad Hager**. | 2026-11-02 | §12 header line. |
 | D15 | Data retention **adjustable in the Web GUI**, default **2 years**. | 2026-11-02 | §5 retention UI with presets, size estimate, confirmation before deleting. |
 | D16 | Charging `/vitals` capture **deferred** (car not available). HTTPS with a self-signed cert and one-time browser warning **confirmed** (D12). | 2026-11-02 | Phase 0 no longer blocks on it; charging-dependent rules ship disabled until calibrated. |
+| D17 | **60 A circuit → 48 A max charging current**; 240 V / 60 Hz split-phase (confirmed by idle capture: `grid_v` 240.1, `grid_hz` 59.8). | 2026-11-02 | §8 device form (breaker → 80 % max), `overcurrent` threshold 50.4 A and enabled by default, new optional `current_near_limit` rule. |
 
 ### 15.1 Still open
 
@@ -975,9 +982,7 @@ records the assumption in the PR that relies on it.
    (ideally once idle and once while charging) and share them — redact serial,
    MAC and SSID if you like. *(The restart that produced 16 s uptime was
    intentional — D10.)*
-4. Electrical setup: country/region, nominal voltage (240 V split-phase, 208 V,
-   230 V single-phase, 400 V three-phase), frequency, **breaker size and the
-   max current configured during commissioning**.
+4. *(Answered — D17: 60 A breaker, 48 A max, 240 V / 60 Hz.)*
 5. Is TrueNAS on the same VLAN/subnet as the chargers, or will traffic cross a
    firewall?
 
