@@ -877,9 +877,26 @@ from the configured 48 A max (D17) — so it ships enabled.) CI green
 on an empty `main` package; licence headers enforced by a CI check.
 
 ### Phase 1 — Wall Connector client + simulator
+
+> **Status (2026-11-02): implemented.** `internal/netguard` (LAN address
+> rules + connect-time dial guard), `internal/wallconnector` (models with
+> plausibility ranges, reflection-based tolerant decoder producing a
+> `Report` of unknown/missing/invalid fields, firmware parsing, observed-only
+> code tables, GUI address parsing, client: no proxy, no redirects, no
+> keep-alive, 5 s timeout, 64 KiB cap, one request at a time, `Snapshot` and
+> `Probe` for "Test connection"), `internal/wcsim` + `cmd/wcsim` (13
+> scenarios — idle, charging*, overheat*, thermal-foldback*, device-alert,
+> grid-low-voltage, overcurrent*, reboot, firmware-change, wifi-weak,
+> offline, slow, malformed; *provisional until issue #1; selectable by flag,
+> env or `POST /_sim/scenario`; `-speed` time acceleration). Three fuzz
+> targets run 60 s each in CI; the address fuzzer found and fixed a
+> trailing-dot / numeric-hostname bypass of the LAN check (regression seeds
+> in `internal/wallconnector/testdata/fuzz`). Coverage: wallconnector 92 %,
+> wcsim 94 %, netguard 100 %.
 - `internal/wallconnector`: typed models, tolerant decoder, code tables,
   client with timeouts/size limits/no redirects.
-- `cmd/wcsim` with scenario files.
+- `cmd/wcsim` with scenarios (implemented in Go rather than data files so
+  they can evolve with simulated time).
 - Fuzz tests on the decoder.
 
 **Accept:** client parses all fixtures; fuzzers run 60 s clean in CI;

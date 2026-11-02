@@ -18,6 +18,8 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
 - `make check` — SPDX headers, golangci-lint, `go test -race` (run before every push)
 - `make build` — builds `bin/tcmon`; `make vuln`, `make licenses` for dependency checks
 - `scripts/capture.sh <ip> [label]` — capture redacted Wall Connector fixtures
+- `make sim SCENARIO=<name> SPEED=<x>` — run the Wall Connector simulator (`internal/wcsim`)
+- `make fuzz FUZZTIME=60s` — run all fuzz targets; commit any failing input under `testdata/fuzz` as a regression seed
 
 ## Conventions
 
@@ -26,3 +28,7 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
 - GitHub Actions are pinned by commit SHA (tag in a trailing comment).
 - Fixtures must stay redacted; `internal/fixturecheck` enforces it.
 - Record significant decisions as ADRs in `docs/adr/`.
+- Device data is untrusted: decode with `wallconnector.Decode*` and honour the
+  `Report` (fields in `Report.Invalid` must not drive alerts as if valid).
+- Only add status-code meanings to `internal/wallconnector/codes.go` that were
+  observed on hardware; never guess.

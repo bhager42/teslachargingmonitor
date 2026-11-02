@@ -18,12 +18,16 @@ GORUN     := GOTOOLCHAIN=$(TOOLCHAIN) $(GO) run
 export CGO_ENABLED = 0
 export GOFLAGS     = -mod=readonly
 
-.PHONY: all build test cover lint fmt vet vuln headers licenses check clean
+.PHONY: all build sim test cover fuzz lint fmt vet vuln headers licenses check clean
 
 all: check build
 
 build: ## Build the tcmon binary into ./bin
 	$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/tcmon ./cmd/tcmon
+	$(GO) build -trimpath -ldflags '-s -w' -o bin/wcsim ./cmd/wcsim
+
+sim: ## Run the Wall Connector simulator (SCENARIO=idle SPEED=1)
+	$(GO) run ./cmd/wcsim -scenario $(or $(SCENARIO),idle) -speed $(or $(SPEED),1)
 
 test: ## Run unit tests with the race detector
 	CGO_ENABLED=1 $(GO) test -race -count=1 ./...
@@ -31,6 +35,15 @@ test: ## Run unit tests with the race detector
 cover: ## Run tests with coverage report
 	$(GO) test -count=1 -coverprofile=coverage.out ./...
 	$(GO) tool cover -func=coverage.out | tail -n 1
+
+FUZZTIME ?= 60s
+FUZZ_TARGETS := FuzzDecode FuzzParseAddress FuzzParseFirmware
+
+fuzz: ## Run every fuzz target for FUZZTIME each
+	@for t in $(FUZZ_TARGETS); do \
+		echo "== $$t"; \
+		$(GO) test -run='^$$' -fuzz="^$$t$$" -fuzztime=$(FUZZTIME) ./internal/wallconnector || exit 1; \
+	done
 
 fmt: ## Format code
 	gofmt -s -w .

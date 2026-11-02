@@ -4,8 +4,8 @@ Self-hosted monitoring and email alerting for the **Tesla Universal Wall
 Connector**, packaged as a small, hardened container for **TrueNAS SCALE
 25.10+** or any Docker host.
 
-> **Status: early development (Phase 0 — repository bootstrap).** Nothing is
-> runnable yet beyond `tcmon version`. See the
+> **Status: early development (Phase 1 complete — Wall Connector client and
+> simulator).** The server itself is not runnable yet beyond `tcmon version`. See the
 > [development plan](docs/DEVELOPMENT_PLAN.md) for scope and roadmap.
 
 ## What it will do
@@ -38,6 +38,16 @@ make check     # SPDX headers, lint, tests
 make build     # -> bin/tcmon
 ./bin/tcmon version
 ```
+
+Running the Wall Connector simulator (no hardware needed):
+
+```bash
+make sim SCENARIO=charging SPEED=60     # 1 simulated minute per second
+go run ./cmd/wcsim -list                 # all scenarios
+curl -d name=overheat http://127.0.0.1:8099/_sim/scenario
+```
+
+Fuzzing: `make fuzz FUZZTIME=60s`.
 
 Capturing fixtures from a real Wall Connector (identifiers are redacted
 automatically):
