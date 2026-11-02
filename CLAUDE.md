@@ -12,3 +12,17 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
   Connector address is configured in the Web GUI, never via env vars; 60-min
   default polling, 5 min while plugged in; email via Gmail is the primary alert
   channel; LAN only with a self-signed HTTPS cert; Go; public repo).
+
+## Commands
+
+- `make check` — SPDX headers, golangci-lint, `go test -race` (run before every push)
+- `make build` — builds `bin/tcmon`; `make vuln`, `make licenses` for dependency checks
+- `scripts/capture.sh <ip> [label]` — capture redacted Wall Connector fixtures
+
+## Conventions
+
+- Every source file starts with the `SPDX-License-Identifier: AGPL-3.0-or-later`
+  header and `Copyright (C) 2026 Brad Hager and contributors`.
+- GitHub Actions are pinned by commit SHA (tag in a trailing comment).
+- Fixtures must stay redacted; `internal/fixturecheck` enforces it.
+- Record significant decisions as ADRs in `docs/adr/`.

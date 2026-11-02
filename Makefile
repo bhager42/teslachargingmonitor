@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Brad Hager and contributors
+
+GO        ?= go
+PKG       := github.com/bhager42/teslachargingmonitor
+VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT    ?= $(shell git rev-parse HEAD 2>/dev/null)
+DATE      ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS   := -s -w \
+	-X $(PKG)/internal/buildinfo.Version=$(VERSION) \
+	-X $(PKG)/internal/buildinfo.Commit=$(COMMIT) \
+	-X $(PKG)/internal/buildinfo.Date=$(DATE)
+
+# Run helper tools with the project toolchain from go.mod, not the tool's own.
+TOOLCHAIN := $(shell sed -n 's/^toolchain //p' go.mod)
+GORUN     := GOTOOLCHAIN=$(TOOLCHAIN) $(GO) run
+
+export CGO_ENABLED = 0
+export GOFLAGS     = -mod=readonly
+
+.PHONY: all build test cover lint fmt vet vuln headers licenses check clean
+
+all: check build
+
+build: ## Build the tcmon binary into ./bin
+	$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/tcmon ./cmd/tcmon
+
+test: ## Run unit tests with the race detector
+	CGO_ENABLED=1 $(GO) test -race -count=1 ./...
+
+cover: ## Run tests with coverage report
+	$(GO) test -count=1 -coverprofile=coverage.out ./...
+	$(GO) tool cover -func=coverage.out | tail -n 1
+
+fmt: ## Format code
+	gofmt -s -w .
+
+vet:
+	$(GO) vet ./...
+
+lint: vet ## golangci-lint v2 built with the go.mod toolchain (see CONTRIBUTING.md)
+	golangci-lint run
+
+vuln: ## govulncheck
+	$(GORUN) golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+headers: ## Verify SPDX license headers
+	./scripts/check-headers.sh
+
+licenses: ## Verify dependency licenses are AGPL-compatible
+	$(GORUN) github.com/google/go-licenses/v2@v2.0.1 check ./... \
+		--disallowed_types=forbidden,restricted,unknown --ignore $(PKG)
+
+check: headers lint test ## Everything CI runs that is fast
+
+clean:
+	rm -rf bin coverage.out

@@ -805,6 +805,22 @@ Deliverables:
 
 ## 13. Testing strategy
 
+Every phase ships its own tests in the same PRs as the code — tests are part of
+each phase's acceptance criteria, not a later phase. CI runs all of them on
+every push and pull request.
+
+| Phase | Tests that must exist when the phase is done |
+|---|---|
+| 0 | Unit (CLI, build info), fixture-redaction check, SPDX header check |
+| 1 | Unit + **fuzz** (decoder, URL validation) against real UWC fixtures; simulator self-tests |
+| 2 | Unit (store, migrations, retention) + **integration** (poller ⇄ simulator ⇄ SQLite) + 24 h soak |
+| 3 | Table-driven unit tests per rule and state transition; **integration** with simulator scenarios |
+| 4 | **Integration** with an in-process mock SMTP server (STARTTLS, implicit TLS, auth failure, Gmail error codes) |
+| 5 | Unit (hashing, sessions, throttling) + **HTTP integration** (headers, CSRF, LAN-only allowlist) + ZAP baseline scan |
+| 6 | **End-to-end** Playwright (Chromium, Firefox, WebKit) + axe accessibility in both themes + Lighthouse budget |
+| 7 | Container structure tests (non-root, read-only, healthcheck, size) + compose smoke test |
+| 8 | Full regression, extended fuzz corpus, ASVS checklist review |
+
 | Layer | Tooling | What |
 |---|---|---|
 | Unit | `go test`, table-driven, `-race` | decoder tolerance, rule state machine (debounce/hysteresis/cooldown), password hashing/verification, session logic, retention math, SSRF guards |
@@ -831,6 +847,15 @@ Each phase = one or more small PRs, CI green, docs updated. Do not start a phase
 until the previous phase's acceptance criteria pass.
 
 ### Phase 0 — Discovery & repo bootstrap
+
+> **Status (2026-11-02): implemented** on `claude/awesome-cori-yon2g6` — LICENSE,
+> README, SECURITY, CONTRIBUTING (DCO), CODE_OF_CONDUCT, ADRs 0001–0004, draft
+> threat model, `scripts/capture.sh` (redacting), `scripts/check-headers.sh`,
+> Makefile, golangci-lint v2 config, Dependabot, CI/CodeQL/Scorecard workflows
+> (actions pinned by SHA), `tcmon version` with tests, fixture-redaction test.
+> Charging fixture deferred (D16, tracking issue). Owner to enable on GitHub:
+> private vulnerability reporting, secret scanning + push protection, branch
+> protection on `main` requiring CI.
 - Capture real payloads from the owner's device(s) (script
   `scripts/capture.sh <ip>` that curls the four endpoints, redacts serial/MAC/SSID,
   writes fixtures). **Needs owner input.**
