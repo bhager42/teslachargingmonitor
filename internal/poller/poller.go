@@ -92,6 +92,9 @@ type Manager struct {
 	mu      sync.Mutex // guards workers; held while starting/stopping them
 	workers map[int64]*worker
 	wg      sync.WaitGroup
+	// runCtx is Run's context: workers live as long as the manager, not as
+	// long as whatever request triggered a Sync/Reload.
+	runCtx context.Context
 
 	subsMu sync.Mutex // separate lock so workers can publish while Sync waits for them
 	subs   map[chan Update]struct{}
@@ -143,6 +146,9 @@ func (m *Manager) publish(u Update) {
 // Run polls until ctx is canceled, re-reading device configuration every
 // SyncEvery so devices added or edited elsewhere are picked up.
 func (m *Manager) Run(ctx context.Context) error {
+	m.mu.Lock()
+	m.runCtx = ctx
+	m.mu.Unlock()
 	defer m.stopAll()
 	if err := m.Sync(ctx); err != nil {
 		m.cfg.Logger.Error("loading devices", "err", err)
@@ -182,7 +188,11 @@ func (m *Manager) Sync(ctx context.Context) error {
 	}
 	for id, d := range want {
 		if _, running := m.workers[id]; !running {
-			m.startLocked(ctx, d)
+			parent := m.runCtx
+			if parent == nil {
+				parent = ctx // Sync before Run (tests): use the caller's context
+			}
+			m.startLocked(parent, d)
 		}
 	}
 	return nil

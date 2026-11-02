@@ -128,6 +128,9 @@ func sessionCookie(t *testing.T, r *http.Response) *http.Cookie {
 	return nil
 }
 
+// inlineScript matches <script> tags without a src attribute.
+var inlineScript = regexp.MustCompile(`<script(?:\s+type="[^"]*")?\s*>`)
+
 var csrfRE = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 
 // formToken fetches the setup or login page and returns the pre-session
@@ -225,7 +228,7 @@ func TestSecurityHeadersEverywhere(t *testing.T) {
 	// Pages have no inline scripts or styles (CSP would block them anyway).
 	for _, p := range []string{"/setup", "/nope"} {
 		b := bodyOf(t, h.do("GET", p, nil))
-		if strings.Contains(b, "<script") || strings.Contains(b, "style=") || strings.Contains(b, "<style") {
+		if inlineScript.MatchString(b) || strings.Contains(b, "style=") || strings.Contains(b, "<style") {
 			t.Errorf("%s contains inline script/style", p)
 		}
 	}

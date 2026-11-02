@@ -119,7 +119,8 @@ func runServe(ctx context.Context, args []string, env Env) int {
 		log.Warn("FIRST-RUN SETUP: open the web UI at https://<this-host>"+portSuffix(webCfg.Listen)+"/setup and enter this one-time token",
 			"setup_token", token, "valid_for", "30m")
 	}
-	webSrv, err := web.New(webCfg, web.Options{Store: st, Auth: authMgr, Logger: log})
+	webSrv, err := web.New(webCfg, web.Options{Store: st, Auth: authMgr, Logger: log, Alerts: engine,
+		Notify: dispatcher, Poll: m})
 	if err != nil {
 		log.Error("starting web server", "err", err)
 		return 1
@@ -138,6 +139,11 @@ func runServe(ctx context.Context, args []string, env Env) int {
 	wg.Go(func() { engine.Run(ctx, updates) })
 	wg.Go(func() { logNotifications(ctx, log, notifications) })
 	wg.Go(func() { dispatcher.Run(ctx, toDeliver) })
+	liveUpdates, unsubLive := m.Subscribe(32)
+	defer unsubLive()
+	liveAlerts, unsubLiveAlerts := engine.Subscribe(32)
+	defer unsubLiveAlerts()
+	wg.Go(func() { feedLive(ctx, webSrv, liveUpdates, liveAlerts) })
 	_ = m.Run(ctx)
 	wg.Wait()
 	log.Info("stopped")
@@ -205,4 +211,27 @@ func portSuffix(listen string) string {
 		return listen[i:]
 	}
 	return ""
+}
+
+// feedLive forwards poll results and alert notifications to the browsers
+// connected to the web UI.
+func feedLive(ctx context.Context, w *web.Server, updates <-chan poller.Update, notes <-chan []alerts.Notification) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case u, ok := <-updates:
+			if !ok {
+				return
+			}
+			// Give the alert engine a moment so the card shows new alerts too.
+			time.Sleep(200 * time.Millisecond)
+			w.HandleUpdate(u)
+		case b, ok := <-notes:
+			if !ok {
+				return
+			}
+			w.HandleAlerts(b)
+		}
+	}
 }

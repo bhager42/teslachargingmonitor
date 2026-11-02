@@ -1,0 +1,21 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-or-later
+Copyright (C) 2026 Brad Hager and contributors
+*/ -}}
+{{define "content"}}
+<div class="page-head"><h1>Wall Connectors</h1><a class="button" href="/settings/devices/new">Add Wall Connector</a></div>
+<p class="hint"><a href="/settings">← Settings</a></p>
+{{- if .Devices}}
+<div class="table-wrap"><table>
+  <thead><tr><th scope="col">Name</th><th scope="col">Address</th><th scope="col">Polling</th><th scope="col">Max current</th><th scope="col">Enabled</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+  <tbody>
+  {{- range .Devices}}
+  <tr><td>{{.Name}}</td><td><code>{{.Address}}</code></td>
+      <td>every {{mins .PollInterval}} min{{if .FastWhenPlugged}}, {{mins .PluggedInterval}} min plugged in{{end}}</td>
+      <td>{{if .MaxCurrentA}}{{num .MaxCurrentA}} A{{else}}–{{end}}</td><td>{{if .Enabled}}yes{{else}}no{{end}}</td>
+      <td><a href="/settings/devices/{{.ID}}">Edit</a></td></tr>
+  {{- end}}
+  </tbody>
+</table></div>
+{{- else}}<p>No Wall Connector yet.</p>{{end}}
+{{end}}

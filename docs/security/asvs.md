@@ -35,7 +35,7 @@ no user accounts, no API for third parties.
 | HSTS | 🟡 | Off with the self-signed default by design (D12); on with `TCMON_HSTS=true` |
 
 ## V4 API and web service
-N/A in Phase 5 (no JSON API yet). 🟡 Phase 6 adds same-origin JSON/SSE endpoints behind the same session + CSRF controls.
+✅ Phase 6: the only JSON/SSE endpoints (`/api/devices/{id}/series`, `/events`) are same-origin GETs behind the session check; inputs are allow-listed (metric, range); SSE streams end when the session expires or is revoked; state changes remain POST forms with CSRF tokens.
 
 ## V5 File handling
 | Requirement | Status | Evidence |

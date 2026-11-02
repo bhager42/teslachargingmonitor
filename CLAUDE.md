@@ -21,6 +21,7 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
 - `make sim SCENARIO=<name> SPEED=<x>` — run the Wall Connector simulator (`internal/wcsim`)
 - `make soak SOAK_POLLS=3000` — leak/soak test of the poller against the simulator
 - `go run ./cmd/tcmon serve -data-dir ./data` with `tcmon device add -data-dir ./data -address 127.0.0.1:8099` (after `make sim`) for a local end-to-end run
+- `make e2e` — Playwright + axe browser tests (WCAG 2.2 AA both themes, CSP, 320 px, live SSE) against the real binaries
 - `make fuzz FUZZTIME=60s` — run all fuzz targets; commit any failing input under `testdata/fuzz` as a regression seed
 
 ## Conventions
@@ -41,6 +42,11 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
 - Web: every page must work under the strict CSP (no inline script/style,
   Trusted Types); state-changing routes go through `authed` (session + CSRF);
   show only `auth.UserMessage` text to users. Templates live in `web/templates`.
+- Browser JS lives in `web/static/js/app.mjs`: DOM APIs only (no innerHTML/eval —
+  `TestJavaScriptBudget` enforces it and the 60 KB gzip budget). Live data is sent
+  pre-formatted from Go (`DeviceCard`) so JS only sets `textContent`.
+- Long-lived work started from a request (e.g. `poller.Reload`) must not inherit
+  the request context.
 - Schema changes go in a new `internal/store/migrations/NNNN_*.sql` file (numbered
   consecutively); never edit an applied migration.
 - Only add status-code meanings to `internal/wallconnector/codes.go` that were

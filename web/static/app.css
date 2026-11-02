@@ -86,3 +86,84 @@
   .sev-warning .badge { color: var(--warn); }
   .sev-info .badge { color: var(--accent); }
 }
+
+@layer components {
+  .skip { position: absolute; inset-inline-start: -999px; }
+  .skip:focus { inset-inline-start: 1rem; top: 1rem; z-index: 10; background: var(--surface); padding: 0.5rem 1rem; border-radius: var(--radius); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .brand { display: inline-flex; gap: 0.5rem; align-items: center; }
+  .theme { display: flex; gap: 0.25rem; }
+  .chip { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 0.2rem 0.6rem; min-block-size: 32px; font-weight: 500; }
+  .chip[aria-pressed="true"] { color: var(--accent-text); background: var(--accent); border-color: var(--accent); }
+  .page-head { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; justify-content: space-between; }
+  .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  a.button { display: inline-flex; align-items: center; text-decoration: none; font-weight: 600; border-radius: calc(var(--radius) / 1.5);
+    background: var(--accent); color: var(--accent-text); padding: 0.6rem 1rem; min-block-size: 44px; }
+  a.button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  button.small { min-block-size: 32px; padding: 0.3rem 0.7rem; font-size: 0.9rem; }
+  button.danger { background: var(--danger); color: var(--accent-text); }
+  .danger-zone { border-color: var(--danger); }
+  .cards { display: grid; gap: var(--space); grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+  .device { display: grid; gap: 0.75rem; }
+  .device-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+  .device-head h2 a { color: var(--text); }
+  .state { display: inline-flex; gap: 0.4rem; align-items: center; font-weight: 600; }
+  .dot { inline-size: 0.75rem; block-size: 0.75rem; border-radius: 50%; background: var(--muted); }
+  .state-charging .dot { background: var(--ok); }
+  .state-plugged .dot { background: var(--accent); }
+  .state-fault .dot, .state-offline .dot { background: var(--danger); }
+  .current-meter { inline-size: 100%; block-size: 0.6rem; }
+  .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0.6rem 1rem; }
+  .fields div { display: grid; }
+  .fields dt { font-size: 0.8rem; font-weight: 500; color: var(--muted); }
+  .fields dd { margin: 0; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+  .device-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; }
+  .card-alerts, .plain { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.3rem; }
+  .card-alerts:empty { display: none; }
+  .kv { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 0.3rem 1rem; }
+  .kv dd { margin: 0; min-inline-size: 0; overflow-wrap: anywhere; }
+  @container (width < 22rem) { .kv { grid-template-columns: minmax(0, 1fr); } .kv dd { margin-block-end: 0.4rem; } }
+  .grid-2 { display: grid; gap: var(--space); grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
+  .tabs { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
+  .tabs a[aria-current="page"] { font-weight: 700; text-decoration: underline; text-underline-offset: 0.3em; }
+  .charts { display: grid; gap: var(--space); grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); }
+  .chart { margin: 0; }
+  .chart figcaption { font-weight: 600; margin-block-end: 0.25rem; }
+  tcmon-chart { display: block; min-block-size: 9rem; }
+  tcmon-chart svg { inline-size: 100%; block-size: auto; overflow: visible; }
+  .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+  .chart-band { fill: var(--accent); opacity: 0.15; }
+  .chart-dot { fill: var(--accent); }
+  .chart-axis { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .chart-text { fill: var(--muted); font-size: 11px; }
+  /* position: relative keeps absolutely positioned .sr-only labels inside the
+     scroll container instead of widening the page. */
+  .table-wrap { overflow-x: auto; max-inline-size: 100%; position: relative; }
+  /* Grid items default to min-width: auto; let them shrink so wide tables
+     scroll inside .table-wrap instead of widening the page. */
+  main > *, .cards > *, .grid-2 > *, .charts > *, .card { min-inline-size: 0; }
+  pre { overflow-x: auto; background: var(--bg); padding: 0.75rem; border-radius: calc(var(--radius) / 1.5); font-size: 0.85rem; }
+  details > summary { cursor: pointer; font-weight: 600; }
+  .form-grid { display: grid; grid-template-columns: minmax(10rem, max-content) 1fr; gap: 0.6rem 1rem; align-items: center; }
+  .form-grid > .span-2, .form-grid details { grid-column: 1 / -1; }
+  @container (width < 36rem) { .form-grid { grid-template-columns: 1fr; } .form-grid > span:empty { display: none; } }
+  @media (width < 40rem) { .form-grid { grid-template-columns: 1fr; } .form-grid > span:empty { display: none; } }
+  select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: calc(var(--radius) / 1.5);
+    padding: 0.5rem; min-block-size: 44px; }
+  .inline-form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .inline-form input { width: auto; flex: 1 1 12rem; }
+  .retention { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .retention .days { width: 7rem; }
+  fieldset { border: 0; padding: 0; margin: 0 0 0.5rem; }
+  .radio-row { display: flex; gap: 1rem; align-items: center; }
+  .radio-row legend { font-weight: 600; float: inline-start; margin-inline-end: 1rem; }
+  .error-text { color: var(--danger); }
+  .live-alerts:empty { display: none; }
+  .live-alerts { position: sticky; top: 0.5rem; z-index: 5; }
+  .live-alerts p { margin: 0 0 0.4rem; padding: 0.6rem 0.8rem; border-radius: calc(var(--radius) / 1.5); background: var(--surface); border: 1px solid var(--warn); }
+  .empty { text-align: start; }
+  main:focus { outline: none; }
+  @media (prefers-contrast: more) { :root { --border: light-dark(#000, #fff); --muted: var(--text); } }
+  @media (forced-colors: active) { .dot, .chip[aria-pressed="true"] { forced-color-adjust: none; } }
+  @view-transition { navigation: auto; }
+}

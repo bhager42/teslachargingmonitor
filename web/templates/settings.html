@@ -1,0 +1,41 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-or-later
+Copyright (C) 2026 Brad Hager and contributors
+*/ -}}
+{{define "content"}}
+<h1>Settings</h1>
+<nav class="tabs" aria-label="Settings sections"><a href="/settings/devices">Wall Connectors</a><a href="/notifications">Notifications</a><a href="/alerts">Alert rules</a><a href="/settings/security">Security</a></nav>
+<form method="post" action="/settings" class="card">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <h2>Display</h2>
+  <fieldset class="radio-row"><legend>Temperatures</legend>
+    <label class="check"><input type="radio" name="temp_unit" value="C" {{if eq .Display.TempUnit "C"}}checked{{end}}> °C</label>
+    <label class="check"><input type="radio" name="temp_unit" value="F" {{if eq .Display.TempUnit "F"}}checked{{end}}> °F</label>
+  </fieldset>
+  <h2>Data retention</h2>
+  <p class="hint">Database size {{.DBSize}}{{with .Oldest}}, oldest reading {{.}}{{end}}. Hourly polling stores about 16 MB per year.</p>
+  <div class="form-grid">
+  {{- range .Retention}}
+  {{- $r := .}}
+    <label for="{{.Name}}">{{.Label}}</label>
+    <div class="retention">
+      <select id="{{.Name}}" name="{{.Name}}">
+        {{- range $.Presets}}<option value="{{.Days}}" {{if eq .Days $r.Days}}selected{{end}}>{{.Label}}</option>{{end}}
+        <option value="custom" {{if .Custom}}selected{{end}}>Custom…</option>
+      </select>
+      <label for="{{.Name}}_custom" class="sr-only">{{.Label}}: custom number of days</label>
+      <input id="{{.Name}}_custom" name="{{.Name}}_custom" type="number" min="1" max="36500" value="{{.Days}}" class="days" aria-describedby="{{.Name}}-help">
+      <span class="hint" id="{{.Name}}-help">days (used when “Custom…” is chosen). {{.Help}}</span>
+    </div>
+  {{- end}}
+  </div>
+  <label class="check"><input type="checkbox" name="confirm_delete" value="1"> I understand that shorter retention permanently deletes older data</label>
+  <div class="actions"><button type="submit">Save settings</button></div>
+</form>
+<form method="post" action="/settings/backup" class="card">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <h2>Backup</h2>
+  <p>Download a consistent copy of the database. Also keep a copy of <code>secret.key</code> (encrypts the email password) and the <code>tls</code> folder from the data directory.</p>
+  <button type="submit" class="secondary">Download database backup</button>
+</form>
+{{end}}

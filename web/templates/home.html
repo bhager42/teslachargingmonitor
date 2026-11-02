@@ -3,29 +3,50 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "content"}}
-<h1>Dashboard</h1>
-<p class="hint">The full dashboard arrives in the next release. Polling, alerts and email are already running.</p>
-<section class="card" aria-labelledby="devices-title">
-  <h2 id="devices-title">Wall Connectors</h2>
-  {{- if .Devices}}
-  <table>
-    <thead><tr><th scope="col">Name</th><th scope="col">Address</th><th scope="col">Last poll</th><th scope="col">Firmware</th></tr></thead>
-    <tbody>
-    {{- range .Devices}}
-      <tr><td>{{.Name}}</td><td>{{.Address}}</td><td>{{.LastPoll}}</td><td>{{.Firmware}}</td></tr>
-    {{- end}}
-    </tbody>
-  </table>
-  {{- else}}
-  <p>No Wall Connector configured yet. Until the settings page exists, add one in the container shell: <code>tcmon device add -address &lt;ip&gt; -breaker 60</code></p>
-  {{- end}}
+<div class="page-head">
+  <h1>Dashboard</h1>
+  <a class="button secondary" href="/settings/devices/new">Add Wall Connector</a>
+</div>
+{{- if not .Cards}}
+<section class="card empty">
+  <h2>Add your Wall Connector</h2>
+  <p>Enter its IP address (find it in your router's list of connected devices or in the Tesla One app, and reserve it there so it doesn't change).</p>
+  <p><a class="button" href="/settings/devices/new">Add Wall Connector</a></p>
 </section>
-<section class="card" aria-labelledby="alerts-title">
-  <h2 id="alerts-title">Recent alerts</h2>
-  {{- if .Alerts}}
+{{- end}}
+<div class="cards" data-live>
+{{- range .Cards}}
+{{- $c := .}}
+<article class="card device state-{{.StateClass}}" data-device-id="{{.ID}}" aria-labelledby="dev-{{.ID}}-name">
+  <header class="device-head">
+    <h2 id="dev-{{.ID}}-name"><a href="/devices/{{.ID}}">{{.Name}}</a></h2>
+    <p class="state" data-role="state"><span class="dot" aria-hidden="true"></span><span data-role="state-text">{{.State}}</span></p>
+  </header>
+  <meter class="current-meter" min="0" max="120" value="{{.CurrentPct}}" data-role="meter" aria-label="Current as a percentage of the maximum">{{.CurrentPct}}%</meter>
+  <dl class="fields">
+  {{- range $.CardFields}}
+    <div><dt>{{.Label}}</dt><dd data-field="{{.Key}}">{{field $c.Fields .Key}}</dd></div>
+  {{- end}}
+  </dl>
+  <ul class="card-alerts" data-role="alerts">
+  {{- range .Alerts}}<li class="sev-{{.Severity}}"><span class="badge">{{.Severity}}</span> {{.Title}}</li>{{end}}
+  </ul>
+  <footer class="device-foot">
+    <p class="hint">Updated <span data-role="updated" data-ts="{{if not .UpdatedAt.IsZero}}{{.UpdatedAt.Format "2006-01-02T15:04:05Z07:00"}}{{end}}">{{.Updated}}</span>{{if .Stale}} <span class="badge sev-warning" data-role="stale">stale</span>{{end}}</p>
+    <form method="post" action="/devices/{{.ID}}/poll" class="inline">
+      <input type="hidden" name="csrf_token" value="{{$.CSRF}}"><input type="hidden" name="back" value="home">
+      <button type="submit" class="secondary small">Poll now</button>
+    </form>
+  </footer>
+</article>
+{{- end}}
+</div>
+<section class="card" aria-labelledby="recent-title">
+  <div class="page-head"><h2 id="recent-title">Recent alerts</h2><a href="/alerts">All alerts and rules</a></div>
+  {{- if .Recent}}
   <ul class="alerts">
-  {{- range .Alerts}}
-    <li class="sev-{{.Severity}}"><span class="badge">{{.Severity}}</span> {{.When}} — {{.Message}}</li>
+  {{- range .Recent}}
+    <li class="sev-{{.Severity}}"><span class="badge">{{.Severity}}</span> <span class="hint">{{.When}}</span> {{.Message}}</li>
   {{- end}}
   </ul>
   {{- else}}<p>No alerts recorded.</p>{{end}}

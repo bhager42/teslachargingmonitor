@@ -260,3 +260,30 @@ func TestNoGoroutineLeak(t *testing.T) {
 		t.Errorf("goroutines before=%d after=%d", before, after)
 	}
 }
+
+// Regression: Reload from a short-lived (HTTP request) context must not tie
+// the worker's lifetime to that context.
+func TestReloadFromShortLivedContext(t *testing.T) {
+	h := newHarness(t, "idle")
+	cfg := fastConfig()
+	cfg.IntervalOverride = 50 * time.Millisecond
+	m := New(h.st, cfg)
+	ch, unsub := m.Subscribe(8)
+	defer unsub()
+	stop := run(t, m)
+	defer stop()
+	if len(m.Devices()) != 0 {
+		t.Fatal("unexpected device")
+	}
+	h.addDevice(t)
+	reqCtx, cancel := context.WithCancel(context.Background())
+	if err := m.Reload(reqCtx); err != nil {
+		t.Fatal(err)
+	}
+	cancel() // the HTTP request that saved the device has finished
+	next(t, ch)
+	next(t, ch) // still polling after the request context was canceled
+	if len(m.Devices()) != 1 {
+		t.Error("worker stopped")
+	}
+}

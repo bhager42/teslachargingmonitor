@@ -1,0 +1,48 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-or-later
+Copyright (C) 2026 Brad Hager and contributors
+*/ -}}
+{{define "content"}}
+{{- $f := .Form}}
+<h1>{{.Title}}</h1>
+<p class="hint"><a href="/notifications">← Notifications</a></p>
+<form method="post" action="{{if $f.ID}}/notifications/{{$f.ID}}{{else}}/notifications/new{{end}}" class="card form-grid">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <label for="name">Name</label>
+  <input id="name" name="name" value="{{$f.Name}}" required maxlength="64">
+  <label for="username">Gmail address (username)</label>
+  <input id="username" name="username" type="email" value="{{$f.Username}}" autocomplete="username" required>
+  <label for="password">App password</label>
+  <div><input id="password" name="password" type="password" autocomplete="new-password" {{if not $f.PasswordSet}}required{{end}} aria-describedby="pw-hint">
+  <p class="hint" id="pw-hint">{{if $f.PasswordSet}}A password is stored (encrypted). Leave empty to keep it.{{else}}Create one at <a href="https://myaccount.google.com/apppasswords" rel="noopener">myaccount.google.com/apppasswords</a> (needs 2-Step Verification). Your normal Gmail password will not work.{{end}}</p></div>
+  <label for="to">Send alerts to</label>
+  <div><input id="to" name="to" value="{{$f.To}}" required aria-describedby="to-hint"><p class="hint" id="to-hint">One or more addresses, separated by commas.</p></div>
+  <label for="min_severity">Minimum severity</label>
+  <select id="min_severity" name="min_severity">{{range .Severities}}<option value="{{.}}" {{if eq . $f.MinSeverity}}selected{{end}}>{{.}}</option>{{end}}</select>
+  <label for="quiet_hours">Quiet hours</label>
+  <div><input id="quiet_hours" name="quiet_hours" value="{{$f.QuietHours}}" placeholder="22:00-07:00" pattern="[0-2][0-9]:[0-5][0-9]-[0-2][0-9]:[0-5][0-9]" aria-describedby="qh-hint"><p class="hint" id="qh-hint">Optional. Non-critical alerts are not emailed during this window (they stay in the history).</p></div>
+  <span></span><label class="check"><input type="checkbox" name="enabled" value="1" {{if $f.Enabled}}checked{{end}}> Enabled</label>
+  <details class="span-2"><summary>Advanced (other mail providers)</summary>
+    <div class="form-grid">
+      <label for="host">SMTP server</label><input id="host" name="host" value="{{$f.Host}}" required>
+      <label for="port">Port</label><input id="port" name="port" type="number" min="1" max="65535" value="{{$f.Port}}" required>
+      <label for="security">Encryption</label>
+      <select id="security" name="security"><option value="starttls" {{if eq $f.Security "starttls"}}selected{{end}}>STARTTLS (587)</option><option value="tls" {{if eq $f.Security "tls"}}selected{{end}}>TLS (465)</option></select>
+      <label for="from">From address</label><input id="from" name="from" type="email" value="{{$f.From}}" placeholder="same as the username">
+      <label for="from_name">From name</label><input id="from_name" name="from_name" value="{{$f.FromName}}" maxlength="64">
+    </div>
+  </details>
+  <span></span>
+  <div class="actions">
+    <button type="submit" name="action" value="save_test">Save and send test email</button>
+    <button type="submit" name="action" value="save" class="secondary">Save</button>
+  </div>
+</form>
+{{- if $f.ID}}
+<form method="post" action="/notifications/{{$f.ID}}/delete" class="card danger-zone">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <h2>Remove this channel</h2>
+  <button type="submit" class="danger">Remove</button>
+</form>
+{{- end}}
+{{end}}

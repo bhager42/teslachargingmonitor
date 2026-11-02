@@ -121,6 +121,45 @@ jobs:
         if: always()
         run: cat "$RUNNER_TEMP/tcmon.log"
 
+  e2e:
+    name: E2E (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Build tcmon and the simulator
+        run: make build
+      - name: Install test dependencies and ${{ matrix.browser }}
+        working-directory: e2e
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Playwright + axe (WCAG 2.2 AA, CSP, 320 px, live updates)
+        working-directory: e2e
+        env:
+          TCMON_E2E_BROWSERS: ${{ matrix.browser }}
+        run: npx playwright test
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 14
+
   security:
     name: Vulnerabilities & licenses
     runs-on: ubuntu-latest

@@ -1040,6 +1040,30 @@ checklist for V2/V3/V4/V13/V14-equivalent sections (ASVS 5.0 numbering)
 documented in `docs/security/asvs.md` with pass/N-A per item.
 
 ### Phase 6 — Web UI
+
+> **Status (2026-11-02): implemented.** Server-rendered pages (dashboard with
+> live device cards, device detail with SVG charts for 24 h / 7 d / 30 d / 1 y,
+> lifetime counters, masked identity, raw responses and CSV export; Alerts
+> with active alerts, snoozes, history with acknowledgement and a rule editor
+> with "test against the last 24 hours"; Notifications with the Gmail form,
+> test email and delivery log; Settings with °C/°F and per-class retention
+> presets/custom days (confirmation before data is deleted) and database
+> backup download; **Settings → Wall Connectors**, where the device address
+> is entered, tested ("Test connection") and edited (D2); Diagnostics with
+> unknown/missing/invalid fields from the latest raw responses and the poll
+> log). Live updates over Server-Sent Events (pre-formatted values, DOM
+> updates via `textContent` only). Theme Auto/Dark/Light stored in a cookie
+> and rendered server-side (no flash). One 7 KB ES module (3 KB gzipped,
+> budget-tested, no `innerHTML`/`eval`), `light-dark()` tokens, container
+> queries, `@layer`, view transitions, web app manifest; no service worker
+> (it cannot register with the self-signed certificate). Playwright + axe
+> suite (WCAG 2.2 AA in both themes on 13 pages + sign-in, zero CSP/Trusted
+> Types violations, 320 px without horizontal scroll, live SSE update,
+> theme without flash, charts, connection test) runs on Chromium, Firefox and
+> WebKit in CI. The e2e suite found and fixed a real bug: devices saved from
+> the web UI were never polled because poller workers inherited the HTTP
+> request's context. **Deferred:** the Lighthouse ≥ 95 audit (needs a
+> signed-in, self-signed-HTTPS Lighthouse CI setup) moves to Phase 8.
 - Layout, design tokens with `light-dark()`, theme toggle without flash,
   dashboard (SSE), device detail charts, alerts, notifications, settings,
   diagnostics, about/source page, PWA manifest.
