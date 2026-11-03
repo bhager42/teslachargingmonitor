@@ -1,0 +1,14 @@
+{
+  "name": "tcmon-e2e",
+  "private": true,
+  "description": "End-to-end browser tests for Tesla Charger Monitoring (test-only; nothing here ships in the app)",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.63.0"
+  }
+}

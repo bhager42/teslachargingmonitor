@@ -21,15 +21,25 @@ import (
 	"html/template"
 	"io/fs"
 	"log/slog"
+	"mime"
 	"net"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"time"
 
+	"github.com/bhager42/teslachargingmonitor/internal/alerts"
 	"github.com/bhager42/teslachargingmonitor/internal/auth"
+	"github.com/bhager42/teslachargingmonitor/internal/notify"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
 	webui "github.com/bhager42/teslachargingmonitor/web"
 )
+
+func init() {
+	// Not in every platform's MIME table; module scripts must be JavaScript.
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
+	_ = mime.AddExtensionType(".mjs", "text/javascript; charset=utf-8")
+}
 
 // Server is the web UI server.
 type Server struct {
@@ -39,6 +49,11 @@ type Server struct {
 	certs *CertSource // nil when TLS is off
 	log   *slog.Logger
 	now   func() time.Time
+
+	alerts *alerts.Engine     // optional in tests
+	notify *notify.Dispatcher // optional in tests
+	poll   PollControl        // optional in tests
+	hub    *Hub
 
 	pages     map[string]*template.Template
 	assetHash map[string]string
@@ -51,6 +66,10 @@ type Options struct {
 	Auth   *auth.Manager
 	Logger *slog.Logger
 	Now    func() time.Time
+	Alerts *alerts.Engine
+	Notify *notify.Dispatcher
+	Poll   PollControl
+	Hub    *Hub
 }
 
 // New validates cfg, prepares the certificate and builds the handler.
@@ -64,7 +83,11 @@ func New(cfg Config, o Options) (*Server, error) {
 	if o.Now == nil {
 		o.Now = time.Now
 	}
-	s := &Server{cfg: cfg, st: o.Store, auth: o.Auth, log: o.Logger, now: o.Now}
+	if o.Hub == nil {
+		o.Hub = NewHub()
+	}
+	s := &Server{cfg: cfg, st: o.Store, auth: o.Auth, log: o.Logger, now: o.Now, alerts: o.Alerts, notify: o.Notify,
+		poll: o.Poll, hub: o.Hub}
 	var err error
 	switch cfg.TLSMode {
 	case TLSAuto:
@@ -105,15 +128,28 @@ func (s *Server) loadAssets() error {
 	if err != nil {
 		return err
 	}
-	funcs := template.FuncMap{"asset": func(name string) (string, error) {
-		h, ok := s.assetHash[name]
-		if !ok {
-			return "", fmt.Errorf("unknown asset %q", name)
-		}
-		return "/static/" + name + "?v=" + h, nil
-	}}
+	funcs := template.FuncMap{
+		"asset": func(name string) (string, error) {
+			h, ok := s.assetHash[name]
+			if !ok {
+				return "", fmt.Errorf("unknown asset %q", name)
+			}
+			return "/static/" + name + "?v=" + h, nil
+		},
+		"field": func(m map[string]string, k string) string { return m[k] },
+		"ago": func(t *time.Time) string {
+			if t == nil {
+				return "never"
+			}
+			return fmtAgo(*t, s.now())
+		},
+		"mins": func(d time.Duration) int { return int(d.Minutes()) },
+		"eq":   func(a, b any) bool { return a == b },
+		"num":  func(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) },
+	}
 	s.pages = map[string]*template.Template{}
-	for _, p := range []string{"login", "setup", "setup_closed", "home", "security", "about", "error"} {
+	for _, p := range []string{"login", "setup", "setup_closed", "home", "security", "about", "error", "device",
+		"devices", "device_form", "alerts", "rule", "notifications", "channel", "settings", "diagnostics", "costs", "energy"} {
 		t, err := template.New(p).Funcs(funcs).ParseFS(webui.Templates, "templates/layout.html", "templates/"+p+".html")
 		if err != nil {
 			return fmt.Errorf("web: parsing %s template: %w", p, err)
@@ -137,6 +173,39 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /setup", s.setupSubmit)
 	mux.Handle("POST /logout", s.authed(s.logout))
 	mux.Handle("GET /{$}", s.authed(s.home))
+	mux.Handle("GET /events", s.authed(s.events))
+	mux.Handle("GET /devices/{id}", s.authed(s.deviceDetail))
+	mux.Handle("GET /devices/{id}/export.csv", s.authed(s.exportCSV))
+	mux.Handle("POST /devices/{id}/poll", s.authed(s.pollNow))
+	mux.Handle("GET /api/devices/{id}/series", s.authed(s.series))
+	mux.Handle("GET /settings/devices", s.authed(s.devicesPage))
+	mux.Handle("GET /settings/devices/new", s.authed(s.newDeviceForm))
+	mux.Handle("POST /settings/devices/new", s.authed(s.saveDevice))
+	mux.Handle("GET /settings/devices/{id}", s.authed(s.editDeviceForm))
+	mux.Handle("POST /settings/devices/{id}", s.authed(s.saveDevice))
+	mux.Handle("POST /settings/devices/{id}/delete", s.authed(s.deleteDevice))
+	mux.Handle("GET /alerts", s.authed(s.alertsPage))
+	mux.Handle("POST /alerts/events/{id}/ack", s.authed(s.ackAlert))
+	mux.Handle("POST /alerts/snooze", s.authed(s.snooze))
+	mux.Handle("POST /alerts/snooze/{id}/end", s.authed(s.unsnooze))
+	mux.Handle("GET /alerts/rules/{key}", s.authed(s.ruleForm))
+	mux.Handle("POST /alerts/rules/{key}", s.authed(s.saveRule))
+	mux.Handle("GET /notifications", s.authed(s.notificationsPage))
+	mux.Handle("GET /notifications/new", s.authed(s.newChannel))
+	mux.Handle("POST /notifications/new", s.authed(s.saveChannel))
+	mux.Handle("GET /notifications/{id}", s.authed(s.editChannel))
+	mux.Handle("POST /notifications/{id}", s.authed(s.saveChannel))
+	mux.Handle("POST /notifications/{id}/test", s.authed(s.testChannel))
+	mux.Handle("POST /notifications/{id}/delete", s.authed(s.deleteChannel))
+	mux.Handle("GET /settings", s.authed(s.settingsPage))
+	mux.Handle("POST /settings", s.authed(s.saveSettings))
+	mux.Handle("POST /settings/backup", s.authed(s.backup))
+	mux.Handle("GET /diagnostics", s.authed(s.diagnostics))
+	mux.Handle("GET /costs", s.authed(s.costsPage))
+	mux.Handle("GET /costs/{kind}", s.authed(s.costsCSV))
+	mux.Handle("GET /settings/energy", s.authed(s.energyPage))
+	mux.Handle("POST /settings/energy", s.authed(s.saveEnergy))
+	mux.Handle("POST /settings/energy/{id}/delete", s.authed(s.deleteRate))
 	mux.Handle("GET /about", s.authed(s.about))
 	mux.Handle("GET /settings/security", s.authed(s.securityPage))
 	mux.Handle("POST /settings/password", s.authed(s.changePassword))

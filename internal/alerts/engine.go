@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -439,4 +440,30 @@ func (e *Engine) Preview(ctx context.Context, device store.Device, ruleKey strin
 		}
 	}
 	return out, nil
+}
+
+// ActiveAlert is a condition rule currently firing for a device.
+type ActiveAlert struct {
+	RuleKey  string
+	Title    string
+	Severity Severity
+	Since    time.Time
+	Notified bool
+}
+
+// Active returns the firing condition rules for a device, most severe first.
+func (e *Engine) Active(deviceID int64) []ActiveAlert {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	var out []ActiveAlert
+	for _, def := range definitions {
+		st, ok := e.states[stateKey{def.Key, deviceID}]
+		if !ok || st.Status != StatusFiring {
+			continue
+		}
+		out = append(out, ActiveAlert{RuleKey: def.Key, Title: def.Title, Severity: st.Severity, Since: st.BreachStart,
+			Notified: st.Notified})
+	}
+	slices.SortStableFunc(out, func(a, b ActiveAlert) int { return int(b.Severity) - int(a.Severity) })
+	return out
 }

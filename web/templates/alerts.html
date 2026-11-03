@@ -1,0 +1,61 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-or-later
+Copyright (C) 2026 Brad Hager and contributors
+*/ -}}
+{{define "content"}}
+<h1>Alerts</h1>
+<section class="card" aria-labelledby="active-title">
+  <h2 id="active-title">Active now</h2>
+  {{- if .Active}}
+  <ul class="alerts">{{range .Active}}<li class="sev-{{.Severity}}"><span class="badge">{{.Severity}}</span> {{.Title}} — {{.Device}} <span class="hint">since {{.Since}}</span></li>{{end}}</ul>
+  {{- else}}<p>Nothing is wrong right now.</p>{{end}}
+</section>
+<section class="card" aria-labelledby="snooze-title">
+  <h2 id="snooze-title">Snooze</h2>
+  {{- if .Snoozes}}
+  <ul class="plain">{{range .Snoozes}}<li>{{.Device}}: muted until {{.Until}}
+    <form method="post" action="/alerts/snooze/{{.ID}}/end" class="inline"><input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button type="submit" class="link">End now</button></form></li>{{end}}</ul>
+  {{- end}}
+  {{- if .Devices}}
+  <form method="post" action="/alerts/snooze" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <label for="snooze-device">Device</label>
+    <select id="snooze-device" name="device_id">{{range .Devices}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+    <label for="snooze-hours">for</label>
+    <select id="snooze-hours" name="hours"><option value="1">1 hour</option><option value="4">4 hours</option><option value="24">1 day</option><option value="72">3 days</option><option value="168">1 week</option></select>
+    <label for="snooze-reason" class="sr-only">Reason (optional)</label>
+    <input id="snooze-reason" name="reason" placeholder="Reason (optional)" maxlength="200">
+    <button type="submit" class="secondary">Snooze notifications</button>
+  </form>
+  <p class="hint">Alerts are still recorded while snoozed; only notifications are held back.</p>
+  {{- end}}
+</section>
+<section class="card" aria-labelledby="rules-title">
+  <h2 id="rules-title">Rules</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th scope="col">Rule</th><th scope="col">Settings</th><th scope="col">Enabled</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+    <tbody>
+    {{- range .Rules}}
+    <tr><td><strong>{{.Title}}</strong><br><span class="hint">{{.Description}}</span></td><td>{{.Summary}}</td>
+        <td>{{if .Enabled}}yes{{else}}no{{end}}{{if .NeedsCalibration}} <span class="badge sev-info">needs calibration</span>{{end}}</td>
+        <td><a href="/alerts/rules/{{.Key}}">Edit<span class="sr-only"> {{.Title}}</span></a></td></tr>
+    {{- end}}
+    </tbody>
+  </table></div>
+</section>
+<section class="card" aria-labelledby="history-title">
+  <h2 id="history-title">History</h2>
+  {{- if .History}}
+  <div class="table-wrap"><table>
+    <thead><tr><th scope="col">When</th><th scope="col">Severity</th><th scope="col">Alert</th><th scope="col">Sent</th><th scope="col"><span class="sr-only">Acknowledge</span></th></tr></thead>
+    <tbody>
+    {{- range .History}}
+    <tr class="sev-{{.Severity}}"><td>{{.When}}</td><td><span class="badge">{{.Severity}}</span></td>
+      <td><strong>{{.Title}}</strong> ({{.Kind}})<br>{{.Message}}</td><td>{{if .Notified}}yes{{else}}held back{{end}}</td>
+      <td>{{if .Acked}}acknowledged{{else}}<form method="post" action="/alerts/events/{{.ID}}/ack" class="inline"><input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button type="submit" class="link">Acknowledge</button></form>{{end}}</td></tr>
+    {{- end}}
+    </tbody>
+  </table></div>
+  {{- else}}<p>No alerts recorded.</p>{{end}}
+</section>
+{{end}}

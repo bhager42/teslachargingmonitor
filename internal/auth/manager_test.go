@@ -188,7 +188,7 @@ func TestRehashOnLogin(t *testing.T) {
 
 func TestInitFromEnvironment(t *testing.T) {
 	ctx := context.Background()
-	m, _, _ := newManager(t)
+	m, _, clk := newManager(t)
 	dir := t.TempDir()
 	file := filepath.Join(dir, "pw")
 	_ = os.WriteFile(file, []byte(pw+"\n"), 0o600)
@@ -200,12 +200,12 @@ func TestInitFromEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Same file on restart: sessions are kept.
-	m2 := NewManager(m.st, Config{Params: fast})
+	m2 := NewManager(m.st, Config{Params: fast, Now: clk.now})
 	if _, err := m2.Init(ctx, Bootstrap{PasswordFile: file}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := m2.Session(ctx, c.Value); err != nil {
-		t.Error("unchanged password file revoked sessions")
+		t.Errorf("unchanged password file revoked sessions: %v", err)
 	}
 	if _, err := m2.ChangePassword(ctx, pw, "x", "x", "", ""); !errors.Is(err, ErrEnvManaged) {
 		t.Errorf("env-managed change = %v", err)

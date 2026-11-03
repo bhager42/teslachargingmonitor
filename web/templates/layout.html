@@ -4,25 +4,34 @@ Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "layout" -}}
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{{.Theme}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark light">
 <meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0f1115">
 <title>{{.Title}} · Tesla Charger Monitoring</title>
 <link rel="stylesheet" href="{{asset "app.css"}}">
 <link rel="icon" href="{{asset "icon.svg"}}" type="image/svg+xml">
+<link rel="manifest" href="{{asset "manifest.webmanifest"}}">
+<script type="module" src="{{asset "js/app.mjs"}}"></script>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 {{- if .InsecureHTTP}}
 <p class="banner banner-danger" role="alert">This connection is not encrypted (plain HTTP). Anyone on your network could read your password. Enable HTTPS (TCMON_TLS=auto).</p>
 {{- end}}
 <header class="site-header">
-  <a class="brand" href="/">Tesla Charger Monitoring</a>
+  <a class="brand" href="/"><img src="{{asset "icon.svg"}}" alt="" width="24" height="24"> Tesla Charger Monitoring</a>
   {{- if .SignedIn}}
   <nav aria-label="Main">
     <a href="/" {{if eq .Nav "home"}}aria-current="page"{{end}}>Dashboard</a>
+    <a href="/costs" {{if eq .Nav "costs"}}aria-current="page"{{end}}>Costs</a>
+    <a href="/alerts" {{if eq .Nav "alerts"}}aria-current="page"{{end}}>Alerts</a>
+    <a href="/notifications" {{if eq .Nav "notifications"}}aria-current="page"{{end}}>Notifications</a>
+    <a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}>Settings</a>
+    <a href="/diagnostics" {{if eq .Nav "diagnostics"}}aria-current="page"{{end}}>Diagnostics</a>
     <a href="/settings/security" {{if eq .Nav "security"}}aria-current="page"{{end}}>Security</a>
     <a href="/about" {{if eq .Nav "about"}}aria-current="page"{{end}}>About</a>
     <form method="post" action="/logout" class="inline">
@@ -31,10 +40,16 @@ Copyright (C) 2026 Brad Hager and contributors
     </form>
   </nav>
   {{- end}}
+  <div class="theme" role="group" aria-label="Color theme">
+    <button type="button" class="chip" data-set-theme="system" aria-pressed="{{if eq .Theme "system"}}true{{else}}false{{end}}">Auto</button>
+    <button type="button" class="chip" data-set-theme="dark" aria-pressed="{{if eq .Theme "dark"}}true{{else}}false{{end}}">Dark</button>
+    <button type="button" class="chip" data-set-theme="light" aria-pressed="{{if eq .Theme "light"}}true{{else}}false{{end}}">Light</button>
+  </div>
 </header>
-<main id="main">
+<main id="main" tabindex="-1">
 {{- if .Flash}}<p class="flash" role="status">{{.Flash}}</p>{{end}}
 {{- if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}
+<div id="live-alerts" class="live-alerts" role="status" aria-live="polite"></div>
 {{template "content" .}}
 </main>
 <footer class="site-footer">

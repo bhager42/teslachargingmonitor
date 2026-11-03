@@ -19,7 +19,6 @@ import (
 
 	"github.com/bhager42/teslachargingmonitor/internal/auth"
 	"github.com/bhager42/teslachargingmonitor/internal/buildinfo"
-	"github.com/bhager42/teslachargingmonitor/internal/store"
 )
 
 type page map[string]any
@@ -27,6 +26,21 @@ type page map[string]any
 // flashes maps fixed codes to messages so no user input is reflected.
 var flashes = map[string]string{
 	"password-changed": "Password changed. Other devices have been signed out.",
+	"device-saved":     "Wall Connector saved. It will be polled right away.",
+	"device-deleted":   "Wall Connector removed.",
+	"polling":          "Polling now. The page updates when the result arrives.",
+	"poll-limited":     "A poll was just requested; wait a few seconds before asking again.",
+	"rule-saved":       "Alert rule saved.",
+	"rule-reset":       "Alert rule reset to its defaults.",
+	"acked":            "Alert acknowledged.",
+	"snoozed":          "Alerts snoozed.",
+	"unsnoozed":        "Snooze ended.",
+	"channel-saved":    "Email settings saved.",
+	"channel-deleted":  "Notification channel removed.",
+	"test-sent":        "Test email sent. Check your inbox (and spam folder).",
+	"settings-saved":   "Settings saved.",
+	"rate-saved":       "Electricity price saved. Costs are recalculated from it.",
+	"rate-deleted":     "Price removed.",
 	"sessions-revoked": "All other devices have been signed out.",
 	"signed-out":       "You have been signed out.",
 }
@@ -44,6 +58,11 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 	}
 	if _, ok := p["Title"]; !ok {
 		p["Title"] = "Tesla Charger Monitoring"
+	}
+	// The theme is read server-side so the first paint is already correct.
+	p["Theme"] = "system"
+	if c, err := r.Cookie("tcmon_theme"); err == nil && (c.Value == "dark" || c.Value == "light") {
+		p["Theme"] = c.Value
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
@@ -217,33 +236,10 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request, sess auth.Sessio
 	http.Redirect(w, r, "/login?ok=signed-out", http.StatusSeeOther)
 }
 
-type deviceRow struct{ Name, Address, LastPoll, Firmware string }
-type alertRow struct{ Severity, When, Message string }
-
-func (s *Server) home(w http.ResponseWriter, r *http.Request, sess auth.Session) {
-	ctx := r.Context()
-	var rows []deviceRow
-	devices, _ := s.st.Devices(ctx)
-	for _, d := range devices {
-		row := deviceRow{Name: d.Name, Address: d.Address, LastPoll: "never", Firmware: "–"}
-		if log, err := s.st.PollLog(ctx, d.ID, 1); err == nil && len(log) == 1 {
-			status := "ok"
-			if !log[0].OK {
-				status = "failed"
-			}
-			row.LastPoll = log[0].TS.Local().Format("2 Jan 15:04") + " (" + status + ")"
-		}
-		if info, err := s.st.DeviceInfo(ctx, d.ID); err == nil {
-			row.Firmware = info.FirmwareVersion
-		}
-		rows = append(rows, row)
-	}
-	var alerts []alertRow
-	evs, _ := s.st.AlertEvents(ctx, store.AlertEventFilter{Limit: 10})
-	for _, e := range evs {
-		alerts = append(alerts, alertRow{Severity: e.Severity, When: e.TS.Local().Format("2 Jan 15:04"), Message: e.Message})
-	}
-	s.render(w, r, http.StatusOK, "home", s.base(page{"Title": "Dashboard", "Devices": rows, "Alerts": alerts}, sess, "home"))
+type alertRow struct {
+	ID                                   int64
+	Severity, Kind, When, Message, Title string
+	Acked, Notified                      bool
 }
 
 func (s *Server) about(w http.ResponseWriter, r *http.Request, sess auth.Session) {

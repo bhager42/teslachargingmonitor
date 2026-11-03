@@ -4,11 +4,13 @@ Self-hosted monitoring and email alerting for the **Tesla Universal Wall
 Connector**, packaged as a small, hardened container for **TrueNAS SCALE
 25.10+** or any Docker host.
 
-> **Status: early development (Phase 5 complete — polling, storage, alerts,
-> email and the secure web server).** `tcmon serve` runs everything and
-> serves HTTPS on port 8443 with first-run setup, sign-in and a minimal
-> dashboard. The full dashboard (Phase 6) and the container image (Phase 7)
-> are next. See the
+> **Status: early development (Phase 6 complete — the full web UI).**
+> `tcmon serve` runs polling, alerts, email and the HTTPS web UI on port
+> 8443: live dashboard, charts, alert rules, Gmail setup, settings and
+> diagnostics and **charging costs** (your price per kWh, daily/weekly/monthly
+> cost charts and a sessions table) — everything is configured in the
+> browser, including the Wall Connector's IP address. The container image
+> (Phase 7) is next. See the
 > [development plan](docs/DEVELOPMENT_PLAN.md) for scope and roadmap.
 
 ## What it will do
@@ -73,6 +75,9 @@ go run ./cmd/tcmon notify add-email -data-dir ./data -username you@gmail.com -to
 The password is read from standard input (or `-password-file`), encrypted
 with the key in `./data/secret.key`, and a test email is sent. Back up
 `secret.key` together with the database.
+
+Browser tests (Playwright + axe; needs Node 22): `make e2e` (Chromium) or
+`make e2e E2E_BROWSERS=chromium,firefox,webkit`.
 
 Fuzzing: `make fuzz FUZZTIME=60s`. Soak test: `make soak`.
 

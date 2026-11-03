@@ -1040,12 +1040,113 @@ checklist for V2/V3/V4/V13/V14-equivalent sections (ASVS 5.0 numbering)
 documented in `docs/security/asvs.md` with pass/N-A per item.
 
 ### Phase 6 — Web UI
+
+> **Status (2026-11-02): implemented.** Server-rendered pages (dashboard with
+> live device cards, device detail with SVG charts for 24 h / 7 d / 30 d / 1 y,
+> lifetime counters, masked identity, raw responses and CSV export; Alerts
+> with active alerts, snoozes, history with acknowledgement and a rule editor
+> with "test against the last 24 hours"; Notifications with the Gmail form,
+> test email and delivery log; Settings with °C/°F and per-class retention
+> presets/custom days (confirmation before data is deleted) and database
+> backup download; **Settings → Wall Connectors**, where the device address
+> is entered, tested ("Test connection") and edited (D2); Diagnostics with
+> unknown/missing/invalid fields from the latest raw responses and the poll
+> log). Live updates over Server-Sent Events (pre-formatted values, DOM
+> updates via `textContent` only). Theme Auto/Dark/Light stored in a cookie
+> and rendered server-side (no flash). One 7 KB ES module (3 KB gzipped,
+> budget-tested, no `innerHTML`/`eval`), `light-dark()` tokens, container
+> queries, `@layer`, view transitions, web app manifest; no service worker
+> (it cannot register with the self-signed certificate). Playwright + axe
+> suite (WCAG 2.2 AA in both themes on 13 pages + sign-in, zero CSP/Trusted
+> Types violations, 320 px without horizontal scroll, live SSE update,
+> theme without flash, charts, connection test) runs on Chromium, Firefox and
+> WebKit in CI. The e2e suite found and fixed a real bug: devices saved from
+> the web UI were never polled because poller workers inherited the HTTP
+> request's context. **Deferred:** the Lighthouse ≥ 95 audit (needs a
+> signed-in, self-signed-HTTPS Lighthouse CI setup) moves to Phase 8.
 - Layout, design tokens with `light-dark()`, theme toggle without flash,
   dashboard (SSE), device detail charts, alerts, notifications, settings,
   diagnostics, about/source page, PWA manifest.
 
 **Accept:** Playwright suite green on 3 engines; axe clean in both themes;
 Lighthouse ≥ 95; works at 320 px; zero CSP violations; JS budget met.
+
+### Phase 6b — Charging cost (owner request D18)
+
+> **Status (2026-11-03): implemented.**
+> - **Cost logic** (`internal/energy`, pure and table-tested): counter deltas
+>   with reset handling, price history, a time-of-use split across window
+>   boundaries, and day/week/month buckets in local time (DST-safe). Energy
+>   is assigned by each interval's midpoint.
+> - **Data:** migration 0005 adds `energy_rates`. Sessions and totals are
+>   computed from stored readings on each page load, so no sessions table
+>   was needed.
+> - **Pages:**
+>   - **Settings → Electricity price:** default $0.155; currency; "applies
+>     from" date or all past data; optional off-peak price and window;
+>     monthly fee; price history.
+>   - **Costs:** totals for this month, last month, this year and all time;
+>     server-rendered SVG bar charts by day, week or month, each with a data
+>     table; the sessions table; daily and session CSV exports.
+>   - **Dashboard card:** session cost and this month's cost.
+> - **Assumptions** (Q10a unanswered): a flat price, energy only, US dollars.
+> - **Acceptance:** a simulated charging session's kWh and cost match the
+>   lifetime counters; axe and 320 px checks pass on the new pages.
+
+Show what charging costs, using the owner's electricity price
+(**$0.155 per kWh**, editable in the GUI).
+
+**Where the energy numbers come from.** The Wall Connector's lifetime
+`energy_wh` counter (verified on the owner's UWC) only ever goes up, so the
+energy used between any two polls is the difference between them. That is
+exact even with hourly polling — nothing is missed between polls. A
+counter that goes down (device reset or replaced) starts a new baseline
+instead of producing a negative value. This is the energy delivered by the
+Wall Connector, which is what the utility bills; the car's own display may
+show slightly less because of charging losses. The UI says so in one line.
+
+**Price settings (Settings → Energy cost).**
+- Price per kWh (default **0.155**), currency symbol (default **$**),
+  decimals shown.
+- Rates keep their history: each change has an "effective from" date, so
+  changing the price updates future costs without rewriting past months
+  (with an option to apply a new price to past data too).
+- Optional extras, off by default: a second **off-peak price** with daily
+  start/end times (time-of-use plans), and a flat **monthly fee** or
+  percentage for taxes/delivery charges. Energy between two polls is
+  costed at the price in effect at that time; when a poll interval crosses
+  an off-peak boundary the energy is split in proportion to time.
+
+**Charts and pages.**
+- **Dashboard card:** "This session: 12.4 kWh · $1.92" and "This month:
+  $18.40".
+- **Cost page** (new nav item "Costs") with bar charts by **day** (last
+  30 days), **week** (last 12 weeks) and **month** (last 12 months), each
+  bar showing cost with kWh on hover/focus and in an accessible data table
+  below the chart. Totals for this month, last month, this year and all
+  time, plus average cost per session and per month.
+- **Charging sessions table:** start, end, duration, kWh, cost and peak
+  current. Sessions come from `charge_starts` increments and the plugged-in
+  polling (5-minute resolution while a car is connected; start/end times
+  are accurate to the polling interval).
+- **CSV export** of daily energy and cost, and of sessions.
+- Optional monthly cost line in the (Phase 8) summary email.
+
+**Data model.** Migration `0005_energy.sql`: `energy_rates` (effective_from,
+price_per_kwh, off-peak price and window, monthly fee); the currency symbol
+is a setting. Sessions and day/week/month totals are computed from the stored
+lifetime-counter and plug-state readings on each page load (small at this
+data volume), so changing a price never leaves stale totals. Cost history
+therefore follows the readings retention (2 years by default).
+
+**Accept:**
+- Unit tests: counter deltas including resets, rate-history boundaries, the
+  time-of-use split across boundaries, and month and day boundaries in the
+  container's time zone (including DST changes).
+- Simulator test: a charging scenario produces session kWh and cost that
+  match the counters to within one poll.
+- Accessibility (axe) checks pass on the Costs page in both themes; the
+  chart has a matching data table.
 
 ### Phase 7 — Container, release, TrueNAS
 - Hardened Dockerfile, multi-arch build, SBOM, provenance, cosign signing,
@@ -1066,8 +1167,8 @@ plain Docker succeeds; `cosign verify` documented and works; image < 25 MB.
 open questions in §15 resolved or deferred explicitly.
 
 ### Later / stretch
-TrueNAS community catalog submission; Home Assistant MQTT discovery; per-session
-cost tracking with utility rates; multi-connector power-sharing view; passkey
+TrueNAS community catalog submission; Home Assistant MQTT discovery; importing
+utility tariffs automatically (e.g. from OpenEI); multi-connector power-sharing view; passkey
 (WebAuthn) as an *optional* second factor; Helm chart.
 
 ### Proposed repository layout
@@ -1111,6 +1212,7 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 | D15 | Data retention **adjustable in the Web GUI**, default **2 years**. | 2026-11-02 | §5 retention UI with presets, size estimate, confirmation before deleting. |
 | D16 | Charging `/vitals` capture **deferred** (car not available). HTTPS with a self-signed cert and one-time browser warning **confirmed** (D12). | 2026-11-02 | Phase 0 no longer blocks on it; charging-dependent rules ship disabled until calibrated. |
 | D17 | **60 A circuit → 48 A max charging current**; 240 V / 60 Hz split-phase (confirmed by idle capture: `grid_v` 240.1, `grid_hz` 59.8). | 2026-11-02 | §8 device form (breaker → 80 % max), `overcurrent` threshold 50.4 A and enabled by default, new optional `current_near_limit` rule. |
+| D18 | Add a **charging cost** view; owner's electricity price **$0.155/kWh**. | 2026-11-03 | New Phase 6b: price settings with history (default 0.155, `$`), optional off-peak price and monthly fee, cost on the dashboard card, Costs page with day/week/month bar charts, sessions table, CSV export. |
 
 ### 15.1 Still open
 
@@ -1140,6 +1242,10 @@ records the assumption in the PR that relies on it.
 8. Quiet hours? Daily/weekly summary digest wanted?
 9. *(Answered — D6/D10: 60 min default, 5 min while plugged in.)*
 10. Do you want an external dead-man's-switch ping (healthchecks.io / Uptime Kuma)?
+10a. *(D18: $0.155/kWh.)* Is that a single flat price, or do you have a
+    time-of-use plan (cheaper overnight)? Should taxes or fixed monthly
+    charges be included in the cost, or energy only? Currency is assumed
+    to be US dollars ($).
 
 **Access & security**
 11. *(Answered — D12: LAN only.)*

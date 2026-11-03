@@ -18,7 +18,7 @@ GORUN     := GOTOOLCHAIN=$(TOOLCHAIN) $(GO) run
 export CGO_ENABLED = 0
 export GOFLAGS     = -mod=readonly
 
-.PHONY: all build sim test cover fuzz soak lint fmt vet vuln headers licenses check clean
+.PHONY: all build sim test cover fuzz soak e2e lint fmt vet vuln headers licenses check clean
 
 all: check build
 
@@ -35,6 +35,11 @@ test: ## Run unit tests with the race detector
 cover: ## Run tests with coverage report
 	$(GO) test -count=1 -coverprofile=coverage.out ./...
 	$(GO) tool cover -func=coverage.out | tail -n 1
+
+E2E_BROWSERS ?= chromium
+
+e2e: build ## Browser tests (Playwright + axe); E2E_BROWSERS=chromium,firefox,webkit
+	cd e2e && npm ci --no-audit --no-fund && TCMON_E2E_BROWSERS=$(E2E_BROWSERS) npx playwright test
 
 SOAK_POLLS ?= 3000
 

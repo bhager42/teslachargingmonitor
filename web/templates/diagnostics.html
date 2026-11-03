@@ -1,0 +1,24 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-or-later
+Copyright (C) 2026 Brad Hager and contributors
+*/ -}}
+{{define "content"}}
+<h1>Diagnostics</h1>
+{{- range .Devices}}
+<section class="card"><h2>{{.Name}}</h2>
+  <h3>Data quality{{with .RawAt}} <span class="hint">(latest responses, {{.}})</span>{{end}}</h3>
+  {{- if .Problems}}<ul class="plain">{{range .Problems}}<li>{{.}}</li>{{end}}</ul>
+  {{- else}}<p>The latest responses matched the expected format exactly.</p>{{end}}
+  <h3>Recent polls</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th scope="col">Time</th><th scope="col">Result</th><th scope="col">Took</th><th scope="col">Error</th></tr></thead>
+    <tbody>{{range .Polls}}<tr><td>{{.When}}</td><td>{{.Result}}</td><td>{{.Took}}</td><td>{{.Error}}</td></tr>{{end}}</tbody>
+  </table></div>
+</section>
+{{- end}}
+<section class="card"><h2>Database</h2>
+  <p>Size {{.DBSize}} · schema version {{.Schema}} · {{.GoVersion}} · {{.LiveClients}} live browser connection(s)</p>
+  <div class="table-wrap"><table><thead><tr><th scope="col">Table</th><th scope="col">Rows</th></tr></thead>
+  <tbody>{{range .Rows}}<tr><td><code>{{.K}}</code></td><td>{{.V}}</td></tr>{{end}}</tbody></table></div>
+</section>
+{{end}}

@@ -69,7 +69,7 @@ func TestBasicCommands(t *testing.T) {
 		{[]string{"help"}, 0, "Usage: tcmon", ""},
 		{nil, 2, "", "Usage: tcmon"},
 		{[]string{"bogus"}, 2, "", `unknown command "bogus"`},
-		{[]string{"migrate"}, 0, "schema version 4", ""},
+		{[]string{"migrate"}, 0, "schema version 5", ""},
 		{[]string{"device"}, 2, "", "tcmon device add"},
 		{[]string{"device", "list"}, 0, "No devices", ""},
 		{[]string{"device", "add"}, 2, "", "-address is required"},
