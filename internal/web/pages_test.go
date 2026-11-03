@@ -417,6 +417,11 @@ func TestNotificationPages(t *testing.T) {
 
 func TestSettingsRetentionAndBackup(t *testing.T) {
 	f := newFull(t)
+	// "Keep forever" (0) must not prefill the min="1" custom box, or the
+	// browser refuses to submit the form.
+	if _, body := f.get("/settings"); !strings.Contains(body, `name="rollups_days_custom" type="number" min="1" max="36500" value=""`) {
+		t.Error(`"Keep forever" prefills the custom days box`)
+	}
 	form := url.Values{"temp_unit": {"C"}, "readings_days": {"custom"}, "readings_days_custom": {"45"}, "raw_payloads_days": {"90"},
 		"rollups_days": {"0"}, "events_days": {"730"}, "poll_log_days": {"90"}, "audit_days": {"365"}}
 	if r := f.post("/settings", form); r.StatusCode != 400 || !strings.Contains(bodyOf(t, r), "permanently deletes") {
