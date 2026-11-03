@@ -39,6 +39,19 @@ GOTOOLCHAIN=go1.27.3 go install github.com/golangci/golangci-lint/v2/cmd/golangc
 2. Run `make check` (and `make vuln` when dependencies change).
 3. Open a pull request using the template; CI must be green.
 
+## Releasing
+
+Releases are built only by `.github/workflows/release.yml`. Either:
+
+- **Actions** → **Release** → **Run workflow** on `main`, and enter the
+  version without the `v` (for example `0.7.0`). The workflow builds, tests,
+  scans, publishes, signs, and then creates the tag `v0.7.0` and the GitHub
+  release on the commit it built. Or:
+- push an annotated tag `vX.Y.Z` on `main`.
+
+A version with a suffix (`1.0.0-rc.1`) is a pre-release and does not move
+the `latest` image tag.
+
 ## Code of Conduct
 
 This project follows the [Contributor Covenant 2.1](CODE_OF_CONDUCT.md).

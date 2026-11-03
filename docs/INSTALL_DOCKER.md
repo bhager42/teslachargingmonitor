@@ -125,7 +125,7 @@ provenance.
 
 ```bash
 cosign verify ghcr.io/bhager42/teslachargingmonitor:0.7.0 \
-  --certificate-identity-regexp '^https://github\.com/bhager42/teslachargingmonitor/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-identity-regexp '^https://github\.com/bhager42/teslachargingmonitor/\.github/workflows/release\.yml@refs/(tags/v|heads/main$)' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
