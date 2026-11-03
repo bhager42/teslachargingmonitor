@@ -52,6 +52,13 @@ services:
       options: { max-size: "10m", max-file: "3" }
 volumes:
   tcmon-data:
+# TrueNAS: shows the "Web UI" button on the app page (0.0.0.0 = this server).
+x-portals:
+  - name: Web UI
+    scheme: https
+    host: 0.0.0.0
+    port: 8443
+    path: /
 ```
 
 The full guide (updating, backups, your own dataset, password reset,
