@@ -18,7 +18,7 @@ GORUN     := GOTOOLCHAIN=$(TOOLCHAIN) $(GO) run
 export CGO_ENABLED = 0
 export GOFLAGS     = -mod=readonly
 
-.PHONY: all build sim test cover fuzz soak e2e lint fmt vet vuln headers licenses check clean
+.PHONY: all build sim test cover fuzz soak e2e image image-test lint fmt vet vuln headers licenses check clean
 
 all: check build
 
@@ -75,6 +75,15 @@ licenses: ## Verify dependency licenses are AGPL-compatible
 		--disallowed_types=forbidden,restricted,unknown --ignore $(PKG)
 
 check: headers lint test ## Everything CI runs that is fast
+
+IMAGE ?= tcmon:dev
+
+image: ## Build the container image (IMAGE=tcmon:dev)
+	docker buildx build --load --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) \
+		--build-arg SOURCE_DATE_EPOCH=$$(git log -1 --format=%ct) -t $(IMAGE) .
+
+image-test: ## Structure and smoke tests for IMAGE (needs Docker; run as root for the UID test)
+	scripts/image-test.sh $(IMAGE)
 
 clean:
 	rm -rf bin coverage.out

@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Brad Hager and contributors
+#
+# Tesla Charger Monitoring on any Docker host. See docs/INSTALL_DOCKER.md.
+#   mkdir -p data && sudo chown 568:568 data && docker compose up -d
+#   docker compose logs tcmon      # shows the one-time setup token
+# Then open https://<this-host>:8443/ and accept the self-signed certificate.
+name: tcmon
+services:
+  tcmon:
+    # Pin a release for repeatable installs, e.g. :0.7.0 or :0.7.0@sha256:<digest>.
+    image: ghcr.io/bhager42/teslachargingmonitor:latest
+    container_name: tcmon
+    restart: unless-stopped
+    user: "568:568"                 # must own ./data; any UID works
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:size=16m,mode=1777"]
+    ports: ["8443:8443"]
+    environment:
+      TZ: America/Chicago           # your time zone (days, quiet hours, costs)
+      TCMON_TLS: auto               # self-signed certificate, LAN only
+      # Host names you use in the browser (IP addresses always work), comma separated:
+      # TCMON_PUBLIC_HOSTNAMES: tcmon.lan
+    volumes:
+      - ./data:/data                # database, secret.key, tls/ — back this up
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 128M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

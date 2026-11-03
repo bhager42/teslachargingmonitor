@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Brad Hager and contributors
+#
+# Tesla Charger Monitoring for TrueNAS SCALE 25.10+:
+# Apps → Discover Apps → ⋮ → Install via YAML. See docs/INSTALL_TRUENAS.md.
+# Before pasting, change the two lines marked EDIT.
+services:
+  tcmon:
+    image: ghcr.io/bhager42/teslachargingmonitor:latest
+    container_name: tcmon
+    restart: unless-stopped
+    user: "568:568"                 # the TrueNAS "apps" user
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:size=16m,mode=1777"]
+    ports: ["8443:8443"]
+    environment:
+      TZ: America/Chicago           # EDIT: your time zone
+      TCMON_TLS: auto
+    volumes:
+      - /mnt/tank/apps/tcmon:/data        # EDIT: the path of your tcmon dataset
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 128M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
