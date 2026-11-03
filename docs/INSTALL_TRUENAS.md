@@ -23,7 +23,7 @@ own snapshots), see [Keeping the data in your own dataset](#own-dataset).
 2. **Name:** `tcmon`.
 3. Paste [`deploy/truenas/custom-app.yaml`](../deploy/truenas/custom-app.yaml)
    and change the line marked `EDIT`: `TZ:` your time zone, for example
-   `America/Chicago` (used for days, quiet hours and costs).
+   `America/New_York` (used for days, quiet hours and costs).
 4. **Save**. TrueNAS pulls the image and starts the app; it shows
    **Running** within a minute.
 

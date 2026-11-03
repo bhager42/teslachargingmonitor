@@ -48,7 +48,7 @@ docker volume create tcmon-data
 docker run -d --name tcmon --restart unless-stopped \
   --read-only --cap-drop ALL --security-opt no-new-privileges:true \
   --tmpfs /tmp:size=16m,mode=1777 \
-  -p 8443:8443 -e TZ=America/Chicago \
+  -p 8443:8443 -e TZ=America/New_York \
   -v tcmon-data:/data \
   ghcr.io/bhager42/teslachargingmonitor:latest
 ```
@@ -65,7 +65,7 @@ mkdir data && podman unshare chown 568:568 data
 
 ```bash
 podman run -d --name tcmon --read-only --cap-drop ALL \
-  -p 8443:8443 -e TZ=America/Chicago -v ./data:/data:Z \
+  -p 8443:8443 -e TZ=America/New_York -v ./data:/data:Z \
   ghcr.io/bhager42/teslachargingmonitor:latest
 ```
 

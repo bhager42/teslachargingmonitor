@@ -19,7 +19,7 @@ services:
     tmpfs: ["/tmp:size=16m,mode=1777"]
     ports: ["8443:8443"]
     environment:
-      TZ: America/Chicago           # your time zone (days, quiet hours, costs)
+      TZ: America/New_York          # your time zone (days, quiet hours, costs)
       TCMON_TLS: auto               # self-signed certificate, LAN only
       # Host names you use in the browser (IP addresses always work), comma separated:
       # TCMON_PUBLIC_HOSTNAMES: tcmon.lan
