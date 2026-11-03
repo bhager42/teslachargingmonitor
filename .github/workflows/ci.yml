@@ -105,7 +105,7 @@ jobs:
           make build
           mkdir -p "$RUNNER_TEMP/tcmon"
           TCMON_LISTEN=0.0.0.0:8443 ./bin/tcmon serve -data-dir "$RUNNER_TEMP/tcmon" > "$RUNNER_TEMP/tcmon.log" 2>&1 &
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             TCMON_LISTEN=0.0.0.0:8443 ./bin/tcmon healthcheck -data-dir "$RUNNER_TEMP/tcmon" && exit 0
             sleep 1
           done
@@ -159,6 +159,51 @@ jobs:
             e2e/playwright-report
             e2e/test-results
           retention-days: 14
+
+  image:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build (linux/amd64)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: tcmon:ci
+          build-args: |
+            VERSION=ci
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Image structure and smoke tests (size, user, no shell, hardened run)
+        run: sudo scripts/image-test.sh tcmon:ci
+      - name: docker compose up (deploy/compose.yaml, host folder)
+        run: |
+          mkdir -p "$RUNNER_TEMP/compose/data"
+          sudo chown 568:568 "$RUNNER_TEMP/compose/data"
+          sed 's|ghcr.io/bhager42/teslachargingmonitor:latest|tcmon:ci|' deploy/compose.yaml > "$RUNNER_TEMP/compose/compose.yaml"
+          cd "$RUNNER_TEMP/compose"
+          docker compose up -d --wait --wait-timeout 90
+          docker compose logs tcmon | grep -q '"setup_token"'
+          docker compose down
+      - name: TrueNAS YAML up (deploy/truenas/custom-app.yaml, named volume)
+        run: |
+          sed 's|ghcr.io/bhager42/teslachargingmonitor:latest|tcmon:ci|' deploy/truenas/custom-app.yaml > "$RUNNER_TEMP/truenas.yaml"
+          docker compose -p ix-tcmon -f "$RUNNER_TEMP/truenas.yaml" up -d --wait --wait-timeout 90
+          docker compose -p ix-tcmon -f "$RUNNER_TEMP/truenas.yaml" logs tcmon | grep -q '"setup_token"'
+          docker compose -p ix-tcmon -f "$RUNNER_TEMP/truenas.yaml" down --volumes
+      - name: Vulnerability scan (Grype; fails on High/Critical with a fix)
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: tcmon:ci
+          fail-build: true
+          severity-cutoff: high
+          only-fixed: true
+          output-format: table
 
   security:
     name: Vulnerabilities & licenses

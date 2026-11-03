@@ -10,8 +10,11 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -55,6 +58,9 @@ func runServe(ctx context.Context, args []string, env Env) int {
 	st, err := openStore(ctx, *dir)
 	if err != nil {
 		log.Error("opening database", "err", err)
+		if hint := permissionHint(err, *dir); hint != "" {
+			log.Error(hint)
+		}
 		return 1
 	}
 	defer func() { _ = st.Close() }()
@@ -232,4 +238,15 @@ func feedLive(ctx context.Context, w *web.Server, updates <-chan poller.Update, 
 			w.HandleAlerts(b)
 		}
 	}
+}
+
+// permissionHint explains the usual container mistake: the data directory
+// (a bind mount) is not owned by the user the container runs as.
+func permissionHint(err error, dir string) string {
+	if !errors.Is(err, fs.ErrPermission) {
+		return ""
+	}
+	return fmt.Sprintf("the data directory %s must be writable by the user tcmon runs as (UID %d, GID %d); "+
+		"on the host run: chown -R %d:%d <host folder mounted at %s>", dir, os.Getuid(), os.Getgid(),
+		os.Getuid(), os.Getgid(), dir)
 }

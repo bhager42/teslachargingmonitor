@@ -11,6 +11,9 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"io/fs"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -230,5 +233,15 @@ func TestNextMaintenance(t *testing.T) {
 		if got := nextMaintenance(tc.now); !got.Equal(tc.want) {
 			t.Errorf("nextMaintenance(%v) = %v, want %v", tc.now, got, tc.want)
 		}
+	}
+}
+
+func TestPermissionHint(t *testing.T) {
+	err := fmt.Errorf("store: creating database file: %w", &fs.PathError{Op: "open", Path: "/data/tcmon.db", Err: fs.ErrPermission})
+	if h := permissionHint(err, "/data"); !strings.Contains(h, "chown -R") || !strings.Contains(h, "/data") {
+		t.Errorf("hint = %q", h)
+	}
+	if h := permissionHint(errors.New("disk full"), "/data"); h != "" {
+		t.Errorf("unrelated error got a hint: %q", h)
 	}
 }

@@ -689,7 +689,7 @@ Static assets are content-hashed and served `immutable` with SRI hashes.
 
 ### Image
 - Multi-stage `Dockerfile`: `golang:<ver>-alpine@sha256:…` builder →
-  `gcr.io/distroless/static-debian12:nonroot@sha256:…` runtime.
+  `gcr.io/distroless/static-debian13:nonroot@sha256:…` runtime (ADR 0005).
 - Binary at `/tcmon`, entrypoint `["/tcmon", "serve"]`.
 - **Runs as UID/GID 568:568 by default** (TrueNAS `apps` user) — overridable
   with `user:`; image must work with any arbitrary UID that owns `/data`.
@@ -764,11 +764,15 @@ TrueNAS SCALE 24.10+ runs apps on Docker Compose; 25.10 supports
 **Apps → Discover → ⋮ → Install via YAML** for custom apps.
 
 Deliverables:
-1. `deploy/truenas/custom-app.yaml` — Compose YAML ready to paste, using a host
-   path such as `/mnt/<pool>/apps/tcmon/data` mounted at `/data`, `user: 568:568`.
+1. `deploy/truenas/custom-app.yaml` — Compose YAML ready to paste, with
+   `user: 568:568` and a named volume `tcmon-data` at `/data` that TrueNAS
+   keeps on the apps pool, so no dataset or path is needed (only `TZ` is
+   edited). Mounting your own dataset (e.g. `/mnt/<pool>/apps/tcmon`) is
+   documented as an option for dataset snapshots.
 2. `docs/INSTALL_TRUENAS.md` step-by-step:
-   - Create dataset `<pool>/apps/tcmon` (preset *Apps*), owner `apps` (568).
-   - Option A: Install via YAML (paste file, edit pool path & TZ).
+   - Option A: Install via YAML (paste file, edit TZ); data in a named volume.
+   - Optional: create dataset `<pool>/apps/tcmon` (preset *Apps*), owner
+     `apps` (568), and mount it at `/data` instead.
    - Option B: Apps → Custom App form (image, port, env, host-path storage,
      run as 568, read-only rootfs toggle if available).
    - Using a TrueNAS-managed certificate (export to the dataset) or putting the
@@ -1149,8 +1153,27 @@ therefore follows the readings retention (2 years by default).
   chart has a matching data table.
 
 ### Phase 7 — Container, release, TrueNAS
+
+> **Status (2026-11-03): implemented; awaiting the first release tag and the
+> owner's TrueNAS install.** See ADR 0005.
+> - **Image:** distroless static (debian13, the current stable) by digest,
+>   cross-compiled reproducibly. It is 19 MB unpacked, about 8 MB to
+>   download, runs as 568:568, and has no shell. It passes
+>   `scripts/image-test.sh`.
+> - **CI:** image tests, a `docker compose up --wait` smoke test with
+>   `deploy/compose.yaml`, and a Grype gate (High/Critical with a fix).
+> - **Release** (`release.yml`, on `vX.Y.Z` tags): amd64 and arm64 images on
+>   GHCR with an SBOM and SLSA provenance, cosign keyless signing, a GitHub
+>   attestation, and a GitHub release.
+> - **Deploy:** `deploy/compose.yaml`, `deploy/truenas/custom-app.yaml`
+>   (a TrueNAS-managed named volume by default, so no dataset or path is
+>   needed; your own dataset is optional),
+>   and `docs/INSTALL_TRUENAS.md` / `docs/INSTALL_DOCKER.md` (update, backup,
+>   restore, password reset, verify).
+> - **Still open:** the owner verifies the TrueNAS install; `cosign verify`
+>   can only be run after the first tag is pushed.
 - Hardened Dockerfile, multi-arch build, SBOM, provenance, cosign signing,
-  GHCR publish on tag, Trivy gate, image structure tests.
+  GHCR publish on tag, vulnerability gate (Grype, ADR 0005), image structure tests.
 - `deploy/compose.yaml`, `deploy/truenas/custom-app.yaml`,
   `docs/INSTALL_TRUENAS.md`, `docs/INSTALL_DOCKER.md`, upgrade/backup docs.
 

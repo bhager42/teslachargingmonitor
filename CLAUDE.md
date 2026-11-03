@@ -22,6 +22,8 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
 - `make soak SOAK_POLLS=3000` — leak/soak test of the poller against the simulator
 - `go run ./cmd/tcmon serve -data-dir ./data` with `tcmon device add -data-dir ./data -address 127.0.0.1:8099` (after `make sim`) for a local end-to-end run
 - `make e2e` — Playwright + axe browser tests (WCAG 2.2 AA both themes, CSP, 320 px, live SSE) against the real binaries
+- `make image` / `sudo make image-test` — build the container image and run
+  `scripts/image-test.sh` (size < 25 MB, UID 568, no shell, hardened run)
 - `make fuzz FUZZTIME=60s` — run all fuzz targets; commit any failing input under `testdata/fuzz` as a regression seed
 
 ## Conventions
