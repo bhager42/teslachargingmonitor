@@ -45,6 +45,8 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
 - Browser JS lives in `web/static/js/app.mjs`: DOM APIs only (no innerHTML/eval —
   `TestJavaScriptBudget` enforces it and the 60 KB gzip budget). Live data is sent
   pre-formatted from Go (`DeviceCard`) so JS only sets `textContent`.
+- Charging cost math lives in `internal/energy` (pure): costs come from lifetime
+  `energy_wh` counter deltas, never from the device's session counter.
 - Long-lived work started from a request (e.g. `poller.Reload`) must not inherit
   the request context.
 - Schema changes go in a new `internal/store/migrations/NNNN_*.sql` file (numbered

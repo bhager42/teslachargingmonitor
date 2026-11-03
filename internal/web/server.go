@@ -149,7 +149,7 @@ func (s *Server) loadAssets() error {
 	}
 	s.pages = map[string]*template.Template{}
 	for _, p := range []string{"login", "setup", "setup_closed", "home", "security", "about", "error", "device",
-		"devices", "device_form", "alerts", "rule", "notifications", "channel", "settings", "diagnostics"} {
+		"devices", "device_form", "alerts", "rule", "notifications", "channel", "settings", "diagnostics", "costs", "energy"} {
 		t, err := template.New(p).Funcs(funcs).ParseFS(webui.Templates, "templates/layout.html", "templates/"+p+".html")
 		if err != nil {
 			return fmt.Errorf("web: parsing %s template: %w", p, err)
@@ -201,6 +201,11 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("POST /settings", s.authed(s.saveSettings))
 	mux.Handle("POST /settings/backup", s.authed(s.backup))
 	mux.Handle("GET /diagnostics", s.authed(s.diagnostics))
+	mux.Handle("GET /costs", s.authed(s.costsPage))
+	mux.Handle("GET /costs/{kind}", s.authed(s.costsCSV))
+	mux.Handle("GET /settings/energy", s.authed(s.energyPage))
+	mux.Handle("POST /settings/energy", s.authed(s.saveEnergy))
+	mux.Handle("POST /settings/energy/{id}/delete", s.authed(s.deleteRate))
 	mux.Handle("GET /about", s.authed(s.about))
 	mux.Handle("GET /settings/security", s.authed(s.securityPage))
 	mux.Handle("POST /settings/password", s.authed(s.changePassword))

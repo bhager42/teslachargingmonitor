@@ -7,8 +7,10 @@ Connector**, packaged as a small, hardened container for **TrueNAS SCALE
 > **Status: early development (Phase 6 complete — the full web UI).**
 > `tcmon serve` runs polling, alerts, email and the HTTPS web UI on port
 > 8443: live dashboard, charts, alert rules, Gmail setup, settings and
-> diagnostics — everything is configured in the browser, including the
-> Wall Connector's IP address. The container image (Phase 7) is next. See the
+> diagnostics and **charging costs** (your price per kWh, daily/weekly/monthly
+> cost charts and a sessions table) — everything is configured in the
+> browser, including the Wall Connector's IP address. The container image
+> (Phase 7) is next. See the
 > [development plan](docs/DEVELOPMENT_PLAN.md) for scope and roadmap.
 
 ## What it will do

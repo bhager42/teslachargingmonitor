@@ -134,6 +134,10 @@
   .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
   .chart-band { fill: var(--accent); opacity: 0.15; }
   .chart-dot { fill: var(--accent); }
+  svg.bars { inline-size: 100%; block-size: auto; }
+  .bar-label { font-size: 15px; }
+  .bar { fill: var(--accent); }
+  .bar:hover { opacity: 0.8; }
   .chart-axis { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .chart-text { fill: var(--muted); font-size: 11px; }
   /* position: relative keeps absolutely positioned .sr-only labels inside the

@@ -1073,6 +1073,26 @@ Lighthouse ≥ 95; works at 320 px; zero CSP violations; JS budget met.
 
 ### Phase 6b — Charging cost (owner request D18)
 
+> **Status (2026-11-03): implemented.**
+> - **Cost logic** (`internal/energy`, pure and table-tested): counter deltas
+>   with reset handling, price history, a time-of-use split across window
+>   boundaries, and day/week/month buckets in local time (DST-safe). Energy
+>   is assigned by each interval's midpoint.
+> - **Data:** migration 0005 adds `energy_rates`. Sessions and totals are
+>   computed from stored readings on each page load, so no sessions table
+>   was needed.
+> - **Pages:**
+>   - **Settings → Electricity price:** default $0.155; currency; "applies
+>     from" date or all past data; optional off-peak price and window;
+>     monthly fee; price history.
+>   - **Costs:** totals for this month, last month, this year and all time;
+>     server-rendered SVG bar charts by day, week or month, each with a data
+>     table; the sessions table; daily and session CSV exports.
+>   - **Dashboard card:** session cost and this month's cost.
+> - **Assumptions** (Q10a unanswered): a flat price, energy only, US dollars.
+> - **Acceptance:** a simulated charging session's kWh and cost match the
+>   lifetime counters; axe and 320 px checks pass on the new pages.
+
 Show what charging costs, using the owner's electricity price
 (**$0.155 per kWh**, editable in the GUI).
 
@@ -1113,12 +1133,11 @@ show slightly less because of charging losses. The UI says so in one line.
 - Optional monthly cost line in the (Phase 8) summary email.
 
 **Data model.** Migration `0005_energy.sql`: `energy_rates` (effective_from,
-price_per_kwh, off-peak price and window, monthly fee, currency) and
-`charging_sessions` (device, start/end, kWh, cost, peak current), updated
-incrementally after each poll. Daily/weekly/monthly totals are computed with
-SQL from the lifetime-counter deltas (indexed, small at this data volume). The
-default retention keeps cost history for 2 years; hourly rollups of
-lifetime energy keep monthly totals beyond that.
+price_per_kwh, off-peak price and window, monthly fee); the currency symbol
+is a setting. Sessions and day/week/month totals are computed from the stored
+lifetime-counter and plug-state readings on each page load (small at this
+data volume), so changing a price never leaves stale totals. Cost history
+therefore follows the readings retention (2 years by default).
 
 **Accept:**
 - Unit tests: counter deltas including resets, rate-history boundaries, the

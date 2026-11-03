@@ -4,7 +4,7 @@ Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "content"}}
 <h1>Settings</h1>
-<nav class="tabs" aria-label="Settings sections"><a href="/settings/devices">Wall Connectors</a><a href="/notifications">Notifications</a><a href="/alerts">Alert rules</a><a href="/settings/security">Security</a></nav>
+<nav class="tabs" aria-label="Settings sections"><a href="/settings/devices">Wall Connectors</a><a href="/settings/energy">Electricity price</a><a href="/notifications">Notifications</a><a href="/alerts">Alert rules</a><a href="/settings/security">Security</a></nav>
 <form method="post" action="/settings" class="card">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
   <h2>Display</h2>

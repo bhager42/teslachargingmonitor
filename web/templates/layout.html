@@ -27,6 +27,7 @@ Copyright (C) 2026 Brad Hager and contributors
   {{- if .SignedIn}}
   <nav aria-label="Main">
     <a href="/" {{if eq .Nav "home"}}aria-current="page"{{end}}>Dashboard</a>
+    <a href="/costs" {{if eq .Nav "costs"}}aria-current="page"{{end}}>Costs</a>
     <a href="/alerts" {{if eq .Nav "alerts"}}aria-current="page"{{end}}>Alerts</a>
     <a href="/notifications" {{if eq .Nav "notifications"}}aria-current="page"{{end}}>Notifications</a>
     <a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}>Settings</a>

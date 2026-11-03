@@ -39,6 +39,8 @@ var flashes = map[string]string{
 	"channel-deleted":  "Notification channel removed.",
 	"test-sent":        "Test email sent. Check your inbox (and spam folder).",
 	"settings-saved":   "Settings saved.",
+	"rate-saved":       "Electricity price saved. Costs are recalculated from it.",
+	"rate-deleted":     "Price removed.",
 	"sessions-revoked": "All other devices have been signed out.",
 	"signed-out":       "You have been signed out.",
 }

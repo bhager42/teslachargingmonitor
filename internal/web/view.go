@@ -100,6 +100,7 @@ type CardAlert struct {
 // CardFields lists the field keys a card shows, in order, with labels.
 var CardFields = []struct{ Key, Label string }{
 	{"current", "Current"}, {"power", "Power"}, {"session_energy", "This session"}, {"session_time", "Session time"},
+	{"session_cost", "Session cost"}, {"month_cost", "This month"},
 	{"grid", "Grid"}, {"handle_temp", "Handle"}, {"pcba_temp", "Circuit board"}, {"mcu_temp", "Controller"},
 	{"wifi", "Wi-Fi"}, {"lifetime_energy", "Lifetime energy"},
 }
@@ -195,7 +196,9 @@ func (s *Server) cardFor(ctx context.Context, d store.Device, unit string) Devic
 	if log, err := s.st.PollLog(ctx, d.ID, 1); err == nil && len(log) == 1 {
 		last = &log[0]
 	}
-	return s.buildCard(d, pt, last, unit, s.now())
+	c := s.buildCard(d, pt, last, unit, s.now())
+	s.costFields(ctx, &c, d.ID)
+	return c
 }
 
 func contextWithTimeout() (context.Context, context.CancelFunc) {
