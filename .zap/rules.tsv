@@ -3,3 +3,5 @@
 10104	IGNORE	(User Agent Fuzzer: informational)
 10035	IGNORE	(HSTS deliberately off with the default self-signed certificate, owner decision D12; enable with TCMON_HSTS=true)
 10112	IGNORE	(Session Management Response Identified: informational detection of the session/form cookies, which are Secure, HttpOnly, SameSite=Strict and __Host- prefixed)
+10015	IGNORE	(Re-examine Cache-control Directives: low; versioned static assets (?v=<hash>) are public and immutable by design, pages are no-store)
+10027	IGNORE	(Information Disclosure - Suspicious Comments: informational; app.mjs comments are documentation of a public AGPL source file)

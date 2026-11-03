@@ -65,8 +65,7 @@ func runServe(ctx context.Context, args []string, env Env) int {
 		return 1
 	}
 	if len(devices) == 0 {
-		log.Warn("no Wall Connector configured yet; add one with `tcmon device add -address <ip>` " +
-			"(the web UI will replace this step)")
+		log.Warn("no Wall Connector configured yet; add one in the web UI under Settings → Wall Connectors")
 	}
 
 	m := poller.New(st, poller.Config{Logger: log, UserAgent: "tcmon/" + info.Version})
@@ -100,8 +99,7 @@ func runServe(ctx context.Context, args []string, env Env) int {
 	}
 	dispatcher := notify.New(st, box, notify.Config{Logger: log, RootCAs: roots})
 	if chs, err := dispatcher.Channels(ctx); err == nil && len(chs) == 0 {
-		log.Warn("no notification channel configured; alerts are only logged. Add Gmail with " +
-			"`tcmon notify add-email -username you@gmail.com -to you@gmail.com -password-stdin`")
+		log.Warn("no notification channel configured; alerts are only logged. add Gmail in the web UI under Notifications")
 	}
 
 	webCfg, err := webConfig(env, *dir)
