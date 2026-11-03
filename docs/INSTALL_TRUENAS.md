@@ -28,7 +28,8 @@ own snapshots), see [Keeping the data in your own dataset](#own-dataset).
    **Running** within a minute.
 
 If port 8443 is already used on your TrueNAS, change the first number in
-`ports: ["8443:8443"]`, for example `"9443:8443"`, and use that port below.
+`ports: ["8443:8443"]`, for example `"9443:8443"`, set the same number
+in `x-portals` → `port:` at the bottom, and use that port below.
 
 ## 2. First sign-in
 
@@ -36,7 +37,8 @@ If port 8443 is already used on your TrueNAS, change the first number in
    container → **View Logs**. Find the line `FIRST-RUN SETUP` and copy the
    `setup_token` value. It is valid for 30 minutes; restarting the app
    prints a new one.
-2. Open `https://<truenas-ip>:8443/` in your browser. It warns once that the
+2. Click **Web UI** on the app page, or open `https://<truenas-ip>:8443/`
+   in your browser. It warns once that the
    certificate is self-signed: this is expected on a LAN (the app makes its
    own certificate). Choose *Advanced → Continue*. To remove the warning
    permanently, download the certificate from **About** in the app and trust
