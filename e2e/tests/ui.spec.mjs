@@ -106,6 +106,13 @@ test('works at 320 px wide without horizontal scrolling', async ({ page }) => {
   }
 });
 
+test('settings save with the defaults, including "Keep forever" retention', async ({ page }) => {
+  await page.goto('/settings');
+  await expect(page.locator('#rollups_days')).toHaveValue('0');
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page).toHaveURL(/[?]ok=settings-saved/);
+});
+
 test('device page draws charts and the settings form tests the connection', async ({ page }) => {
   await page.goto('/devices/1');
   await expect(page.locator('tcmon-chart svg').first()).toBeVisible();

@@ -24,7 +24,7 @@ Copyright (C) 2026 Brad Hager and contributors
         <option value="custom" {{if .Custom}}selected{{end}}>Custom…</option>
       </select>
       <label for="{{.Name}}_custom" class="sr-only">{{.Label}}: custom number of days</label>
-      <input id="{{.Name}}_custom" name="{{.Name}}_custom" type="number" min="1" max="36500" value="{{.Days}}" class="days" aria-describedby="{{.Name}}-help">
+      <input id="{{.Name}}_custom" name="{{.Name}}_custom" type="number" min="1" max="36500" value="{{if .Days}}{{.Days}}{{end}}" class="days" aria-describedby="{{.Name}}-help">
       <span class="hint" id="{{.Name}}-help">days (used when “Custom…” is chosen). {{.Help}}</span>
     </div>
   {{- end}}
