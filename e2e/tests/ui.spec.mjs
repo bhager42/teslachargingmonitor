@@ -37,7 +37,7 @@ for (const theme of ['dark', 'light']) {
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       await settle(page, path);
       const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
-      expect(violations.map((v) => `${path}: ${v.id} — ${v.help} (${v.nodes.length})`)).toEqual([]);
+      expect(violations.map((v) => `${path}: ${v.id} — ${v.help}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
     }
     expect(problems).toEqual([]);
   });

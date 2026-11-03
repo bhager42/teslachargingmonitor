@@ -126,6 +126,7 @@
   .grid-2 { display: grid; gap: var(--space); grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
   .tabs { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
   .tabs a { display: inline-block; min-block-size: 24px; min-inline-size: 24px; padding-block: 0.25rem; }
+  a[download] { display: inline-block; min-block-size: 24px; padding-block: 0.15rem; }
   .tabs a[aria-current="page"] { font-weight: 700; text-decoration: underline; text-underline-offset: 0.3em; }
   .charts { display: grid; gap: var(--space); grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); }
   .chart { margin: 0; }
