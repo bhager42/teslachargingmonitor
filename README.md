@@ -4,19 +4,64 @@ Self-hosted monitoring and email alerting for the **Tesla Universal Wall
 Connector**, packaged as a small, hardened container for **TrueNAS SCALE
 25.10+** or any Docker host.
 
-> **Status: early development (Phase 7 — container image and install
-> guides).** Polling, alerts, Gmail email, the HTTPS web UI (live dashboard,
-> charts, alert rules, settings, diagnostics) and **charging costs** all work,
-> and everything is configured in the browser, including the Wall
-> Connector's IP address. Hardening for v1.0 (Phase 8) is next. See the
+> **Status: v0.7.0, the first release (Phase 7 — container image and
+> install guides).** Polling, alerts, Gmail email, the HTTPS web UI (live
+> dashboard, charts, alert rules, settings, diagnostics) and **charging
+> costs** all work, and everything is configured in the browser, including
+> the Wall Connector's IP address. Hardening for v1.0 (Phase 8) is next. See the
 > [development plan](docs/DEVELOPMENT_PLAN.md) for scope and roadmap.
 
 ## Install
 
-- **TrueNAS SCALE 25.10+:** [docs/INSTALL_TRUENAS.md](docs/INSTALL_TRUENAS.md)
-  (Apps → Install via YAML).
-- **Docker / Podman:** [docs/INSTALL_DOCKER.md](docs/INSTALL_DOCKER.md)
-  ([`deploy/compose.yaml`](deploy/compose.yaml)).
+### TrueNAS SCALE 25.10+
+
+1. **Apps** → **Discover Apps** → **⋮** (top right) → **Install via YAML**.
+2. **Name:** `tcmon`. Paste the YAML below and set `TZ` to your time zone.
+   That is the only change needed: the data is kept in a volume TrueNAS
+   manages on your apps pool.
+3. **Save**, then open **Apps** → **tcmon** → **Workloads** → **View Logs**
+   and copy the `setup_token` from the `FIRST-RUN SETUP` line.
+4. Open `https://<truenas-ip>:8443/`, accept the one-time self-signed
+   certificate warning, enter the token and choose a password.
+
+```yaml
+services:
+  tcmon:
+    image: ghcr.io/bhager42/teslachargingmonitor:latest
+    container_name: tcmon
+    restart: unless-stopped
+    user: "568:568"                 # the TrueNAS "apps" user
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:size=16m,mode=1777"]
+    ports: ["8443:8443"]
+    environment:
+      TZ: America/Chicago           # EDIT: your time zone
+      TCMON_TLS: auto
+    volumes:
+      - tcmon-data:/data
+      # Optional: keep the data in your own dataset instead (owned by apps,
+      # 568), replacing the line above:
+      # - /mnt/tank/apps/tcmon:/data
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 128M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+volumes:
+  tcmon-data:
+```
+
+The full guide (updating, backups, your own dataset, password reset,
+troubleshooting) is [docs/INSTALL_TRUENAS.md](docs/INSTALL_TRUENAS.md). The
+same YAML is in [`deploy/truenas/custom-app.yaml`](deploy/truenas/custom-app.yaml).
+
+### Docker / Podman
+
+See [docs/INSTALL_DOCKER.md](docs/INSTALL_DOCKER.md) and
+[`deploy/compose.yaml`](deploy/compose.yaml).
 
 The image `ghcr.io/bhager42/teslachargingmonitor` is published for amd64 and
 arm64 from release tags, signed with cosign and shipped with an SBOM and
