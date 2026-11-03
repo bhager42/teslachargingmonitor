@@ -1,14 +1,23 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Brad Hager and contributors
 #
-# On a version tag (vX.Y.Z): test, scan and publish the multi-arch image to
-# GHCR with SBOM and SLSA provenance, sign it with cosign (keyless), and
-# create a GitHub release. Verification: docs/INSTALL_DOCKER.md#verify.
+# Test, scan and publish the multi-arch image to GHCR with SBOM and SLSA
+# provenance, sign it with cosign (keyless), and create a GitHub release.
+# Start it either by pushing a tag vX.Y.Z, or from the Actions tab
+# (Release → Run workflow on main, enter the version): the workflow then
+# creates the tag on the commit it built. Verification:
+# docs/INSTALL_DOCKER.md#verify.
 name: Release
 
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the v (e.g. 0.7.0 or 1.0.0-rc.1)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -35,8 +44,24 @@ jobs:
           persist-credentials: false
       - name: Version and reproducible build date
         id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            version="${INPUT_VERSION#v}"
+            if [ "$GITHUB_REF" != refs/heads/main ]; then
+              echo "::error::Run the release from main"; exit 1
+            fi
+            if git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}" "refs/tags/v${version}" >/dev/null; then
+              echo "::error::Tag v${version} already exists"; exit 1
+            fi
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          if ! printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::Not a version: $version"; exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "epoch=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -71,10 +96,10 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=v${{ steps.v.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ steps.v.outputs.version }}
           flavor: |
-            latest=${{ !contains(github.ref_name, '-') }}
+            latest=${{ !contains(steps.v.outputs.version, '-') }}
       - name: Build and push (linux/amd64, linux/arm64) with SBOM and provenance
         id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -123,6 +148,10 @@ jobs:
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
           \`\`\`
           NOTES
+          # A tag push already has the tag; a manual run creates it on the
+          # commit that was built (GITHUB_SHA).
+          target="--verify-tag"
+          [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && target="--target $GITHUB_SHA"
           # shellcheck disable=SC2086
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+          gh release create "v${VERSION}" --repo "$GITHUB_REPOSITORY" $target \
             --title "v${VERSION}" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes $prerelease
