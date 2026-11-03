@@ -3,7 +3,8 @@
 #
 # Tesla Charger Monitoring for TrueNAS SCALE 25.10+:
 # Apps → Discover Apps → ⋮ → Install via YAML. See docs/INSTALL_TRUENAS.md.
-# Before pasting, change the two lines marked EDIT.
+# Only the time zone needs changing (line marked EDIT). Data is kept in the
+# "tcmon-data" volume that TrueNAS manages on your apps pool.
 services:
   tcmon:
     image: ghcr.io/bhager42/teslachargingmonitor:latest
@@ -19,10 +20,15 @@ services:
       TZ: America/Chicago           # EDIT: your time zone
       TCMON_TLS: auto
     volumes:
-      - /mnt/tank/apps/tcmon:/data        # EDIT: the path of your tcmon dataset
+      - tcmon-data:/data
+      # Optional: keep the data in your own dataset instead (owned by apps,
+      # 568), replacing the line above:
+      # - /mnt/tank/apps/tcmon:/data
     deploy:
       resources:
         limits: { cpus: "0.50", memory: 128M }
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
+volumes:
+  tcmon-data:

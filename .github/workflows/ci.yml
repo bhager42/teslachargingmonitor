@@ -181,16 +181,21 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Image structure and smoke tests (size, user, no shell, hardened run)
         run: sudo scripts/image-test.sh tcmon:ci
-      - name: docker compose up (deploy/compose.yaml)
+      - name: docker compose up (deploy/compose.yaml, host folder)
         run: |
           mkdir -p "$RUNNER_TEMP/compose/data"
           sudo chown 568:568 "$RUNNER_TEMP/compose/data"
           sed 's|ghcr.io/bhager42/teslachargingmonitor:latest|tcmon:ci|' deploy/compose.yaml > "$RUNNER_TEMP/compose/compose.yaml"
-          docker compose -f deploy/truenas/custom-app.yaml config -q
           cd "$RUNNER_TEMP/compose"
           docker compose up -d --wait --wait-timeout 90
           docker compose logs tcmon | grep -q '"setup_token"'
           docker compose down
+      - name: TrueNAS YAML up (deploy/truenas/custom-app.yaml, named volume)
+        run: |
+          sed 's|ghcr.io/bhager42/teslachargingmonitor:latest|tcmon:ci|' deploy/truenas/custom-app.yaml > "$RUNNER_TEMP/truenas.yaml"
+          docker compose -p ix-tcmon -f "$RUNNER_TEMP/truenas.yaml" up -d --wait --wait-timeout 90
+          docker compose -p ix-tcmon -f "$RUNNER_TEMP/truenas.yaml" logs tcmon | grep -q '"setup_token"'
+          docker compose -p ix-tcmon -f "$RUNNER_TEMP/truenas.yaml" down --volumes
       - name: Vulnerability scan (Grype; fails on High/Critical with a fix)
         uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
         with:

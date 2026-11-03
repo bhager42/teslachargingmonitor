@@ -764,12 +764,15 @@ TrueNAS SCALE 24.10+ runs apps on Docker Compose; 25.10 supports
 **Apps → Discover → ⋮ → Install via YAML** for custom apps.
 
 Deliverables:
-1. `deploy/truenas/custom-app.yaml` — Compose YAML ready to paste, mounting
-   the `tcmon` dataset itself (e.g. `/mnt/<pool>/apps/tcmon`) at `/data`,
-   `user: 568:568`.
+1. `deploy/truenas/custom-app.yaml` — Compose YAML ready to paste, with
+   `user: 568:568` and a named volume `tcmon-data` at `/data` that TrueNAS
+   keeps on the apps pool, so no dataset or path is needed (only `TZ` is
+   edited). Mounting your own dataset (e.g. `/mnt/<pool>/apps/tcmon`) is
+   documented as an option for dataset snapshots.
 2. `docs/INSTALL_TRUENAS.md` step-by-step:
-   - Create dataset `<pool>/apps/tcmon` (preset *Apps*), owner `apps` (568).
-   - Option A: Install via YAML (paste file, edit pool path & TZ).
+   - Option A: Install via YAML (paste file, edit TZ); data in a named volume.
+   - Optional: create dataset `<pool>/apps/tcmon` (preset *Apps*), owner
+     `apps` (568), and mount it at `/data` instead.
    - Option B: Apps → Custom App form (image, port, env, host-path storage,
      run as 568, read-only rootfs toggle if available).
    - Using a TrueNAS-managed certificate (export to the dataset) or putting the
@@ -1163,7 +1166,8 @@ therefore follows the readings retention (2 years by default).
 >   GHCR with an SBOM and SLSA provenance, cosign keyless signing, a GitHub
 >   attestation, and a GitHub release.
 > - **Deploy:** `deploy/compose.yaml`, `deploy/truenas/custom-app.yaml`
->   (the `tcmon` dataset itself is mounted at `/data`, so no shell is needed),
+>   (a TrueNAS-managed named volume by default, so no dataset or path is
+>   needed; your own dataset is optional),
 >   and `docs/INSTALL_TRUENAS.md` / `docs/INSTALL_DOCKER.md` (update, backup,
 >   restore, password reset, verify).
 > - **Still open:** the owner verifies the TrueNAS install; `cosign verify`

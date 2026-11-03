@@ -23,8 +23,10 @@ Phase 7 ships tcmon as a container for TrueNAS SCALE 25.10+ and plain Docker
   emulation. The build is reproducible: `-trimpath`, `-buildid=`, no VCS
   stamping, and the build date comes from `SOURCE_DATE_EPOCH` (the commit time).
 - **Data:** a single writable `/data` (owned 568:568 in the image so a named
-  volume inherits it). On TrueNAS the `tcmon` dataset itself is mounted at
-  `/data`, so no shell is needed to create a subfolder.
+  volume inherits it). On TrueNAS the YAML uses a named volume (`tcmon-data`)
+  that TrueNAS keeps on its apps pool, so the user enters no path and sets no
+  permissions. Mounting a dataset of the user's own is documented as an
+  option for dataset snapshots.
 - **Vulnerability gate:** Grype (`anchore/scan-action`), failing on High or
   Critical findings that have a fix. The plan allowed Trivy or Grype; Grype
   runs from a single pinned action and can be swapped later without
