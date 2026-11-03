@@ -37,7 +37,7 @@ services:
     tmpfs: ["/tmp:size=16m,mode=1777"]
     ports: ["8443:8443"]
     environment:
-      TZ: America/Chicago           # EDIT: your time zone
+      TZ: America/New_York          # EDIT: your time zone
       TCMON_TLS: auto
     volumes:
       - tcmon-data:/data
