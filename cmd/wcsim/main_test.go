@@ -25,10 +25,15 @@ func TestList(t *testing.T) {
 	if code := run(context.Background(), []string{"-list"}, noenv, &out, &errOut); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut.String())
 	}
-	for _, want := range []string{"idle", "charging", "[provisional]", "offline"} {
+	for _, want := range []string{"idle", "charging", "offline"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("-list output missing %q", want)
 		}
+	}
+	// Charging values come from the real UWC capture, so no scenario is
+	// provisional any more.
+	if strings.Contains(out.String(), "[provisional]") {
+		t.Errorf("-list output still marks a scenario provisional:\n%s", out.String())
 	}
 }
 
