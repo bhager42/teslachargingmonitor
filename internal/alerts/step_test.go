@@ -10,6 +10,7 @@ package alerts
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -296,6 +297,7 @@ func TestRuleEvaluations(t *testing.T) {
 		{"device_alert_active", idle(t0), None, false},
 		{"not_ready_reasons", idle(t0), None, false}, // [2,4,8] while unplugged is normal
 		{"not_ready_reasons", mod(idle(t0), func(i *Input) { i.Snapshot.Vitals.VehicleConnected = true }), Warning, false},
+		{"not_ready_reasons", scenario("charging", time.Minute, t0), None, false}, // [1] while charging is normal
 		{"wifi_no_internet", scenario("wifi-weak", 0, t0), Info, false},
 		{"wifi_weak", scenario("wifi-weak", 0, t0), Info, false},
 		{"pcba_temp_high", scenario("overheat", 20*time.Minute, t0), Warning, false},
@@ -308,8 +310,9 @@ func TestRuleEvaluations(t *testing.T) {
 		}), Info, false},
 		{"relay_voltage_abnormal", idle(t0), None, false},
 		{"relay_voltage_abnormal", mod(idle(t0), func(i *Input) { v := 5.0; i.Snapshot.Vitals.RelayK1V = &v }), Warning, false},
-		{"relay_voltage_abnormal", mod(scenario("charging", time.Minute, t0), func(i *Input) { v := 6.0; i.Snapshot.Vitals.RelayK2V = &v }), Warning, false},
-		{"relay_voltage_abnormal", scenario("charging", time.Minute, t0), None, false},
+		// Not calibrated: the real UWC charging values (K1 5.8 V, K2 0 V) are
+		// outside the default closed band, which is why the rule ships disabled.
+		{"relay_voltage_abnormal", scenario("charging", time.Minute, t0), Warning, false},
 		{"device_unreachable", idle(t0.Add(h)), None, false},
 	}
 	for _, c := range cases {
@@ -423,5 +426,29 @@ func TestSeverityJSON(t *testing.T) {
 	}
 	if err := s.UnmarshalJSON([]byte(`"loud"`)); err == nil {
 		t.Error("bad severity accepted")
+	}
+}
+
+// The real UWC charging capture must not trigger any rule that is enabled
+// by default (issue #1: not_ready_reasons fired on every normal charge).
+func TestRealChargingCaptureRaisesNoDefaultAlerts(t *testing.T) {
+	b, err := os.ReadFile("../../testdata/fixtures/uwc/26.26.10/vitals.charging.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, rep, err := wallconnector.DecodeVitals(b)
+	if err != nil || !rep.Clean() {
+		t.Fatalf("err=%v report=%+v", err, rep)
+	}
+	in := idle(t0)
+	in.Snapshot.Vitals = v
+	in.Snapshot.Reports[wallconnector.EndpointVitals] = rep
+	for _, def := range Definitions() {
+		if def.Kind != Condition || !def.Defaults.Enabled {
+			continue
+		}
+		if res := def.Eval(in, def.DefaultConfig().Params, newState()); !res.Skip && res.Severity != None {
+			t.Errorf("%s fires on a normal charge: %v %s", def.Key, res.Severity, res.Message)
+		}
 	}
 }

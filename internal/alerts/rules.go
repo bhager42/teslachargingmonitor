@@ -88,8 +88,8 @@ type Definition struct {
 	EventSeverity Severity
 	Params        []ParamSpec
 	Defaults      Config
-	// NeedsCalibration marks rules whose thresholds still need a real
-	// charging capture (issue #1); they ship disabled.
+	// NeedsCalibration marks rules whose thresholds have not been
+	// calibrated against real charging data (issue #1); they ship disabled.
 	NeedsCalibration bool
 	Eval             func(in Input, p Params, st *State) Result
 }
@@ -268,14 +268,16 @@ var definitions = []Definition{
 		"%.0f new alert(s) recorded by the Wall Connector (lifetime total %.0f)"),
 	{
 		Key: "not_ready_reasons", Title: "Car plugged in but not ready", Kind: Condition,
-		Description: "The Wall Connector reports not-ready reasons while a car is connected. (Reasons reported while unplugged are normal and ignored.)",
+		Description: "The Wall Connector reports not-ready reasons while a car is connected and not charging. (Reasons reported while unplugged or while charging are normal and ignored.)",
 		Defaults:    cond(true, 2*time.Minute, 1, 0),
 		Eval: func(in Input, _ Params, _ *State) Result {
-			if !in.vital("vehicle_connected") || !in.vital("evse_not_ready_reasons") {
+			if !in.vital("vehicle_connected") || !in.vital("contactor_closed") || !in.vital("evse_not_ready_reasons") {
 				return Result{Skip: true}
 			}
 			v := in.Snapshot.Vitals
-			if !v.VehicleConnected || len(v.EVSENotReadyReasons) == 0 {
+			// A UWC (fw 26.26.10) reports [1] while charging normally, so a
+			// closed contactor means the car is evidently ready.
+			if !v.VehicleConnected || v.ContactorClosed || len(v.EVSENotReadyReasons) == 0 {
 				return Result{}
 			}
 			return Result{Severity: Warning, Message: "Car connected but not ready: " +
@@ -411,7 +413,8 @@ var definitions = []Definition{
 	{
 		Key: "relay_voltage_abnormal", Title: "Relay voltage abnormal", Kind: Condition,
 		Description: "Relay drive voltage (UWC: K1/K2, Gen 3: coil) outside the expected band, the two relays disagree, " +
-			"or a relay shows voltage while the contactor is open (possible stuck relay). Needs calibration from a real charging capture.",
+			"or a relay shows voltage while the contactor is open (possible stuck relay). Not calibrated for the UWC: " +
+			"a real charging capture showed K1 5.8 V and K2 0.0 V with the contactor closed, outside the default band.",
 		NeedsCalibration: true,
 		Params: []ParamSpec{
 			{"closed_min_v", "Closed: minimum", "V", 0, 60, 9},

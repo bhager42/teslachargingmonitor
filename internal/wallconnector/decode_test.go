@@ -43,6 +43,24 @@ func TestDecodeUWCFixtures(t *testing.T) {
 			t.Errorf("reasons=%v alerts=%v", v.EVSENotReadyReasons, v.CurrentAlerts)
 		}
 	})
+	t.Run("vitals charging", func(t *testing.T) {
+		v, rep, err := DecodeVitals(readFixture(t, "vitals.charging.json"))
+		if err != nil || !rep.Clean() {
+			t.Fatalf("err=%v report=%+v", err, rep)
+		}
+		if !v.ContactorClosed || !v.VehicleConnected || v.VehicleCurrentA != 47.4 || v.CurrentBA != 47.4 || v.EVSEState != 11 {
+			t.Errorf("unexpected values: %+v", v)
+		}
+		if v.RelayK1V == nil || *v.RelayK1V != 5.8 || v.RelayK2V == nil || *v.RelayK2V != 0 {
+			t.Errorf("relays = %v / %v", v.RelayK1V, v.RelayK2V)
+		}
+		if got := EVSEStateInfo(v.EVSEState); !got.Known || got.Label != "Charging" {
+			t.Errorf("evse_state 11 = %+v", got)
+		}
+		if !slices.Equal(v.EVSENotReadyReasons, []int{1}) {
+			t.Errorf("reasons=%v", v.EVSENotReadyReasons)
+		}
+	})
 	t.Run("lifetime", func(t *testing.T) {
 		l, rep, err := DecodeLifetime(readFixture(t, "lifetime.json"))
 		if err != nil || !rep.Clean() {

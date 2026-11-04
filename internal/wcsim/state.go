@@ -10,9 +10,9 @@
 // development and tests. Scenarios (idle, charging, overheating, offline, …)
 // evolve with simulated time so alert rules can be exercised end to end.
 //
-// The idle baseline reproduces the real UWC fixtures (firmware 26.26.10).
-// Charging-state values are PROVISIONAL — synthesized from Gen 3 Wall
-// Connector behavior until a real charging capture exists (issue #1).
+// The idle baseline and the charging values reproduce the real UWC fixtures
+// (firmware 26.26.10). Plugged-in-but-not-charging has not been captured yet
+// and has no scenario.
 package wcsim
 
 import "github.com/bhager42/teslachargingmonitor/internal/wallconnector"

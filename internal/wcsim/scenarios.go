@@ -58,7 +58,6 @@ var scenarios = []Scenario{
 	{
 		Name:        "charging",
 		Description: "Charging at 48 A with gently rising temperatures.",
-		Provisional: true,
 		State: func(e time.Duration) (State, Behavior) {
 			s := charging(e, chargeCurrentA)
 			return s, Normal
@@ -67,7 +66,6 @@ var scenarios = []Scenario{
 	{
 		Name:        "overheat",
 		Description: "Charging while the handle and PCBA heat ~2 °C/min up to 90 °C.",
-		Provisional: true,
 		State: func(e time.Duration) (State, Behavior) {
 			s := charging(e, chargeCurrentA)
 			rise := math.Min(e.Minutes()*2, 60)
@@ -79,7 +77,6 @@ var scenarios = []Scenario{
 	{
 		Name:        "thermal-foldback",
 		Description: "Charging; after 10 min a thermal foldback halves the current and increments the counter.",
-		Provisional: true,
 		State: func(e time.Duration) (State, Behavior) {
 			if e < EventAfter {
 				s := charging(e, chargeCurrentA)
@@ -117,7 +114,6 @@ var scenarios = []Scenario{
 	{
 		Name:        "overcurrent",
 		Description: "Charging at 52 A, above the 48 A limit plus 5 %.",
-		Provisional: true,
 		State: func(e time.Duration) (State, Behavior) {
 			return charging(e, 52.0), Normal
 		},
@@ -195,7 +191,9 @@ func tick(s *State, e time.Duration) {
 	s.Lifetime.UptimeS += secs
 }
 
-// charging builds a PROVISIONAL charging state at the given current.
+// charging builds a charging state at the given current. The fixed values
+// come from the real UWC charging capture (testdata/fixtures/uwc/26.26.10/
+// vitals.charging.json); session, energy and temperatures evolve with time.
 func charging(e time.Duration, amps float64) State {
 	s := Baseline()
 	tick(&s, e)
@@ -208,18 +206,23 @@ func charging(e time.Duration, amps float64) State {
 	v.SessionS = int64(secs)
 	v.GridV = chargeVoltage
 	v.VehicleCurrentA = amps
-	v.CurrentAA = amps
+	// Split phase as captured: the current is reported on B and N, the
+	// voltage on B, with A and C near half the grid voltage.
+	v.CurrentAA = 0
 	v.CurrentBA = amps
-	v.VoltageAV = chargeVoltage / 2
-	v.VoltageBV = chargeVoltage / 2
-	v.VoltageCV = 0
-	v.RelayK1V = f64(11.9) // provisional
-	v.RelayK2V = f64(11.9) // provisional
-	v.PilotHighV = 6.0     // J1772 state C
-	v.PilotLowV = -12.0
+	v.CurrentCA = 0
+	v.CurrentNA = amps
+	v.VoltageAV = 111.6
+	v.VoltageBV = chargeVoltage
+	v.VoltageCV = 111.5
+	v.RelayK1V = f64(5.8)
+	v.RelayK2V = f64(0)
+	v.PilotHighV = 4.6
+	v.PilotLowV = 4.7
 	v.ProxV = 1.5
-	v.EVSEState = 11 // provisional: Gen 3 reports 11 while charging
-	v.EVSENotReadyReasons = []int{}
+	v.InputThermopileUV = -1257
+	v.EVSEState = 11
+	v.EVSENotReadyReasons = []int{1}
 	v.SessionEnergyWh = round1(wh)
 	v.HandleTempC = round1(20.1 + 15*(1-math.Exp(-e.Minutes()/30)))
 	v.PCBATempC = round1(22.2 + 18*(1-math.Exp(-e.Minutes()/30)))
