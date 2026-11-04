@@ -26,14 +26,16 @@ func (c CodeInfo) String() string { return c.Label }
 // fixture and a note instead (see docs/DEVELOPMENT_PLAN.md §2).
 var (
 	evseStates = map[int]string{
-		1: "Idle (no vehicle)", // UWC fw 26.26.10, unplugged
+		1:  "Idle (no vehicle)", // UWC fw 26.26.10, unplugged
+		11: "Charging",          // UWC fw 26.26.10, contactor closed, 47.4 A flowing
 	}
 	configStatuses = map[int]string{
 		5: "Configured", // UWC fw 26.26.10, normal commissioned unit
 	}
 	notReadyReasons = map[int]string{
-		// UWC fw 26.26.10 reports [2,4,8] while unplugged; individual
-		// meanings are not yet known, so none are listed.
+		// UWC fw 26.26.10 reports [2,4,8] while unplugged and [1] while
+		// charging normally; individual meanings are not yet known, so
+		// none are listed.
 	}
 	alertCodes = map[int]string{}
 )

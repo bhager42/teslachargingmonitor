@@ -6,7 +6,7 @@ Copyright (C) 2026 Brad Hager and contributors
 <h1>{{.Rule.Title}}</h1>
 <p class="hint"><a href="/alerts">← Alerts</a></p>
 <p>{{.Rule.Description}}</p>
-{{- if .Rule.NeedsCalibration}}<p class="error">The thresholds for this rule are provisional until real charging data has been captured (see issue #1).</p>{{end}}
+{{- if .Rule.NeedsCalibration}}<p class="error">The thresholds for this rule have not been calibrated against real charging data yet and may alert during normal charging (see issue #1).</p>{{end}}
 <form method="post" action="/alerts/rules/{{.Rule.Key}}" class="card form-grid">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
   <span></span><label class="check"><input type="checkbox" name="enabled" value="1" {{if .Config.Enabled}}checked{{end}}> Enabled</label>
