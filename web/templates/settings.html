@@ -32,10 +32,31 @@ Copyright (C) 2026 Brad Hager and contributors
   <label class="check"><input type="checkbox" name="confirm_delete" value="1"> I understand that shorter retention permanently deletes older data</label>
   <div class="actions"><button type="submit">Save settings</button></div>
 </form>
+{{- with .Heartbeat}}
+<form method="post" action="/settings/heartbeat" class="card" id="heartbeat">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+  <h2>Dead-man's switch</h2>
+  <p>Optional. tcmon visits this address after each successful poll, so a monitoring service such as healthchecks.io or Uptime Kuma (push monitor) can warn you if tcmon stops working or can no longer reach the Wall Connector.
+    Set the service's period or grace time longer than the polling interval: at least 70 minutes with the default 60-minute polling.</p>
+  <p>{{if .Configured}}Pinging <code>{{.Display}}</code>{{with .LastSuccess}}; last successful ping {{.}}{{end}}.{{else}}Off: no ping URL is set.{{end}}</p>
+  <div class="form-grid">
+    <label for="ping_url">{{if .Configured}}New ping URL{{else}}Ping URL{{end}}</label>
+    <div>
+      <input id="ping_url" name="ping_url" type="url" inputmode="url" autocomplete="off" spellcheck="false" maxlength="2048" placeholder="https://hc-ping.com/…" aria-describedby="ping_url-help">
+      <span class="hint" id="ping_url-help">HTTPS only. Stored encrypted and never shown again, because it usually contains a secret token.{{if .Configured}} Leave empty to keep the current one.{{end}}</span>
+    </div>
+  </div>
+  <div class="actions">
+    <button type="submit" name="action" value="save">Save</button>
+    <button type="submit" name="action" value="test" class="secondary">{{if .Configured}}Send test ping{{else}}Save and send test ping{{end}}</button>
+    {{- if .Configured}}<button type="submit" name="action" value="remove" class="secondary">Remove</button>{{end}}
+  </div>
+</form>
+{{- end}}
 <form method="post" action="/settings/backup" class="card">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
   <h2>Backup</h2>
-  <p>Download a consistent copy of the database. Also keep a copy of <code>secret.key</code> (encrypts the email password) and the <code>tls</code> folder from the data directory.</p>
+  <p>Download a consistent copy of the database. Also keep a copy of <code>secret.key</code> (encrypts the email password and the ping URL) and the <code>tls</code> folder from the data directory.</p>
   <button type="submit" class="secondary">Download database backup</button>
 </form>
 {{end}}

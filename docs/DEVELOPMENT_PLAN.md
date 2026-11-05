@@ -1213,6 +1213,11 @@ Delivered as small PRs, in this order:
    negative), and a default max current above 100 A for breakers over 125 A.
 4. Dead-man's-switch ping (D20): URL in Settings, stored encrypted, HTTPS
    only, sent after each successful poll, failures shown in Diagnostics.
+   *Done 2026-11-05:* `internal/heartbeat`; Settings → Dead-man's switch
+   (save, test, remove; the URL is write-only and shown as host only),
+   Diagnostics shows the last attempt, success and error. HTTPS GET, at
+   most one a minute; failed polls send nothing, so the service also
+   warns when no Wall Connector answers.
 5. Weekly digest email (D19): opt-in per email channel; content from
    `internal/energy` and the alert history; previewable and testable.
 6. i18n scaffolding: user-facing strings moved to a message catalogue

@@ -22,6 +22,7 @@ import (
 	"github.com/bhager42/teslachargingmonitor/internal/alerts"
 	"github.com/bhager42/teslachargingmonitor/internal/auth"
 	"github.com/bhager42/teslachargingmonitor/internal/buildinfo"
+	"github.com/bhager42/teslachargingmonitor/internal/heartbeat"
 	"github.com/bhager42/teslachargingmonitor/internal/notify"
 	"github.com/bhager42/teslachargingmonitor/internal/poller"
 	"github.com/bhager42/teslachargingmonitor/internal/secrets"
@@ -108,6 +109,13 @@ func runServe(ctx context.Context, args []string, env Env) int {
 		log.Warn("no notification channel configured; alerts are only logged. add Gmail in the web UI under Notifications")
 	}
 
+	beat := heartbeat.New(st, box, heartbeat.Config{Logger: log, RootCAs: roots, UserAgent: "tcmon/" + info.Version})
+	if err := beat.Load(ctx); err != nil {
+		log.Error("loading the dead-man's-switch ping URL; enter it again in Settings", "err", err)
+	}
+	beatUpdates, unsubBeat := m.Subscribe(32)
+	defer unsubBeat()
+
 	webCfg, err := webConfig(env, *dir)
 	if err != nil {
 		log.Error("web configuration", "err", err)
@@ -124,7 +132,7 @@ func runServe(ctx context.Context, args []string, env Env) int {
 			"setup_token", token, "valid_for", "30m")
 	}
 	webSrv, err := web.New(webCfg, web.Options{Store: st, Auth: authMgr, Logger: log, Alerts: engine,
-		Notify: dispatcher, Poll: m})
+		Notify: dispatcher, Poll: m, Heartbeat: beat})
 	if err != nil {
 		log.Error("starting web server", "err", err)
 		return 1
@@ -143,6 +151,7 @@ func runServe(ctx context.Context, args []string, env Env) int {
 	wg.Go(func() { engine.Run(ctx, updates) })
 	wg.Go(func() { logNotifications(ctx, log, notifications) })
 	wg.Go(func() { dispatcher.Run(ctx, toDeliver) })
+	wg.Go(func() { beat.Run(ctx, beatUpdates) })
 	liveUpdates, unsubLive := m.Subscribe(32)
 	defer unsubLive()
 	liveAlerts, unsubLiveAlerts := engine.Subscribe(32)

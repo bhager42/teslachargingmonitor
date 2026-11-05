@@ -40,8 +40,8 @@ Connector.
 2. tcmon ⇄ Wall Connector (plain, unauthenticated HTTP on the LAN —
    responses are untrusted input).
 3. tcmon ⇄ Gmail SMTP (TLS, certificate always validated).
-3a. tcmon ⇄ dead-man's-switch service (HTTPS to an owner-entered URL;
-   planned for Phase 8, D20).
+3a. tcmon ⇄ dead-man's-switch service (optional HTTPS GET to an
+   owner-entered URL after each successful poll, D20).
 4. Container ⇄ host (`/data` volume, non-root UID 568).
 5. CI/CD ⇄ GHCR ⇄ user (supply chain).
 
@@ -59,7 +59,7 @@ Connector.
 | T5 | Forged log entries via request text | JSON logs; request-controlled text stripped of line breaks and truncated (`logSafe`) |
 | R1 | Settings changed without trace | Audit log of auth and settings changes (§10) |
 | I1 | XSS via device strings (SSID, codes) | `html/template` escaping, strict CSP, Trusted Types (§8, §10) |
-| I2 | Secrets in DB/backups | Channel credentials encrypted (AES-256-GCM) with a separate `secret.key` (0600); `Secret` type redacted in logs/JSON; passwords never on the command line (Phase 4) |
+| I2 | Secrets in DB/backups | Channel credentials and the dead-man's-switch URL (it holds a token) encrypted (AES-256-GCM) with a separate `secret.key` (0600); `Secret` type redacted in logs/JSON; passwords never on the command line (Phase 4) |
 | I4 | Alerts or credentials sent in clear over SMTP | STARTTLS required (plaintext refused) or implicit TLS; certificate verification always on (Phase 4) |
 | T3 | Header injection via device/rule text into email | Addresses parsed with `net/mail`, subject flattened and RFC 2047-encoded, HTML template auto-escaping (Phase 4) |
 | I3 | Identifiers committed to the public repo | Redacting capture script + fixture test (Phase 0) |
@@ -69,7 +69,7 @@ Connector.
 | D2 | Email flood | Batching per poll, cooldowns, repeat limits (§6, §7) |
 | D3 | Slow or oversized requests exhaust the server | 64 KiB bodies, 16 KiB headers, read/write/idle timeouts; Argon2id work bounded by the login throttle |
 | E1 | Container breakout / privilege escalation | Non-root, read-only rootfs, no capabilities, no-new-privileges (§11) |
-| E2 | SSRF via the device address or the dead-man's-switch URL | Device addresses limited to LAN ranges when parsed and again at dial time (DNS-rebinding-safe), no redirects; the planned dead-man URL will be HTTPS only (D20) |
+| E2 | SSRF via the device address or the dead-man's-switch URL | Device addresses limited to LAN ranges when parsed and again at dial time (DNS-rebinding-safe), no redirects; the dead-man URL is HTTPS only (certificate validated, redirects only to HTTPS, at most 3), entered by the signed-in owner, and its response body is discarded (D20) |
 | E3 | CSRF from another LAN web app | Fetch-metadata checks + tokens + SameSite=Strict (§10) |
 
 ## Accepted risks
