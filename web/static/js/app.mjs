@@ -15,8 +15,14 @@ function initTheme() {
     btn.addEventListener('click', () => {
       const theme = btn.dataset.setTheme;
       root.dataset.theme = theme;
-      const secure = location.protocol === 'https:' ? '; Secure' : '';
-      document.cookie = `tcmon_theme=${theme}; Path=/; Max-Age=31536000; SameSite=Strict${secure}`;
+      // Over HTTPS the cookie uses the __Host- prefix (ASVS V3.3.1) and the
+      // unprefixed one from older versions is removed.
+      if (location.protocol === 'https:') {
+        document.cookie = `__Host-tcmon_theme=${theme}; Path=/; Max-Age=31536000; SameSite=Strict; Secure`;
+        document.cookie = 'tcmon_theme=; Path=/; Max-Age=0; SameSite=Strict; Secure';
+      } else {
+        document.cookie = `tcmon_theme=${theme}; Path=/; Max-Age=31536000; SameSite=Strict`;
+      }
       try { localStorage.setItem('tcmon_theme', theme); } catch { /* storage unavailable */ }
       for (const b of document.querySelectorAll('[data-set-theme]')) {
         b.setAttribute('aria-pressed', String(b === btn));
