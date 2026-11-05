@@ -1171,8 +1171,8 @@ therefore follows the readings retention (2 years by default).
 >   and `docs/INSTALL_TRUENAS.md` / `docs/INSTALL_DOCKER.md` (update, backup,
 >   restore, password reset, verify).
 > - **TrueNAS (owner-verified 2026-11-05, v0.7.2):** installed with
->   "Install via YAML" on TrueNAS SCALE and working, including a real
->   charging session. Found and fixed along the way: Settings could not be
+>   "Install via YAML" on TrueNAS SCALE and working. Found and fixed along
+>   the way: Settings could not be
 >   saved with "Keep forever" retention (#11, v0.7.1); the app page had no
 >   **Web UI** button, which made it easy to open plain `http://` instead of
 >   `https://` (`x-portals`, #10, v0.7.1); "Car plugged in but not ready"
