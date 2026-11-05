@@ -196,7 +196,7 @@ staying easy for Claude Code to build and maintain.
 | Password hashing | `golang.org/x/crypto/argon2` (Argon2id) | OWASP-recommended. |
 | Notifications | In-house small channel implementations (ntfy, SMTP, webhook, …) **or** `shoutrrr` (maintained fork) — decide in Phase 4 after dependency/licence review | Keep dependency count low. |
 | Logging | `log/slog` JSON to stdout | Container-native; TrueNAS shows container logs. |
-| Metrics (optional) | Prometheus text format at `/metrics`, bearer-token protected, off by default | For Grafana users. |
+| Metrics (optional, deferred — D21) | Prometheus text format at `/metrics`, bearer-token protected, off by default | For Grafana users; not in v1.0. |
 | Container base | `gcr.io/distroless/static-debian12:nonroot` (or `scratch` + CA certs), pinned by **digest** | No shell, no package manager. |
 
 If the owner prefers Python/TypeScript, the architecture still applies; only §4
@@ -377,10 +377,10 @@ shows when it *would* have fired.
 ### Health of the app itself
 - `self_notification_failure`: a channel failed N times → show banner in UI and
   try other channels.
-- Daily/weekly optional **digest** (energy used, sessions, max temps, alerts).
+- Weekly optional **digest** (energy used, sessions, cost, max temps, alerts) — D19.
 - Optional **dead-man's switch**: ping an external URL (e.g. healthchecks.io /
   Uptime Kuma push) after every successful poll cycle so the owner learns if
-  `tcmon` itself stops.
+  `tcmon` itself stops — D20.
 
 ---
 
@@ -1191,8 +1191,24 @@ plain Docker succeeds; `cosign verify` documented and works; image < 25 MB.
 
 ### Phase 8 — Hardening & polish (v1.0.0)
 - Threat model finalised, ASVS checklist complete, fuzz corpus extended,
-  digest/report emails, optional Prometheus `/metrics`, dead-man's-switch ping,
+  weekly digest email (D19), dead-man's-switch ping (D20),
   i18n scaffolding (strings externalised), docs site (optional).
+  Prometheus `/metrics` is deferred (D21).
+
+Delivered as small PRs, in this order:
+1. Decisions D19–D21 and this breakdown.
+2. Threat model finalised; ASVS 5.0 checklist cross-checked against the
+   official requirement IDs, with every 🟡 closed or explicitly deferred.
+3. Fuzz corpus extended: seeds for every target from the real fixtures, and
+   new targets for untrusted parsing (form values, rule parameters, CSV).
+4. Dead-man's-switch ping (D20): URL in Settings, stored encrypted, HTTPS
+   only, sent after each successful poll, failures shown in Diagnostics.
+5. Weekly digest email (D19): opt-in per email channel; content from
+   `internal/energy` and the alert history; previewable and testable.
+6. i18n scaffolding: user-facing strings moved to a message catalogue
+   (English only), without changing any text.
+7. Lighthouse ≥ 95 audit in CI (carried over from Phase 6).
+8. CHANGELOG, §15 resolved or explicitly deferred, then v1.0.0.
 
 **Accept:** v1.0.0 tagged, release notes, signed images, CHANGELOG, all
 open questions in §15 resolved or deferred explicitly.
@@ -1244,6 +1260,9 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 | D16 | Charging `/vitals` capture **deferred** (car not available). HTTPS with a self-signed cert and one-time browser warning **confirmed** (D12). | 2026-11-02 | Phase 0 no longer blocks on it; charging-dependent rules ship disabled until calibrated. |
 | D17 | **60 A circuit → 48 A max charging current**; 240 V / 60 Hz split-phase (confirmed by idle capture: `grid_v` 240.1, `grid_hz` 59.8). | 2026-11-02 | §8 device form (breaker → 80 % max), `overcurrent` threshold 50.4 A and enabled by default, new optional `current_near_limit` rule. |
 | D18 | Add a **charging cost** view; owner's electricity price **$0.155/kWh**. | 2026-11-03 | New Phase 6b: price settings with history (default 0.155, `$`), optional off-peak price and monthly fee, cost on the dashboard card, Costs page with day/week/month bar charts, sessions table, CSV export. |
+| D19 | **Weekly digest email, optional** (off by default). | 2026-11-05 | Phase 8: one email a week (charging energy and cost, alerts, device health) to the email channels; no daily option. |
+| D20 | **Dead-man's-switch ping, optional** (off until a URL is entered). | 2026-11-05 | Phase 8: HTTPS GET/POST to a user-entered URL (healthchecks.io, Uptime Kuma push) after each successful poll; the service's grace period must exceed the poll interval (60 min by default). |
+| D21 | Prometheus `/metrics` **deferred** (not in v1.0). | 2026-11-05 | Phase 8 drops it; §4 row kept as a later option. InfluxDB, Home Assistant and MQTT stay in Later / stretch. |
 
 ### 15.1 Still open
 
@@ -1270,9 +1289,9 @@ records the assumption in the PR that relies on it.
    would you want next (ntfy, Pushover, Home Assistant, …)?
 7. Confirm or adjust the default thresholds in §6 (especially temperatures and
    voltage band). Any rules to add/remove?
-8. Quiet hours? Daily/weekly summary digest wanted?
+8. *(Answered — D19: weekly digest, optional.)* Quiet hours exist (per channel, Phase 4).
 9. *(Answered — D6/D10: 60 min default, 5 min while plugged in.)*
-10. Do you want an external dead-man's-switch ping (healthchecks.io / Uptime Kuma)?
+10. *(Answered — D20: optional dead-man's-switch ping URL.)*
 10a. *(D18: $0.155/kWh.)* Is that a single flat price, or do you have a
     time-of-use plan (cheaper overnight)? Should taxes or fixed monthly
     charges be included in the cost, or energy only? Currency is assumed
@@ -1289,7 +1308,8 @@ records the assumption in the PR that relies on it.
 **Data**
 15. *(Answered — D15: adjustable in GUI, 2-year default.)* Which dataset/pool
     path on TrueNAS? (Default in docs: `/mnt/<pool>/apps/tcmon/data`.)
-16. Prometheus/Grafana or InfluxDB export wanted? Home Assistant/MQTT integration?
+16. *(Answered — D21: Prometheus `/metrics` deferred.)* InfluxDB or Home
+    Assistant/MQTT integration wanted later?
 17. Units: °C or °F; time zone.
 
 **Project / legal**
