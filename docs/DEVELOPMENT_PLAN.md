@@ -1205,6 +1205,12 @@ Delivered as small PRs, in this order:
    unprefixed theme cookie.
 3. Fuzz corpus extended: seeds for every target from the real fixtures, and
    new targets for untrusted parsing (form values, rule parameters, CSV).
+   *Done 2026-11-05:* 10 targets (device decoding, addresses, firmware, alert
+   rules on device data, quiet hours, email composition, charging costs,
+   password policy, device settings, off-peak times), all run by `make fuzz`
+   and in CI. Found and fixed: From names that `net/mail` cannot parse back,
+   off-peak windows shifted or double-counted on DST days (could make a cost
+   negative), and a default max current above 100 A for breakers over 125 A.
 4. Dead-man's-switch ping (D20): URL in Settings, stored encrypted, HTTPS
    only, sent after each successful poll, failures shown in Diagnostics.
 5. Weekly digest email (D19): opt-in per email channel; content from

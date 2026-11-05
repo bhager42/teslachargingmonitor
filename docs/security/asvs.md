@@ -337,4 +337,5 @@ N/A — all 7 Level 1–2 requirements. No WebRTC.
 - `e2e`: every page under the strict CSP with no violations, in Chromium,
   Firefox and WebKit.
 - CI: ZAP baseline scan against the running server; CodeQL; govulncheck;
-  Grype; dependency review; Scorecard; fuzzing of the device decoders.
+  Grype; dependency review; Scorecard; 10 fuzz targets (device data,
+  alert rules, email composition, charging costs, form validation).

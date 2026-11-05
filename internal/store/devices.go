@@ -35,6 +35,9 @@ const (
 // fraction of the breaker rating.
 const ContinuousLoadFactor = 0.8
 
+// MaxCurrentLimitA bounds the configured maximum charging current.
+const MaxCurrentLimitA = 100.0
+
 // Device is a configured Wall Connector.
 type Device struct {
 	ID              int64
@@ -94,11 +97,13 @@ func (d *Device) Normalize() error {
 	if d.NominalHz != 50 && d.NominalHz != 60 {
 		return errors.New("nominal frequency must be 50 or 60 Hz")
 	}
-	if d.BreakerA < 0 || d.BreakerA > 200 || d.MaxCurrentA < 0 || d.MaxCurrentA > 100 {
+	if d.BreakerA < 0 || d.BreakerA > 200 || d.MaxCurrentA < 0 || d.MaxCurrentA > MaxCurrentLimitA {
 		return errors.New("breaker must be 0-200 A and max current 0-100 A")
 	}
 	if d.BreakerA > 0 && d.MaxCurrentA == 0 {
-		d.MaxCurrentA = d.BreakerA * ContinuousLoadFactor
+		// Capped so the default stays within the limit above (found by
+		// FuzzDeviceNormalize: a 131 A breaker gave 104.8 A).
+		d.MaxCurrentA = min(d.BreakerA*ContinuousLoadFactor, MaxCurrentLimitA)
 	}
 	if d.BreakerA > 0 && d.MaxCurrentA > d.BreakerA*ContinuousLoadFactor {
 		return fmt.Errorf("max current %g A exceeds 80 %% of the %g A breaker", d.MaxCurrentA, d.BreakerA)

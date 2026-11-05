@@ -73,11 +73,15 @@ func (p Plan) offPeakOverlap(r Rate, a, b time.Time) time.Duration {
 	var total time.Duration
 	y, m, d := a.In(p.Loc).Date()
 	for day := time.Date(y, m, d-1, 0, 0, 0, 0, p.Loc); day.Before(b); day = time.Date(day.Year(), day.Month(), day.Day()+1, 0, 0, 0, 0, p.Loc) {
-		start := day.Add(time.Duration(r.OffPeakStart) * time.Minute)
-		end := day.Add(time.Duration(r.OffPeakEnd) * time.Minute)
+		// Wall-clock times, not durations from midnight: days with a DST
+		// change are 23 or 25 hours long.
+		dy, dm, dd := day.Date()
+		start := time.Date(dy, dm, dd, 0, r.OffPeakStart, 0, 0, p.Loc)
+		endDay := dd
 		if r.OffPeakEnd <= r.OffPeakStart {
-			end = end.Add(24 * time.Hour) // window spans midnight
+			endDay++ // window spans midnight
 		}
+		end := time.Date(dy, dm, endDay, 0, r.OffPeakEnd, 0, 0, p.Loc)
 		lo, hi := maxTime(a, start), minTime(b, end)
 		if hi.After(lo) {
 			total += hi.Sub(lo)

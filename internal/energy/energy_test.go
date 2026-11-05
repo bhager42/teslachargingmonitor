@@ -72,6 +72,33 @@ func TestTimeOfUseSplit(t *testing.T) {
 	}
 }
 
+// The off-peak window follows the wall clock on days with a DST change
+// (2026-03-08 has 23 hours, 2026-11-01 has 25). Found by FuzzCosts.
+func TestTimeOfUseAcrossDST(t *testing.T) {
+	p := NewPlan([]Rate{{Price: 0.20, OffPeakPrice: f(0.08), OffPeakStart: 23 * 60, OffPeakEnd: 6 * 60}}, chicago)
+	cases := []struct {
+		name     string
+		from, to time.Time
+		want     float64 // for 10 kWh
+	}{
+		{"spring forward: half and half at 23:00", at(2026, 3, 8, 22, 30), at(2026, 3, 8, 23, 30), 1.4},
+		{"spring forward: half and half at 06:00", at(2026, 3, 8, 5, 30), at(2026, 3, 8, 6, 30), 1.4},
+		{"fall back: all peak before 23:00", at(2026, 11, 1, 21, 30), at(2026, 11, 1, 22, 30), 2.0},
+		{"fall back: half and half at 23:00", at(2026, 11, 1, 22, 30), at(2026, 11, 1, 23, 30), 1.4},
+	}
+	for _, c := range cases {
+		if got := p.Cost(c.from, c.to, 10000); !near(got, c.want) {
+			t.Errorf("%s = %v, want %v", c.name, got, c.want)
+		}
+	}
+	// A window spanning almost a whole day must not be counted twice on
+	// the short day: the cost stays between the off-peak and peak prices.
+	wide := NewPlan([]Rate{{Price: 0.20, OffPeakPrice: f(0.08), OffPeakStart: 48, OffPeakEnd: 42}}, chicago)
+	if got := wide.Cost(at(2026, 3, 7, 12, 0), at(2026, 3, 10, 12, 0), 10000); got < 0.8-1e-9 || got > 2.0 {
+		t.Errorf("wide window across spring forward = %v, want 0.8-2.0", got)
+	}
+}
+
 func TestIntervalsHandleResets(t *testing.T) {
 	p := NewPlan(nil, chicago)
 	s := []Sample{
