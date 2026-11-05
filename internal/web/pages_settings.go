@@ -65,6 +65,9 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, sess aut
 	stats, _ := s.st.Stats(ctx)
 	p["Title"], p["Retention"], p["Presets"], p["Display"] = "Settings", retentionFields(ret), retentionPresets, s.display(ctx)
 	p["DBSize"] = fmt.Sprintf("%.1f MB", float64(stats.SizeBytes)/1e6)
+	if hb := s.heartbeatView(); hb != nil {
+		p["Heartbeat"] = hb
+	}
 	if !stats.OldestReading.IsZero() {
 		p["Oldest"] = stats.OldestReading.Local().Format("2 Jan 2006")
 	}
@@ -227,5 +230,5 @@ func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request, sess auth.S
 	}
 	s.render(w, r, http.StatusOK, "diagnostics", s.base(page{"Title": "Diagnostics", "Devices": out, "Rows": rows,
 		"DBSize": fmt.Sprintf("%.1f MB", float64(stats.SizeBytes)/1e6), "Schema": ver, "GoVersion": info.GoVersion,
-		"LiveClients": clients}, sess, "diagnostics"))
+		"LiveClients": clients, "Heartbeat": s.heartbeatView()}, sess, "diagnostics"))
 }

@@ -260,7 +260,7 @@ N/A — all 29 Level 1–2 requirements. No OAuth or OpenID Connect, as client, 
 | V13.2.1 | Authenticated backend connections | 2 | N/A | Embedded SQLite in the same process; no backend services |
 | V13.2.2 | Least privilege between components | 2 | ✅ | Runs as UID 568 with no capabilities, read-only root file system, no-new-privileges; only `/data` is writable |
 | V13.2.3 | No default service credentials | 2 | ✅ | None exist; the Gmail app password is entered by the owner |
-| V13.2.4 | Allowlist for outbound communication | 2 | ✅ | Wall Connector limited to LAN addresses at dial time; SMTP to the owner's configured host only |
+| V13.2.4 | Allowlist for outbound communication | 2 | ✅ | Wall Connector limited to LAN addresses at dial time; SMTP and the optional dead-man's-switch ping to owner-configured hosts only |
 | V13.2.5 | Server allowlist for loaded resources | 2 | ✅ | Static files are embedded; nothing is loaded from elsewhere |
 | V13.3.1 | Secrets management solution | 2 | ⚠️ | No vault on a home NAS: credentials are encrypted with a separate key file (mode 0600, or `TCMON_SECRET_KEY_FILE` from a secrets mount); passwords are refused as environment variables |
 | V13.3.2 | Least-privilege access to secrets | 2 | ✅ | Key and certificate files mode 0600, owned by the app user |

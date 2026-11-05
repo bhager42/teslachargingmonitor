@@ -16,6 +16,20 @@ Copyright (C) 2026 Brad Hager and contributors
   </table></div>
 </section>
 {{- end}}
+{{- with .Heartbeat}}
+<section class="card"><h2>Dead-man's switch</h2>
+  {{- if .Configured}}
+  <p>Pinging <code>{{.Display}}</code> after each successful poll.</p>
+  <dl class="kv">
+    <dt>Last attempt</dt><dd>{{or .LastAttempt "none since tcmon started"}}</dd>
+    <dt>Last success</dt><dd>{{or .LastSuccess "none since tcmon started"}}</dd>
+    {{- if .LastError}}<dt>Last error</dt><dd>{{.LastError}} ({{.LastErrorAt}}{{if gt .Failures 1}}, {{.Failures}} failures in a row{{end}})</dd>{{end}}
+  </dl>
+  {{- else}}
+  <p>Off{{with .LastError}}: {{.}}{{else}}. Set a ping URL in <a href="/settings#heartbeat">Settings</a>.{{end}}</p>
+  {{- end}}
+</section>
+{{- end}}
 <section class="card"><h2>Database</h2>
   <p>Size {{.DBSize}} · schema version {{.Schema}} · {{.GoVersion}} · {{.LiveClients}} live browser connection(s)</p>
   <div class="table-wrap"><table><thead><tr><th scope="col">Table</th><th scope="col">Rows</th></tr></thead>

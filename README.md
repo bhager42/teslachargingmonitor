@@ -84,6 +84,9 @@ provenance ([how to verify](docs/INSTALL_DOCKER.md#verify)).
   high temperatures, thermal foldbacks, device alerts, grid voltage/frequency
   out of range, overcurrent, charger offline, unexpected reboots, firmware or
   grid-profile changes, and more.
+- Optionally ping a dead-man's-switch service (healthchecks.io, Uptime
+  Kuma push monitor) after each successful poll, so you hear about it if
+  tcmon itself stops.
 - Dark-mode-first web dashboard protected by a single password, LAN-only,
   served over HTTPS (self-signed by default).
 

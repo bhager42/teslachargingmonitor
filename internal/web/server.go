@@ -31,6 +31,7 @@ import (
 
 	"github.com/bhager42/teslachargingmonitor/internal/alerts"
 	"github.com/bhager42/teslachargingmonitor/internal/auth"
+	"github.com/bhager42/teslachargingmonitor/internal/heartbeat"
 	"github.com/bhager42/teslachargingmonitor/internal/notify"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
 	webui "github.com/bhager42/teslachargingmonitor/web"
@@ -54,6 +55,7 @@ type Server struct {
 	alerts *alerts.Engine     // optional in tests
 	notify *notify.Dispatcher // optional in tests
 	poll   PollControl        // optional in tests
+	beat   *heartbeat.Pinger  // optional in tests
 	hub    *Hub
 
 	pages     map[string]*template.Template
@@ -70,7 +72,9 @@ type Options struct {
 	Alerts *alerts.Engine
 	Notify *notify.Dispatcher
 	Poll   PollControl
-	Hub    *Hub
+	// Heartbeat is the dead-man's-switch pinger (optional).
+	Heartbeat *heartbeat.Pinger
+	Hub       *Hub
 }
 
 // New validates cfg, prepares the certificate and builds the handler.
@@ -88,7 +92,7 @@ func New(cfg Config, o Options) (*Server, error) {
 		o.Hub = NewHub()
 	}
 	s := &Server{cfg: cfg, st: o.Store, auth: o.Auth, log: o.Logger, now: o.Now, alerts: o.Alerts, notify: o.Notify,
-		poll: o.Poll, hub: o.Hub}
+		poll: o.Poll, beat: o.Heartbeat, hub: o.Hub}
 	var err error
 	switch cfg.TLSMode {
 	case TLSAuto:
@@ -201,6 +205,7 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("GET /settings", s.authed(s.settingsPage))
 	mux.Handle("POST /settings", s.authed(s.saveSettings))
 	mux.Handle("POST /settings/backup", s.authed(s.backup))
+	mux.Handle("POST /settings/heartbeat", s.authed(s.saveHeartbeat))
 	mux.Handle("GET /diagnostics", s.authed(s.diagnostics))
 	mux.Handle("GET /costs", s.authed(s.costsPage))
 	mux.Handle("GET /costs/{kind}", s.authed(s.costsCSV))

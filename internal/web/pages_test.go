@@ -12,7 +12,9 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -20,11 +22,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/bhager42/teslachargingmonitor/internal/alerts"
 	"github.com/bhager42/teslachargingmonitor/internal/auth"
+	"github.com/bhager42/teslachargingmonitor/internal/heartbeat"
 	"github.com/bhager42/teslachargingmonitor/internal/notify"
 	"github.com/bhager42/teslachargingmonitor/internal/notify/smtpmock"
 	"github.com/bhager42/teslachargingmonitor/internal/poller"
@@ -59,6 +63,8 @@ type full struct {
 	smtp   *smtpmock.Server
 	simURL string
 	sim    *wcsim.Server
+	beat   *httptest.Server // dead-man's-switch endpoint: /ok counts pings, others fail
+	pings  *atomic.Int32
 	c      *http.Cookie
 	csrf   string
 }
@@ -84,7 +90,20 @@ func newFull(t *testing.T) *full {
 	t.Cleanup(smtp.Close)
 	disp := notify.New(st, box, notify.Config{RootCAs: smtp.RootCAs, SendTimeout: 5 * time.Second})
 	fp := &fakePoll{}
-	srv, err := New(Config{DataDir: dir}, Options{Store: st, Auth: am, Now: clk.now, Alerts: engine, Notify: disp, Poll: fp})
+	pings := &atomic.Int32{}
+	beatSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ok/"+beatToken {
+			http.Error(w, "gone", http.StatusGone)
+			return
+		}
+		pings.Add(1)
+	}))
+	t.Cleanup(beatSrv.Close)
+	roots := x509.NewCertPool()
+	roots.AddCert(beatSrv.Certificate())
+	beat := heartbeat.New(st, box, heartbeat.Config{Now: clk.now, RootCAs: roots, Timeout: 5 * time.Second})
+	srv, err := New(Config{DataDir: dir}, Options{Store: st, Auth: am, Now: clk.now, Alerts: engine, Notify: disp, Poll: fp,
+		Heartbeat: beat})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +111,7 @@ func newFull(t *testing.T) *full {
 	ts := httptest.NewServer(sim)
 	t.Cleanup(ts.Close)
 	f := &full{harness: &harness{t: t, srv: srv, st: st, auth: am, clk: clk, token: token, dir: dir},
-		poll: fp, engine: engine, smtp: smtp, simURL: ts.URL, sim: sim}
+		poll: fp, engine: engine, smtp: smtp, simURL: ts.URL, sim: sim, beat: beatSrv, pings: pings}
 	f.c = f.setup()
 	f.csrf = f.harness.csrf(f.c)
 	return f
@@ -444,6 +463,71 @@ func TestSettingsRetentionAndBackup(t *testing.T) {
 	r := f.post("/settings/backup", url.Values{})
 	if b := bodyOf(t, r); r.StatusCode != 200 || !strings.HasPrefix(b, "SQLite format 3") {
 		t.Errorf("backup = %d", r.StatusCode)
+	}
+}
+
+const beatToken = "5e0c1d2b-8a7f-4e6d-9c3b-2a1f0e9d8c7b" //nolint:gosec // fake token for tests
+
+func TestHeartbeatSettings(t *testing.T) {
+	f := newFull(t)
+	if _, body := f.get("/settings"); !strings.Contains(body, "Off: no ping URL is set") {
+		t.Error("settings do not show the ping as off")
+	}
+	if _, body := f.get("/diagnostics"); !strings.Contains(body, "Set a ping URL") {
+		t.Error("diagnostics do not show the ping as off")
+	}
+	for _, c := range []struct {
+		form url.Values
+		want string
+	}{
+		{url.Values{"action": {"save"}}, "Enter the ping URL"},
+		{url.Values{"action": {"test"}}, "Enter the ping URL"},
+		{url.Values{"action": {"save"}, "ping_url": {"http://hc-ping.com/" + beatToken}}, "must start with https://"},
+		{url.Values{"action": {"bogus"}}, "Unknown action"},
+	} {
+		if r := f.post("/settings/heartbeat", c.form); r.StatusCode != 400 || !strings.Contains(bodyOf(t, r), c.want) {
+			t.Errorf("%v = %d, want 400 with %q", c.form, r.StatusCode, c.want)
+		}
+	}
+
+	good := f.beat.URL + "/ok/" + beatToken
+	if r := f.post("/settings/heartbeat", url.Values{"action": {"test"}, "ping_url": {good}}); r.StatusCode != 303 ||
+		!strings.Contains(r.Header.Get("Location"), "beat-tested") {
+		t.Fatalf("save and test = %d %s", r.StatusCode, r.Header.Get("Location"))
+	}
+	if n := f.pings.Load(); n != 1 {
+		t.Errorf("pings = %d", n)
+	}
+	// Test again with the field empty: uses the saved URL.
+	if r := f.post("/settings/heartbeat", url.Values{"action": {"test"}}); r.StatusCode != 303 || f.pings.Load() != 2 {
+		t.Errorf("retest = %d, pings %d", r.StatusCode, f.pings.Load())
+	}
+	for _, p := range []string{"/settings", "/diagnostics"} {
+		_, body := f.get(p)
+		if strings.Contains(body, beatToken) || !strings.Contains(body, "Pinging <code>"+f.beat.URL+"/…</code>") {
+			t.Errorf("%s: token shown or destination missing", p)
+		}
+	}
+
+	// A failing URL: error shown, never the token; Diagnostics reports it.
+	bad := f.beat.URL + "/gone/" + beatToken
+	r := f.post("/settings/heartbeat", url.Values{"action": {"test"}, "ping_url": {bad}})
+	if body := bodyOf(t, r); r.StatusCode != 400 || !strings.Contains(body, "Saved, but the test ping failed: the monitoring service answered HTTP 410") ||
+		strings.Contains(body, beatToken) {
+		t.Errorf("failing test = %d %s", r.StatusCode, body)
+	}
+	if _, body := f.get("/diagnostics"); !strings.Contains(body, "answered HTTP 410") || strings.Contains(body, beatToken) {
+		t.Error("diagnostics do not show the ping failure")
+	}
+
+	if r := f.post("/settings/heartbeat", url.Values{"action": {"remove"}}); r.StatusCode != 303 {
+		t.Errorf("remove = %d", r.StatusCode)
+	}
+	if _, body := f.get("/settings"); !strings.Contains(body, "Off: no ping URL is set") {
+		t.Error("ping not removed")
+	}
+	if log, err := f.st.AuditLog(context.Background(), 100); err != nil || strings.Contains(fmt.Sprintf("%+v", log), beatToken) {
+		t.Errorf("audit log: %v, contains the token: %+v", err, log)
 	}
 }
 

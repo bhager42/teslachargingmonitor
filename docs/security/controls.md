@@ -95,12 +95,13 @@ control because all data belongs to the one owner.
 | Use | Algorithm | Key / material | Lifecycle |
 |---|---|---|---|
 | Password storage | Argon2id, m = 64 MiB, t = 3, p = 1, 16-byte salt | — | Parameters are stored in each hash; rehashed transparently when they change |
-| Channel credentials at rest (Gmail app password) | AES-256-GCM, random 96-bit nonce, versioned format, bound to its purpose (fixed AAD) | `secret.key` (32 random bytes, mode 0600) in the data directory, or `TCMON_SECRET_KEY_FILE` | Created on first run; kept separately from the database in backups; rotation means re-entering credentials with a new key |
+| Channel credentials at rest (Gmail app password, dead-man's-switch URL) | AES-256-GCM, random 96-bit nonce, versioned format, bound to its purpose (fixed AAD) | `secret.key` (32 random bytes, mode 0600) in the data directory, or `TCMON_SECRET_KEY_FILE` | Created on first run; kept separately from the database in backups; rotation means re-entering credentials with a new key |
 | Session and CSRF tokens | `crypto/rand`, 256 bits; SHA-256 for the stored session hash | — | Expire as above; revoked on sign-out or password change |
 | Setup token | `crypto/rand`, 160 bits | — | Single use, 30 minutes |
 | HTTPS (default) | Self-signed ECDSA P-256 certificate; TLS 1.3 minimum (1.2 opt-in via `TCMON_TLS_MIN_VERSION`); Go's default suites incl. X25519MLKEM768 | Key in `tls/` in the data directory | 825-day validity, renewed automatically 30 days before expiry or when host names change; fingerprint shown in the log and on About |
 | HTTPS (own certificate) | As provided | `TCMON_TLS_CERT_FILE` / `TCMON_TLS_KEY_FILE` | Owner-managed |
 | SMTP | TLS 1.2+, certificate always verified (system roots or `TCMON_SMTP_CA_FILE`) | — | — |
+| Dead-man's-switch ping | TLS 1.2+, certificate always verified (system roots, plus `TCMON_SMTP_CA_FILE` if set, for a LAN monitor with a private CA) | — | — |
 | Release images | cosign keyless signatures, SLSA provenance, SBOM | GitHub OIDC (no long-lived keys) | Per release |
 
 Only Go's standard library and `golang.org/x/crypto` implement these.
@@ -113,15 +114,15 @@ Only Go's standard library and `golang.org/x/crypto` implement these.
 | Inbound | Owner's browser | HTTPS (self-signed by default) | LAN client allowlist, Host header allowlist |
 | Outbound | Wall Connector | HTTP (the device offers nothing else) | LAN addresses only, checked when parsing and at dial time; no proxy; no redirects |
 | Outbound | Gmail (or another SMTP server) | SMTP with STARTTLS or implicit TLS | Host entered by the owner; plaintext refused |
+| Outbound | Dead-man's-switch service (optional) | HTTPS GET, TLS ≥ 1.2, certificate validated | URL entered by the owner; off until set; at most one ping a minute, after successful polls; redirects only to HTTPS (at most 3); response discarded; 10 s timeout |
 
-Nothing else is contacted: no telemetry, update checks, fonts or CDNs. The
-dead-man's-switch ping (D20, Phase 8) will add one owner-entered HTTPS URL.
+Nothing else is contacted: no telemetry, update checks, fonts or CDNs.
 
 ## Sensitive data classification (V14.1)
 
 | Class | Data | Protection |
 |---|---|---|
-| Secret | Password (hash only), Gmail app password, `secret.key`, TLS private key, session/setup tokens | Never logged or shown; credentials encrypted at rest; files mode 0600; `secrets.Secret` type redacts itself |
+| Secret | Password (hash only), Gmail app password, dead-man's-switch URL, `secret.key`, TLS private key, session/setup tokens | Never logged or shown; credentials encrypted at rest; files mode 0600; `secrets.Secret` type redacts itself |
 | Personal | Wall Connector serial, Wi-Fi SSID/MAC, LAN IPs, email addresses | Serial masked in the UI and alerts; SSID/MAC never logged; never committed (redacted fixtures, `fixturecheck`) |
 | Private | Readings and charging history (reveals when someone is home) | Stored only in the local database; retention configurable (D15); backups only by the signed-in owner |
 | Internal | Configuration, alert rules, audit log | Signed-in owner only |
