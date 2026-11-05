@@ -457,6 +457,12 @@ func TestThemeCookie(t *testing.T) {
 	if b := bodyOf(t, r); !strings.Contains(b, `data-theme="system"`) {
 		t.Error("invalid theme cookie not ignored")
 	}
+	// The __Host- cookie set over HTTPS wins over a leftover unprefixed one.
+	r = f.do("GET", "/login", nil, cookie(&http.Cookie{Name: "__Host-tcmon_theme", Value: "dark"}), //nolint:gosec // request-side test cookie
+		cookie(&http.Cookie{Name: "tcmon_theme", Value: "light"})) //nolint:gosec // request-side test cookie
+	if b := bodyOf(t, r); !strings.Contains(b, `data-theme="dark"`) {
+		t.Error("__Host-tcmon_theme not used")
+	}
 }
 
 func TestLiveEvents(t *testing.T) {

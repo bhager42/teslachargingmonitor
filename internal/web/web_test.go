@@ -241,6 +241,12 @@ func TestSecurityHeadersEverywhere(t *testing.T) {
 	if r := h.do("GET", "/static/app.css?v=old", nil); r.Header.Get("Cache-Control") != "no-cache" {
 		t.Errorf("stale asset cache = %q", r.Header.Get("Cache-Control"))
 	}
+	// No directory listings (ASVS V13.4.3).
+	for _, p := range []string{"/static/", "/static/js", "/static/js/", "/static/missing.css"} {
+		if r := h.do("GET", p, nil); r.StatusCode != http.StatusNotFound || strings.Contains(bodyOf(t, r), "<pre>") {
+			t.Errorf("GET %s = %d, want 404 without a listing", p, r.StatusCode)
+		}
+	}
 
 	hsts := newHarness(t, Config{HSTS: true}, auth.Bootstrap{})
 	if r := hsts.do("GET", "/login", nil); r.Header.Get("Strict-Transport-Security") != "max-age=31536000" {

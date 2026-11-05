@@ -1199,6 +1199,10 @@ Delivered as small PRs, in this order:
 1. Decisions D19–D21 and this breakdown.
 2. Threat model finalised; ASVS 5.0 checklist cross-checked against the
    official requirement IDs, with every 🟡 closed or explicitly deferred.
+   *Done 2026-11-05:* all 253 Level 1–2 requirements assessed
+   (`docs/security/asvs.md`), documented policies in
+   `docs/security/controls.md`; fixed static directory listings and the
+   unprefixed theme cookie.
 3. Fuzz corpus extended: seeds for every target from the real fixtures, and
    new targets for untrusted parsing (form values, rule parameters, CSV).
 4. Dead-man's-switch ping (D20): URL in Settings, stored encrypted, HTTPS

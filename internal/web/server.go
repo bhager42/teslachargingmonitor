@@ -24,6 +24,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"path"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -235,6 +236,11 @@ func (s *Server) static() http.Handler {
 	files := http.FileServerFS(sub)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Path[len("/static/"):]
+		// Serve files only: http.FileServer would list directories (ASVS V13.4.3).
+		if fi, err := fs.Stat(sub, path.Clean("/" + name)[1:]); err != nil || fi.IsDir() {
+			s.renderError(w, r, http.StatusNotFound, "Not found", "There is no page at this address.")
+			return
+		}
 		if want, ok := s.assetHash[name]; ok && r.URL.Query().Get("v") == want {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else {

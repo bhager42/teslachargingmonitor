@@ -61,8 +61,13 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 	}
 	// The theme is read server-side so the first paint is already correct.
 	p["Theme"] = "system"
-	if c, err := r.Cookie("tcmon_theme"); err == nil && (c.Value == "dark" || c.Value == "light") {
-		p["Theme"] = c.Value
+	// app.mjs sets __Host-tcmon_theme over HTTPS (ASVS V3.3.1); the
+	// unprefixed name is plain HTTP and older versions.
+	for _, name := range []string{"__Host-tcmon_theme", "tcmon_theme"} {
+		if c, err := r.Cookie(name); err == nil && (c.Value == "dark" || c.Value == "light") {
+			p["Theme"] = c.Value
+			break
+		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
