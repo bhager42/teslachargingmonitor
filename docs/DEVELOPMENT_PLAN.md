@@ -1154,8 +1154,8 @@ therefore follows the readings retention (2 years by default).
 
 ### Phase 7 — Container, release, TrueNAS
 
-> **Status (2026-11-03): implemented; awaiting the first release tag and the
-> owner's TrueNAS install.** See ADR 0005.
+> **Status (2026-11-05): implemented and released (v0.7.0–v0.7.2); TrueNAS
+> install owner-verified.** See ADR 0005.
 > - **Image:** distroless static (debian13, the current stable) by digest,
 >   cross-compiled reproducibly. It is 19 MB unpacked, about 8 MB to
 >   download, runs as 568:568, and has no shell. It passes
@@ -1170,8 +1170,16 @@ therefore follows the readings retention (2 years by default).
 >   needed; your own dataset is optional),
 >   and `docs/INSTALL_TRUENAS.md` / `docs/INSTALL_DOCKER.md` (update, backup,
 >   restore, password reset, verify).
-> - **Still open:** the owner verifies the TrueNAS install; `cosign verify`
->   can only be run after the first tag is pushed.
+> - **TrueNAS (owner-verified 2026-11-05, v0.7.2):** installed with
+>   "Install via YAML" on TrueNAS SCALE and working. Found and fixed along
+>   the way: Settings could not be saved with "Keep forever" retention (#11,
+>   v0.7.1); the app page had no **Web UI** button, which made it easy to
+>   open plain `http://` instead of `https://` (`x-portals`, #10, v0.7.1);
+>   "Car plugged in but not ready" fired on every normal charge (#13,
+>   v0.7.2).
+> - **Still open:** `cosign verify` against a released image (documented in
+>   `docs/INSTALL_DOCKER.md`, not yet run). `gh attestation verify` on
+>   `:0.7.2` exited successfully.
 - Hardened Dockerfile, multi-arch build, SBOM, provenance, cosign signing,
   GHCR publish on tag, vulnerability gate (Grype, ADR 0005), image structure tests.
 - `deploy/compose.yaml`, `deploy/truenas/custom-app.yaml`,
