@@ -10,6 +10,7 @@ package wallconnector
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -49,8 +50,33 @@ func FuzzDecode(f *testing.F) {
 	})
 }
 
+// fixtureStrings returns the string field key from every fixture file
+// named file, so real device values seed the corpus.
+func fixtureStrings(f *testing.F, file, key string) []string {
+	f.Helper()
+	files, _ := filepath.Glob("../../testdata/fixtures/*/*/" + file)
+	var out []string
+	for _, p := range files {
+		b, err := os.ReadFile(p) //nolint:gosec // test fixture path
+		if err != nil {
+			f.Fatal(err)
+		}
+		var m map[string]any
+		if err := json.Unmarshal(b, &m); err != nil {
+			f.Fatal(err)
+		}
+		if v, ok := m[key].(string); ok {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 func FuzzParseAddress(f *testing.F) {
-	for _, s := range []string{"192.168.1.17", "http://[fd00::1]:80", "wc.lan", "https://x:1/", "::ffff:10.0.0.1", "%", "[::1]"} {
+	seeds := []string{"192.168.1.17", "http://[fd00::1]:80", "wc.lan", "https://x:1/", "::ffff:10.0.0.1", "%", "[::1]",
+		"2130706433", "0x7f.1", "127.1", "http://user@10.0.0.1", "10.0.0.1/path", "http://10.0.0.1:0", "WC.LAN.", "fe80::1%eth0"}
+	seeds = append(seeds, fixtureStrings(f, "wifi_status.json", "wifi_infra_ip")...)
+	for _, s := range seeds {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
@@ -67,7 +93,9 @@ func FuzzParseAddress(f *testing.F) {
 }
 
 func FuzzParseFirmware(f *testing.F) {
-	for _, s := range []string{"26.26.10+g42855ec9b9cd1", "1.2.3-rc1", "", "1.2"} {
+	seeds := []string{"26.26.10+g42855ec9b9cd1", "1.2.3-rc1", "", "1.2", "01.2.3", "1.2.3+", "99999999999999999999.0.0"}
+	seeds = append(seeds, fixtureStrings(f, "version.json", "firmware_version")...)
+	for _, s := range seeds {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {

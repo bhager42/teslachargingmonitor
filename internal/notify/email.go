@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bhager42/teslachargingmonitor/internal/secrets"
 )
@@ -92,8 +93,18 @@ func (c *EmailConfig) Normalize() error {
 		return fmt.Errorf("invalid From address %q", c.From)
 	}
 	c.From = from.Address
-	if !noCRLF(c.FromName) || len([]rune(c.FromName)) > 64 {
+	c.FromName = strings.TrimSpace(c.FromName)
+	if !noCRLF(c.FromName) || !utf8.ValidString(c.FromName) || len([]rune(c.FromName)) > 64 {
 		return errors.New("the From name must be at most 64 characters on one line")
+	}
+	// The From header must parse back to the same name and address. net/mail
+	// encodes some names (e.g. non-ASCII ending in a backslash) into a header
+	// it cannot read back, and mail servers may reject such messages.
+	if c.FromName != "" {
+		a, err := mail.ParseAddress((&mail.Address{Name: c.FromName, Address: c.From}).String())
+		if err != nil || a.Name != c.FromName || a.Address != c.From {
+			return errors.New("the From name contains characters that cannot be used in an email header")
+		}
 	}
 	if len(c.To) == 0 || len(c.To) > MaxRecipients {
 		return fmt.Errorf("enter 1-%d recipient addresses", MaxRecipients)
@@ -110,7 +121,7 @@ func (c *EmailConfig) Normalize() error {
 	if c.SubjectPrefix == "" {
 		c.SubjectPrefix = DefaultSubjectPrefix
 	}
-	if !noCRLF(c.SubjectPrefix) || len([]rune(c.SubjectPrefix)) > 64 {
+	if !noCRLF(c.SubjectPrefix) || !utf8.ValidString(c.SubjectPrefix) || len([]rune(c.SubjectPrefix)) > 64 {
 		return errors.New("subject prefix must be at most 64 characters on one line")
 	}
 	return nil

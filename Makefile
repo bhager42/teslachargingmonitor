@@ -47,12 +47,16 @@ soak: ## Poll the simulator SOAK_POLLS times; fails on goroutine/heap growth
 	TCMON_SOAK_POLLS=$(SOAK_POLLS) $(GO) test -run '^TestSoak$$' -count=1 -v ./internal/poller
 
 FUZZTIME ?= 60s
-FUZZ_TARGETS := FuzzDecode FuzzParseAddress FuzzParseFirmware
+# package:target pairs (packages under internal/)
+FUZZ_TARGETS := wallconnector:FuzzDecode wallconnector:FuzzParseAddress wallconnector:FuzzParseFirmware \
+	alerts:FuzzRules alerts:FuzzParseQuietHours notify:FuzzEmail energy:FuzzCosts \
+	auth:FuzzCheckPolicy store:FuzzDeviceNormalize web:FuzzParseClock
 
 fuzz: ## Run every fuzz target for FUZZTIME each
 	@for t in $(FUZZ_TARGETS); do \
-		echo "== $$t"; \
-		$(GO) test -run='^$$' -fuzz="^$$t$$" -fuzztime=$(FUZZTIME) ./internal/wallconnector || exit 1; \
+		pkg=$${t%%:*}; name=$${t#*:}; \
+		echo "== $$pkg $$name"; \
+		$(GO) test -run='^$$' -fuzz="^$$name$$" -fuzztime=$(FUZZTIME) ./internal/$$pkg || exit 1; \
 	done
 
 fmt: ## Format code

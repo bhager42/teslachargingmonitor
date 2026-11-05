@@ -240,6 +240,9 @@ func TestNormalize(t *testing.T) {
 		func(c *EmailConfig) { c.To = make([]string, MaxRecipients+1) },
 		func(c *EmailConfig) { c.SubjectPrefix = "a\nb" },
 		func(c *EmailConfig) { c.FromName = strings.Repeat("x", 65) },
+		func(c *EmailConfig) { c.FromName = `Garage é\` }, // net/mail cannot parse its own encoding (found by FuzzEmail)
+		func(c *EmailConfig) { c.FromName = "\xf2" },
+		func(c *EmailConfig) { c.SubjectPrefix = "\xff" },
 	}
 	for i, mut := range bad {
 		c := GmailPreset(user, "a@example.com")
