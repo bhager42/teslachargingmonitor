@@ -22,6 +22,8 @@ Copyright (C) 2026 Brad Hager and contributors
   <label for="quiet_hours">Quiet hours</label>
   <div><input id="quiet_hours" name="quiet_hours" value="{{$f.QuietHours}}" placeholder="22:00-07:00" pattern="[0-2][0-9]:[0-5][0-9]-[0-2][0-9]:[0-5][0-9]" aria-describedby="qh-hint"><p class="hint" id="qh-hint">Optional. Non-critical alerts are not emailed during this window (they stay in the history).</p></div>
   <span></span><label class="check"><input type="checkbox" name="enabled" value="1" {{if $f.Enabled}}checked{{end}}> Enabled</label>
+  <span></span><div><label class="check"><input type="checkbox" name="digest" value="1" {{if $f.Digest}}checked{{end}} aria-describedby="digest-hint"> Weekly summary</label>
+  <p class="hint" id="digest-hint">Also send a summary every Monday morning: last week's charging energy and cost, alerts, and Wall Connector health. Sent regardless of the minimum severity and quiet hours. <a href="/notifications/digest">Preview</a></p></div>
   <details class="span-2"><summary>Advanced (other mail providers)</summary>
     <div class="form-grid">
       <label for="host">SMTP server</label><input id="host" name="host" value="{{$f.Host}}" required>

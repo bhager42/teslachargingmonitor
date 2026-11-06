@@ -164,7 +164,7 @@ func TestAllPagesRender(t *testing.T) {
 	pages := []string{"/", "/alerts", "/notifications", "/notifications/new", "/notifications/" + itoa(ch.ID),
 		"/settings", "/settings/devices", "/settings/devices/new", "/settings/devices/" + itoa(d.ID), "/diagnostics",
 		"/devices/" + itoa(d.ID), "/devices/" + itoa(d.ID) + "?range=7d", "/alerts/rules/handle_temp_high",
-		"/alerts/rules/unexpected_reboot", "/settings/security", "/about"}
+		"/alerts/rules/unexpected_reboot", "/settings/security", "/about", "/notifications/digest"}
 	for _, p := range pages {
 		status, body := f.get(p)
 		if status != http.StatusOK {
@@ -528,6 +528,54 @@ func TestHeartbeatSettings(t *testing.T) {
 	}
 	if log, err := f.st.AuditLog(context.Background(), 100); err != nil || strings.Contains(fmt.Sprintf("%+v", log), beatToken) {
 		t.Errorf("audit log: %v, contains the token: %+v", err, log)
+	}
+}
+
+func TestDigestPages(t *testing.T) {
+	f := newFull(t)
+	d := f.addDevice()
+	f.saveSnapshot(d, "charging", f.clk.now().AddDate(0, 0, -7))
+	status, body := f.get("/notifications/digest")
+	if status != 200 || !strings.Contains(body, "Weekly summary ") || !strings.Contains(body, "== Garage ==") ||
+		!strings.Contains(body, "every Monday at 08:00") {
+		t.Fatalf("preview = %d %s", status, body)
+	}
+
+	port := strings.TrimPrefix(f.smtp.Addr, "127.0.0.1:")
+	form := url.Values{"name": {"Gmail"}, "username": {"owner@gmail.com"}, "password": {"abcdefghijklmnop"},
+		"to": {"me@example.com"}, "host": {"localhost"}, "port": {port}, "security": {"starttls"},
+		"min_severity": {"info"}, "enabled": {"1"}, "digest": {"1"}, "action": {"save"}}
+	if r := f.post("/notifications/new", form); r.StatusCode != 303 {
+		t.Fatalf("save = %d %s", r.StatusCode, bodyOf(t, r))
+	}
+	chs, _ := f.srv.notify.Channels(context.Background())
+	if len(chs) != 1 || !chs[0].Digest {
+		t.Fatalf("channel = %+v", chs)
+	}
+	id := itoa(chs[0].ID)
+	if _, body := f.get("/notifications"); !strings.Contains(body, "Mondays at 08:00") || !strings.Contains(body, "/notifications/"+id+"/digest") {
+		t.Error("notifications page does not show the weekly summary")
+	}
+	if _, body := f.get("/notifications/" + id); !strings.Contains(body, `name="digest" value="1" checked`) {
+		t.Error("edit form does not show the digest opt-in")
+	}
+	r := f.post("/notifications/"+id+"/digest", url.Values{})
+	if r.StatusCode != 303 || !strings.Contains(r.Header.Get("Location"), "digest-sent") {
+		t.Fatalf("send digest = %d %s", r.StatusCode, bodyOf(t, r))
+	}
+	ms := f.smtp.Messages()
+	if len(ms) != 1 || !strings.Contains(string(ms[0].Data), "Weekly summary") {
+		t.Fatalf("messages = %d", len(ms))
+	}
+	if r := f.post("/notifications/999/digest", url.Values{}); r.StatusCode != 404 {
+		t.Errorf("unknown channel = %d", r.StatusCode)
+	}
+	// Opting out.
+	form.Del("digest")
+	form.Set("password", "")
+	_ = f.post("/notifications/"+id, form)
+	if c, _ := f.srv.notify.Channel(context.Background(), chs[0].ID); c.Digest {
+		t.Error("digest still on after unticking")
 	}
 }
 

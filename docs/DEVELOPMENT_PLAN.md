@@ -1220,6 +1220,16 @@ Delivered as small PRs, in this order:
    warns when no Wall Connector answers.
 5. Weekly digest email (D19): opt-in per email channel; content from
    `internal/energy` and the alert history; previewable and testable.
+   *Done 2026-11-05:* `internal/digest` builds the previous Monday–Sunday
+   week (energy and cost per Wall Connector and in total, compared with the
+   week before; charging sessions; polls; highest temperatures; grid
+   voltage range; device events; alerts grouped by rule, most severe
+   first) and queues it through the delivery queue every Monday at 08:00
+   local time, catching up later in the week if tcmon was down. Opt-in
+   per channel (migration 0006, off for existing channels); severity
+   filters and quiet hours do not apply. Notifications → Preview weekly
+   summary shows the text version; "Send weekly summary now" sends it.
+   Weekly costs are energy only (monthly fees belong to months).
 6. i18n scaffolding: user-facing strings moved to a message catalogue
    (English only), without changing any text.
 7. Lighthouse ≥ 95 audit in CI (carried over from Phase 6).

@@ -76,7 +76,7 @@ func TestOpenCreatesSecureFileAndMigrates(t *testing.T) {
 	if perm := fi.Mode().Perm(); perm != 0o600 {
 		t.Errorf("db file mode = %o, want 600", perm)
 	}
-	if v, err := s.SchemaVersion(context.Background()); err != nil || v != 5 {
+	if v, err := s.SchemaVersion(context.Background()); err != nil || v != 6 {
 		t.Errorf("schema version = %d, %v", v, err)
 	}
 	var av, fk int

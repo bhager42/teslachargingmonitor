@@ -124,7 +124,7 @@ Nothing else is contacted: no telemetry, update checks, fonts or CDNs.
 |---|---|---|
 | Secret | Password (hash only), Gmail app password, dead-man's-switch URL, `secret.key`, TLS private key, session/setup tokens | Never logged or shown; credentials encrypted at rest; files mode 0600; `secrets.Secret` type redacts itself |
 | Personal | Wall Connector serial, Wi-Fi SSID/MAC, LAN IPs, email addresses | Serial masked in the UI and alerts; SSID/MAC never logged; never committed (redacted fixtures, `fixturecheck`) |
-| Private | Readings and charging history (reveals when someone is home) | Stored only in the local database; retention configurable (D15); backups only by the signed-in owner |
+| Private | Readings and charging history (reveals when someone is home) | Stored only in the local database; retention configurable (D15); backups only by the signed-in owner. The optional weekly digest (D19) emails a summary (energy, cost, alert counts, highest temperatures) only to channels the owner opted in |
 | Internal | Configuration, alert rules, audit log | Signed-in owner only |
 
 No sensitive data travels in URLs or query strings, and every non-static

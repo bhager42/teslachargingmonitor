@@ -3,7 +3,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "content"}}
-<div class="page-head"><h1>Notifications</h1><a class="button" href="/notifications/new">Add email (Gmail)</a></div>
+<div class="page-head"><h1>Notifications</h1><div class="actions"><a class="button secondary" href="/notifications/digest">Preview weekly summary</a><a class="button" href="/notifications/new">Add email (Gmail)</a></div></div>
 {{- if not .Channels}}
 <section class="card empty"><h2>No email set up yet</h2>
 <p>Alerts are recorded but not sent anywhere. Add your Gmail address to receive them by email. You'll need a Google <a href="https://myaccount.google.com/apppasswords" rel="noopener">app password</a> (2-Step Verification must be on).</p></section>
@@ -16,6 +16,7 @@ Copyright (C) 2026 Brad Hager and contributors
     <dt>From</dt><dd>{{.Email.From}}</dd>
     <dt>To</dt><dd>{{range $i, $t := .Email.To}}{{if $i}}, {{end}}{{$t}}{{end}}</dd>
     <dt>Sends</dt><dd>{{.MinSeverity}} and above{{if .QuietHours}}; quiet hours {{.QuietHours}} (critical still sent){{end}}</dd>
+    <dt>Weekly summary</dt><dd>{{if .Digest}}Mondays at {{$.DigestAt}}{{else}}off{{end}}</dd>
     <dt>Password</dt><dd>{{if .PasswordSet}}stored (encrypted){{else}}not set{{end}}</dd>
     <dt>Last success</dt><dd>{{ago .LastSuccess}}</dd>
     {{- if .ConsecutiveFailures}}<dt>Problems</dt><dd class="error-text">{{.ConsecutiveFailures}} failed attempt(s): {{.LastError}}</dd>{{end}}
@@ -23,6 +24,9 @@ Copyright (C) 2026 Brad Hager and contributors
   <div class="actions">
     <a class="button secondary" href="/notifications/{{.ID}}">Edit</a>
     <form method="post" action="/notifications/{{.ID}}/test" class="inline"><input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button type="submit" class="secondary">Send test email</button></form>
+    {{- if .Digest}}
+    <form method="post" action="/notifications/{{.ID}}/digest" class="inline"><input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button type="submit" class="secondary">Send weekly summary now</button></form>
+    {{- end}}
   </div>
 </section>
 {{- end}}
