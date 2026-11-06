@@ -218,6 +218,12 @@ func TestCodes(t *testing.T) {
 	if c := EVSEStateInfo(42); c.Known || c.Label != "Unknown (code 42)" {
 		t.Errorf("EVSEStateInfo(42) = %+v", c)
 	}
+	if c := EVSEStateInfo(4); !c.Known || c.Label != "Connected, not charging" {
+		t.Errorf("EVSEStateInfo(4) = %+v", c)
+	}
+	if c := NotReadyReasonInfo(1); c.Known {
+		t.Error("not-ready reason meanings are not yet confirmed and must not be guessed")
+	}
 	if c := NotReadyReasonInfo(2); c.Known {
 		t.Error("not-ready reason meanings are not yet confirmed and must not be guessed")
 	}

@@ -11,8 +11,8 @@
 // evolve with simulated time so alert rules can be exercised end to end.
 //
 // The idle baseline and the charging values reproduce the real UWC fixtures
-// (firmware 26.26.10). Plugged-in-but-not-charging has not been captured yet
-// and has no scenario.
+// (firmware 26.26.10). Plugged-in-but-not-charging was captured on fw 26.34.0
+// (testdata/fixtures/uwc/26.34.0) but has no scenario yet.
 package wcsim
 
 import "github.com/bhager42/teslachargingmonitor/internal/wallconnector"

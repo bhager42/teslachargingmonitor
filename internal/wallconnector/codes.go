@@ -26,16 +26,18 @@ func (c CodeInfo) String() string { return c.Label }
 // fixture and a note instead (see docs/DEVELOPMENT_PLAN.md §2).
 var (
 	evseStates = map[int]string{
-		1:  "Idle (no vehicle)", // UWC fw 26.26.10, unplugged
-		11: "Charging",          // UWC fw 26.26.10, contactor closed, 47.4 A flowing
+		1:  "Idle (no vehicle)",       // UWC fw 26.26.10, unplugged
+		4:  "Connected, not charging", // UWC fw 26.34.0, car plugged in, contactor open, 0 A
+		11: "Charging",                // UWC fw 26.26.10, contactor closed, 47.4 A flowing
 	}
 	configStatuses = map[int]string{
 		5: "Configured", // UWC fw 26.26.10, normal commissioned unit
 	}
 	notReadyReasons = map[int]string{
 		// UWC fw 26.26.10 reports [2,4,8] while unplugged and [1] while
-		// charging normally; individual meanings are not yet known, so
-		// none are listed.
+		// charging normally; fw 26.34.0 reports [1] with a car plugged in
+		// but idle. Individual meanings are not yet known, so none are
+		// listed.
 	}
 	alertCodes = map[int]string{}
 )
@@ -43,6 +45,12 @@ var (
 // UnpluggedNotReadyReasons is the set reported by an idle, unplugged UWC
 // (fw 26.26.10). It is normal and must not raise alerts.
 var UnpluggedNotReadyReasons = []int{2, 4, 8}
+
+// ConnectedNotReadyReasons is the set a UWC reports whenever a car is
+// connected and nothing is wrong: while charging (fw 26.26.10) and while
+// plugged in but idle, e.g. charge complete or waiting for a schedule
+// (fw 26.34.0). It is normal and must not raise alerts.
+var ConnectedNotReadyReasons = []int{1}
 
 func lookup(table map[int]string, code int) CodeInfo {
 	if l, ok := table[code]; ok {

@@ -96,7 +96,7 @@ provenance ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
 | Device | Status |
 |---|---|
-| Tesla Universal Wall Connector | Primary target; tested against firmware 26.26.10 |
+| Tesla Universal Wall Connector | Primary target; tested against firmware 26.26.10 and 26.34.0 |
 | Tesla Wall Connector (Gen 3) | Expected to work (same API family), untested |
 
 ## Development
