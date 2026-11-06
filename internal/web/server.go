@@ -154,7 +154,7 @@ func (s *Server) loadAssets() error {
 	}
 	s.pages = map[string]*template.Template{}
 	for _, p := range []string{"login", "setup", "setup_closed", "home", "security", "about", "error", "device",
-		"devices", "device_form", "alerts", "rule", "notifications", "channel", "settings", "diagnostics", "costs", "energy"} {
+		"devices", "device_form", "alerts", "rule", "notifications", "channel", "settings", "diagnostics", "costs", "energy", "digest"} {
 		t, err := template.New(p).Funcs(funcs).ParseFS(webui.Templates, "templates/layout.html", "templates/"+p+".html")
 		if err != nil {
 			return fmt.Errorf("web: parsing %s template: %w", p, err)
@@ -197,6 +197,8 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("POST /alerts/rules/{key}", s.authed(s.saveRule))
 	mux.Handle("GET /notifications", s.authed(s.notificationsPage))
 	mux.Handle("GET /notifications/new", s.authed(s.newChannel))
+	mux.Handle("GET /notifications/digest", s.authed(s.digestPreview))
+	mux.Handle("POST /notifications/{id}/digest", s.authed(s.sendDigest))
 	mux.Handle("POST /notifications/new", s.authed(s.saveChannel))
 	mux.Handle("GET /notifications/{id}", s.authed(s.editChannel))
 	mux.Handle("POST /notifications/{id}", s.authed(s.saveChannel))

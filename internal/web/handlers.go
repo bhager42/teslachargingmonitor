@@ -38,6 +38,7 @@ var flashes = map[string]string{
 	"channel-saved":    "Email settings saved.",
 	"channel-deleted":  "Notification channel removed.",
 	"test-sent":        "Test email sent. Check your inbox (and spam folder).",
+	"digest-sent":      "Weekly summary sent. Check your inbox (and spam folder).",
 	"settings-saved":   "Settings saved.",
 	"beat-saved":       "Ping URL saved. tcmon pings it after each successful poll.",
 	"beat-tested":      "Test ping sent. Check that your monitoring service received it.",

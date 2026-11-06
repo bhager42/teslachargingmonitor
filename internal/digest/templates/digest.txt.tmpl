@@ -1,0 +1,38 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-or-later
+Copyright (C) 2026 Brad Hager and contributors
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License as published by the
+Free Software Foundation, either version 3 of the License, or (at your
+option) any later version. See the LICENSE file for details.
+*/ -}}
+Weekly summary, {{.Range}}
+
+Charging: {{.Total}}
+{{- if .NoDevices}}
+
+No Wall Connector is configured yet.
+{{- end}}
+{{- range .Devices}}
+
+== {{.Name}} ==
+  Charging: {{.Charging}}
+  {{.Previous}}
+  Polling: {{.Polls}}
+  {{.Temps}}
+  {{- with .Grid}}
+  {{.}}{{end}}
+  {{- with .Events}}
+  Device events: {{range $i, $e := .}}{{if $i}}, {{end}}{{$e}}{{end}}{{end}}
+{{- end}}
+
+Alerts
+{{- range .Alerts}}
+  [{{.Severity}}] {{.Title}} — {{.Device}}: {{.Count}}, last {{.Last}}
+{{- else}}
+  No alerts this week.
+{{- end}}
+
+--
+{{.Footer}}

@@ -181,6 +181,45 @@ func TestEnqueueBatchesAndFilters(t *testing.T) {
 	_ = quiet
 }
 
+func TestDigestGoesOnlyToOptedInChannels(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t, smtpmock.Options{})
+	e.addChannel(t, nil) // alerts only
+	digest := e.addChannel(t, func(s *EmailSettings) {
+		s.Name, s.Digest, s.Email.To = "Digest", true, []string{"digest@example.com"}
+		// The digest ignores quiet hours and the severity filter.
+		s.MinSeverity, s.QuietHours = alerts.Critical, "00:00-23:59"
+	})
+	e.addChannel(t, func(s *EmailSettings) { s.Name, s.Digest, s.Enabled = "Off", true, false })
+	if ci, _ := e.d.Channel(ctx, digest.ID); !ci.Digest {
+		t.Fatal("Digest flag not stored")
+	}
+	msg := Message{Subject: "Weekly summary", Text: "weekly text\n", HTML: "<p>weekly html</p>", Severity: alerts.Info}
+	n, err := e.d.EnqueueDigest(ctx, msg)
+	if err != nil || n != 1 {
+		t.Fatalf("EnqueueDigest = %d, %v", n, err)
+	}
+	if err := e.d.DeliverDue(ctx); err != nil {
+		t.Fatal(err)
+	}
+	ms := e.smtp.Messages()
+	if len(ms) != 1 || ms[0].To[0] != "digest@example.com" || !strings.Contains(string(ms[0].Data), "weekly text") {
+		t.Fatalf("messages = %+v", ms)
+	}
+	// SendNow (the "send digest now" button) is immediate and unqueued.
+	if err := e.d.SendNow(ctx, digest.ID, msg); err != nil || len(e.smtp.Messages()) != 2 {
+		t.Fatalf("SendNow = %v, %d messages", err, len(e.smtp.Messages()))
+	}
+	// Turning it off on update.
+	if _, err := e.d.UpdateEmailChannel(ctx, digest.ID, EmailSettings{Name: "Digest", Enabled: true,
+		MinSeverity: alerts.Info, Email: cfgFor(e.smtp, SecurityStartTLS)}); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := e.d.EnqueueDigest(ctx, msg); err != nil || n != 0 {
+		t.Errorf("after opting out: %d, %v", n, err)
+	}
+}
+
 func TestRetryThenSuccess(t *testing.T) {
 	ctx := context.Background()
 	e := newEnv(t, smtpmock.Options{TempFail: 2})

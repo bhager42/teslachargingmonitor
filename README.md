@@ -84,6 +84,8 @@ provenance ([how to verify](docs/INSTALL_DOCKER.md#verify)).
   high temperatures, thermal foldbacks, device alerts, grid voltage/frequency
   out of range, overcurrent, charger offline, unexpected reboots, firmware or
   grid-profile changes, and more.
+- Optional weekly summary email every Monday: last week's charging energy
+  and cost, alerts, and Wall Connector health.
 - Optionally ping a dead-man's-switch service (healthchecks.io, Uptime
   Kuma push monitor) after each successful poll, so you hear about it if
   tcmon itself stops.

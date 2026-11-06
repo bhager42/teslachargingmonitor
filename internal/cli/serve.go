@@ -22,6 +22,7 @@ import (
 	"github.com/bhager42/teslachargingmonitor/internal/alerts"
 	"github.com/bhager42/teslachargingmonitor/internal/auth"
 	"github.com/bhager42/teslachargingmonitor/internal/buildinfo"
+	"github.com/bhager42/teslachargingmonitor/internal/digest"
 	"github.com/bhager42/teslachargingmonitor/internal/heartbeat"
 	"github.com/bhager42/teslachargingmonitor/internal/notify"
 	"github.com/bhager42/teslachargingmonitor/internal/poller"
@@ -152,6 +153,7 @@ func runServe(ctx context.Context, args []string, env Env) int {
 	wg.Go(func() { logNotifications(ctx, log, notifications) })
 	wg.Go(func() { dispatcher.Run(ctx, toDeliver) })
 	wg.Go(func() { beat.Run(ctx, beatUpdates) })
+	wg.Go(func() { digest.NewScheduler(st, dispatcher, digest.Config{Logger: log}).Run(ctx) })
 	liveUpdates, unsubLive := m.Subscribe(32)
 	defer unsubLive()
 	liveAlerts, unsubLiveAlerts := engine.Subscribe(32)

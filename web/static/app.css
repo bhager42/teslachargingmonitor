@@ -149,6 +149,7 @@
      scroll inside .table-wrap instead of widening the page. */
   main > *, .cards > *, .grid-2 > *, .charts > *, .card { min-inline-size: 0; }
   pre { overflow-x: auto; background: var(--bg); padding: 0.75rem; border-radius: calc(var(--radius) / 1.5); font-size: 0.85rem; }
+  pre.digest { white-space: pre-wrap; overflow-wrap: anywhere; }
   details > summary { cursor: pointer; font-weight: 600; }
   .form-grid { display: grid; grid-template-columns: minmax(10rem, max-content) 1fr; gap: 0.6rem 1rem; align-items: center; }
   .form-grid > .span-2, .form-grid details { grid-column: 1 / -1; }
