@@ -268,7 +268,7 @@ var definitions = []Definition{
 		"%.0f new alert(s) recorded by the Wall Connector (lifetime total %.0f)"),
 	{
 		Key: "not_ready_reasons", Title: "Car plugged in but not ready", Kind: Condition,
-		Description: "The Wall Connector reports not-ready reasons while a car is connected and not charging. (Reasons reported while unplugged or while charging are normal and ignored.)",
+		Description: "The Wall Connector reports unusual not-ready reasons while a car is connected and not charging. (The reasons a UWC normally reports while unplugged, charging, or plugged in and idle are ignored.)",
 		Defaults:    cond(true, 2*time.Minute, 1, 0),
 		Eval: func(in Input, _ Params, _ *State) Result {
 			if !in.vital("vehicle_connected") || !in.vital("contactor_closed") || !in.vital("evse_not_ready_reasons") {
@@ -278,6 +278,14 @@ var definitions = []Definition{
 			// A UWC (fw 26.26.10) reports [1] while charging normally, so a
 			// closed contactor means the car is evidently ready.
 			if !v.VehicleConnected || v.ContactorClosed || len(v.EVSENotReadyReasons) == 0 {
+				return Result{}
+			}
+			// [1] is also reported with a car plugged in but idle (fw 26.34.0:
+			// charge complete or waiting for a schedule), so only other
+			// reasons are worth an alert.
+			if !slices.ContainsFunc(v.EVSENotReadyReasons, func(c int) bool {
+				return !slices.Contains(wallconnector.ConnectedNotReadyReasons, c)
+			}) {
 				return Result{}
 			}
 			return Result{Severity: Warning, Message: "Car connected but not ready: " +

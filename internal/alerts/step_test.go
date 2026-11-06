@@ -298,6 +298,12 @@ func TestRuleEvaluations(t *testing.T) {
 		{"not_ready_reasons", idle(t0), None, false}, // [2,4,8] while unplugged is normal
 		{"not_ready_reasons", mod(idle(t0), func(i *Input) { i.Snapshot.Vitals.VehicleConnected = true }), Warning, false},
 		{"not_ready_reasons", scenario("charging", time.Minute, t0), None, false}, // [1] while charging is normal
+		{"not_ready_reasons", mod(idle(t0), func(i *Input) { // [1] plugged in but idle is normal (fw 26.34.0)
+			i.Snapshot.Vitals.VehicleConnected, i.Snapshot.Vitals.EVSENotReadyReasons = true, []int{1}
+		}), None, false},
+		{"not_ready_reasons", mod(idle(t0), func(i *Input) {
+			i.Snapshot.Vitals.VehicleConnected, i.Snapshot.Vitals.EVSENotReadyReasons = true, []int{1, 16}
+		}), Warning, false},
 		{"wifi_no_internet", scenario("wifi-weak", 0, t0), Info, false},
 		{"wifi_weak", scenario("wifi-weak", 0, t0), Info, false},
 		{"pcba_temp_high", scenario("overheat", 20*time.Minute, t0), Warning, false},
@@ -429,26 +435,29 @@ func TestSeverityJSON(t *testing.T) {
 	}
 }
 
-// The real UWC charging capture must not trigger any rule that is enabled
-// by default (issue #1: not_ready_reasons fired on every normal charge).
-func TestRealChargingCaptureRaisesNoDefaultAlerts(t *testing.T) {
-	b, err := os.ReadFile("../../testdata/fixtures/uwc/26.26.10/vitals.charging.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	v, rep, err := wallconnector.DecodeVitals(b)
-	if err != nil || !rep.Clean() {
-		t.Fatalf("err=%v report=%+v", err, rep)
-	}
-	in := idle(t0)
-	in.Snapshot.Vitals = v
-	in.Snapshot.Reports[wallconnector.EndpointVitals] = rep
-	for _, def := range Definitions() {
-		if def.Kind != Condition || !def.Defaults.Enabled {
-			continue
+// The real UWC captures of normal states must not trigger any rule that is
+// enabled by default (issue #1: not_ready_reasons fired on every normal
+// charge, and later whenever a car sat plugged in after charging).
+func TestRealCapturesRaiseNoDefaultAlerts(t *testing.T) {
+	for _, name := range []string{"26.26.10/vitals.json", "26.26.10/vitals.charging.json", "26.34.0/vitals.plugged-idle.json"} {
+		b, err := os.ReadFile("../../testdata/fixtures/uwc/" + name) //nolint:gosec // test fixture
+		if err != nil {
+			t.Fatal(err)
 		}
-		if res := def.Eval(in, def.DefaultConfig().Params, newState()); !res.Skip && res.Severity != None {
-			t.Errorf("%s fires on a normal charge: %v %s", def.Key, res.Severity, res.Message)
+		v, rep, err := wallconnector.DecodeVitals(b)
+		if err != nil || !rep.Clean() {
+			t.Fatalf("%s: err=%v report=%+v", name, err, rep)
+		}
+		in := idle(t0)
+		in.Snapshot.Vitals = v
+		in.Snapshot.Reports[wallconnector.EndpointVitals] = rep
+		for _, def := range Definitions() {
+			if def.Kind != Condition || !def.Defaults.Enabled {
+				continue
+			}
+			if res := def.Eval(in, def.DefaultConfig().Params, newState()); !res.Skip && res.Severity != None {
+				t.Errorf("%s fires on %s: %v %s", def.Key, name, res.Severity, res.Message)
+			}
 		}
 	}
 }

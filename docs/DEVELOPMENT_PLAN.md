@@ -134,7 +134,9 @@ Implications for the design:
   (`internal/wallconnector/codes.go`) that can grow; show raw values when unknown.
   Seed it only with **observed** meanings (UWC fw 26.26.10: `evse_state` 1 =
   idle/unplugged; `config_status` 5 = normal configured state; not-ready
-  reasons 2, 4, 8 present while unplugged). Unconfirmed meanings are labelled
+  reasons 2, 4, 8 present while unplugged; not-ready reason 1 present while
+  charging and, on fw 26.34.0, with a car plugged in but idle, when
+  `evse_state` is 4). Unconfirmed meanings are labelled
   "unknown (code N)" rather than guessed. The UI should also learn the
   "normal" code set per device and highlight codes never seen before.
 
