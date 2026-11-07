@@ -155,10 +155,11 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npx playwright install --with-deps ${{ matrix.browser }}
-      - name: Playwright + axe (WCAG 2.2 AA, CSP, 320 px, live updates)
+      - name: Playwright + axe (WCAG 2.2 AA, CSP, 320 px, live updates) + Lighthouse (Chromium)
         working-directory: e2e
         env:
           TCMON_E2E_BROWSERS: ${{ matrix.browser }}
+          TCMON_LH_REPORTS: test-results/lighthouse
         run: npx playwright test
       - name: Upload report
         if: failure()

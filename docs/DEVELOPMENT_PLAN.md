@@ -1240,6 +1240,14 @@ Delivered as small PRs, in this order:
    chart labels, and validation errors from other packages (part 2b);
    alert emails, the test email and the weekly summary (part 3).
 7. Lighthouse ≥ 95 audit in CI (carried over from Phase 6).
+   *Done:* `e2e/tests/lighthouse.spec.mjs` runs Lighthouse 13.5 in the
+   Chromium e2e job on sign-in, dashboard, device detail, alerts,
+   notifications, settings, costs and diagnostics, signed in over the
+   self-signed HTTPS, as a desktop and as a throttled phone (simulated
+   throttling, so CI noise does not move the score). Performance must be
+   ≥ 95; accessibility and best practices must be 100, because they do not
+   depend on timing and a single failed audit (e.g. unreadable text) still
+   scores 96. Every page scores 100 in all three today.
 8. CHANGELOG, §15 resolved or explicitly deferred, then v1.0.0.
 
 **Accept:** v1.0.0 tagged, release notes, signed images, CHANGELOG, all
