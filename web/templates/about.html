@@ -3,18 +3,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "content"}}
-<h1>About</h1>
+<h1>{{t "about.title"}}</h1>
 <section class="card">
   <dl>
-    <dt>Version</dt><dd>{{.Version}}</dd>
-    <dt>Commit</dt><dd><code>{{.Commit}}</code></dd>
-    <dt>Source code</dt><dd><a href="{{.SourceURL}}" rel="noopener">{{.SourceURL}}</a></dd>
-    <dt>License</dt><dd>GNU Affero General Public License, version 3 or (at your option) any later version. If you run a modified version as a network service, you must offer its source code to its users.</dd>
+    <dt>{{t "about.version"}}</dt><dd>{{.Version}}</dd>
+    <dt>{{t "about.commit"}}</dt><dd><code>{{.Commit}}</code></dd>
+    <dt>{{t "about.source"}}</dt><dd><a href="{{.SourceURL}}" rel="noopener">{{.SourceURL}}</a></dd>
+    <dt>{{t "about.license"}}</dt><dd>{{t "about.license_text"}}</dd>
     {{- if .CertFingerprint}}
-    <dt>HTTPS certificate SHA-256</dt><dd><code class="wrap">{{.CertFingerprint}}</code><br><span class="hint">Compare with the fingerprint your browser shows for this site and with the one in the container log.</span></dd>
-    <dt>Certificate</dt><dd><a href="/settings/certificate.pem" download>Download to trust it on your devices</a></dd>
+    <dt>{{t "about.fingerprint"}}</dt><dd><code class="wrap">{{.CertFingerprint}}</code><br><span class="hint">{{t "about.fingerprint_hint"}}</span></dd>
+    <dt>{{t "about.certificate"}}</dt><dd><a href="/settings/certificate.pem" download>{{t "about.certificate_download"}}</a></dd>
     {{- end}}
   </dl>
-  <p class="hint">Tesla Charger Monitoring is an independent project, not affiliated with or endorsed by Tesla, Inc. “Tesla” and “Wall Connector” are trademarks of Tesla, Inc.</p>
+  <p class="hint">{{t "about.disclaimer"}}</p>
 </section>
 {{end}}

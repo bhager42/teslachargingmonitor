@@ -3,19 +3,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "content"}}
-<div class="page-head"><h1>Wall Connectors</h1><a class="button" href="/settings/devices/new">Add Wall Connector</a></div>
-<p class="hint"><a href="/settings">← Settings</a></p>
+<div class="page-head"><h1>{{t "devices.title"}}</h1><a class="button" href="/settings/devices/new">{{t "common.add_wall_connector"}}</a></div>
+<p class="hint"><a href="/settings">{{t "devices.back"}}</a></p>
 {{- if .Devices}}
 <div class="table-wrap"><table>
-  <thead><tr><th scope="col">Name</th><th scope="col">Address</th><th scope="col">Polling</th><th scope="col">Max current</th><th scope="col">Enabled</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+  <thead><tr><th scope="col">{{t "devices.col_name"}}</th><th scope="col">{{t "devices.col_address"}}</th><th scope="col">{{t "devices.col_polling"}}</th><th scope="col">{{t "devices.col_max_current"}}</th><th scope="col">{{t "devices.col_enabled"}}</th><th scope="col"><span class="sr-only">{{t "common.actions"}}</span></th></tr></thead>
   <tbody>
   {{- range .Devices}}
   <tr><td>{{.Name}}</td><td><code>{{.Address}}</code></td>
-      <td>every {{mins .PollInterval}} min{{if .FastWhenPlugged}}, {{mins .PluggedInterval}} min plugged in{{end}}</td>
-      <td>{{if .MaxCurrentA}}{{num .MaxCurrentA}} A{{else}}–{{end}}</td><td>{{if .Enabled}}yes{{else}}no{{end}}</td>
-      <td><a href="/settings/devices/{{.ID}}">Edit</a></td></tr>
+      <td>{{t "devices.every" "n" (mins .PollInterval)}}{{if .FastWhenPlugged}}{{t "devices.plugged" "n" (mins .PluggedInterval)}}{{end}}</td>
+      <td>{{if .MaxCurrentA}}{{num .MaxCurrentA}} A{{else}}–{{end}}</td><td>{{if .Enabled}}{{t "common.yes"}}{{else}}{{t "common.no"}}{{end}}</td>
+      <td><a href="/settings/devices/{{.ID}}">{{t "common.edit"}}</a></td></tr>
   {{- end}}
   </tbody>
 </table></div>
-{{- else}}<p>No Wall Connector yet.</p>{{end}}
+{{- else}}<p>{{t "devices.empty"}}</p>{{end}}
 {{end}}

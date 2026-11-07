@@ -5,46 +5,46 @@ Copyright (C) 2026 Brad Hager and contributors
 {{define "content"}}
 {{- $f := .Form}}
 <h1>{{.Title}}</h1>
-<p class="hint"><a href="/notifications">← Notifications</a></p>
+<p class="hint"><a href="/notifications">{{t "common.back_notifications"}}</a></p>
 <form method="post" action="{{if $f.ID}}/notifications/{{$f.ID}}{{else}}/notifications/new{{end}}" class="card form-grid">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-  <label for="name">Name</label>
+  <label for="name">{{t "channel.name"}}</label>
   <input id="name" name="name" value="{{$f.Name}}" required maxlength="64">
-  <label for="username">Gmail address (username)</label>
+  <label for="username">{{t "channel.username"}}</label>
   <input id="username" name="username" type="email" value="{{$f.Username}}" autocomplete="username" required>
-  <label for="password">App password</label>
+  <label for="password">{{t "channel.password"}}</label>
   <div><input id="password" name="password" type="password" autocomplete="new-password" {{if not $f.PasswordSet}}required{{end}} aria-describedby="pw-hint">
-  <p class="hint" id="pw-hint">{{if $f.PasswordSet}}A password is stored (encrypted). Leave empty to keep it.{{else}}Create one at <a href="https://myaccount.google.com/apppasswords" rel="noopener">myaccount.google.com/apppasswords</a> (needs 2-Step Verification). Your normal Gmail password will not work.{{end}}</p></div>
-  <label for="to">Send alerts to</label>
-  <div><input id="to" name="to" value="{{$f.To}}" required aria-describedby="to-hint"><p class="hint" id="to-hint">One or more addresses, separated by commas.</p></div>
-  <label for="min_severity">Minimum severity</label>
+  <p class="hint" id="pw-hint">{{if $f.PasswordSet}}{{t "channel.password_set"}}{{else}}{{th "channel.password_hint_html"}}{{end}}</p></div>
+  <label for="to">{{t "channel.to"}}</label>
+  <div><input id="to" name="to" value="{{$f.To}}" required aria-describedby="to-hint"><p class="hint" id="to-hint">{{t "channel.to_hint"}}</p></div>
+  <label for="min_severity">{{t "channel.min_severity"}}</label>
   <select id="min_severity" name="min_severity">{{range .Severities}}<option value="{{.}}" {{if eq . $f.MinSeverity}}selected{{end}}>{{.}}</option>{{end}}</select>
-  <label for="quiet_hours">Quiet hours</label>
-  <div><input id="quiet_hours" name="quiet_hours" value="{{$f.QuietHours}}" placeholder="22:00-07:00" pattern="[0-2][0-9]:[0-5][0-9]-[0-2][0-9]:[0-5][0-9]" aria-describedby="qh-hint"><p class="hint" id="qh-hint">Optional. Non-critical alerts are not emailed during this window (they stay in the history).</p></div>
-  <span></span><label class="check"><input type="checkbox" name="enabled" value="1" {{if $f.Enabled}}checked{{end}}> Enabled</label>
-  <span></span><div><label class="check"><input type="checkbox" name="digest" value="1" {{if $f.Digest}}checked{{end}} aria-describedby="digest-hint"> Weekly summary</label>
-  <p class="hint" id="digest-hint">Also send a summary every Monday morning: last week's charging energy and cost, alerts, and Wall Connector health. Sent regardless of the minimum severity and quiet hours. <a href="/notifications/digest">Preview</a></p></div>
-  <details class="span-2"><summary>Advanced (other mail providers)</summary>
+  <label for="quiet_hours">{{t "channel.quiet_hours"}}</label>
+  <div><input id="quiet_hours" name="quiet_hours" value="{{$f.QuietHours}}" placeholder="22:00-07:00" pattern="[0-2][0-9]:[0-5][0-9]-[0-2][0-9]:[0-5][0-9]" aria-describedby="qh-hint"><p class="hint" id="qh-hint">{{t "channel.quiet_hours_hint"}}</p></div>
+  <span></span><label class="check"><input type="checkbox" name="enabled" value="1" {{if $f.Enabled}}checked{{end}}> {{t "common.enabled"}}</label>
+  <span></span><div><label class="check"><input type="checkbox" name="digest" value="1" {{if $f.Digest}}checked{{end}} aria-describedby="digest-hint"> {{t "channel.digest"}}</label>
+  <p class="hint" id="digest-hint">{{th "channel.digest_hint_html"}}</p></div>
+  <details class="span-2"><summary>{{t "channel.advanced"}}</summary>
     <div class="form-grid">
-      <label for="host">SMTP server</label><input id="host" name="host" value="{{$f.Host}}" required>
-      <label for="port">Port</label><input id="port" name="port" type="number" min="1" max="65535" value="{{$f.Port}}" required>
-      <label for="security">Encryption</label>
+      <label for="host">{{t "channel.host"}}</label><input id="host" name="host" value="{{$f.Host}}" required>
+      <label for="port">{{t "channel.port"}}</label><input id="port" name="port" type="number" min="1" max="65535" value="{{$f.Port}}" required>
+      <label for="security">{{t "channel.security"}}</label>
       <select id="security" name="security"><option value="starttls" {{if eq $f.Security "starttls"}}selected{{end}}>STARTTLS (587)</option><option value="tls" {{if eq $f.Security "tls"}}selected{{end}}>TLS (465)</option></select>
-      <label for="from">From address</label><input id="from" name="from" type="email" value="{{$f.From}}" placeholder="same as the username">
-      <label for="from_name">From name</label><input id="from_name" name="from_name" value="{{$f.FromName}}" maxlength="64">
+      <label for="from">{{t "channel.from"}}</label><input id="from" name="from" type="email" value="{{$f.From}}" placeholder="{{t "channel.from_placeholder"}}">
+      <label for="from_name">{{t "channel.from_name"}}</label><input id="from_name" name="from_name" value="{{$f.FromName}}" maxlength="64">
     </div>
   </details>
   <span></span>
   <div class="actions">
-    <button type="submit" name="action" value="save_test">Save and send test email</button>
-    <button type="submit" name="action" value="save" class="secondary">Save</button>
+    <button type="submit" name="action" value="save_test">{{t "channel.save_test"}}</button>
+    <button type="submit" name="action" value="save" class="secondary">{{t "common.save"}}</button>
   </div>
 </form>
 {{- if $f.ID}}
 <form method="post" action="/notifications/{{$f.ID}}/delete" class="card danger-zone">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-  <h2>Remove this channel</h2>
-  <button type="submit" class="danger">Remove</button>
+  <h2>{{t "channel.remove_title"}}</h2>
+  <button type="submit" class="danger">{{t "channel.remove"}}</button>
 </form>
 {{- end}}
 {{end}}

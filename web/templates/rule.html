@@ -4,42 +4,42 @@ Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "content"}}
 <h1>{{.Rule.Title}}</h1>
-<p class="hint"><a href="/alerts">← Alerts</a></p>
+<p class="hint"><a href="/alerts">{{t "rule.back"}}</a></p>
 <p>{{.Rule.Description}}</p>
-{{- if .Rule.NeedsCalibration}}<p class="error">The thresholds for this rule have not been calibrated against real charging data yet and may alert during normal charging (see issue #1).</p>{{end}}
+{{- if .Rule.NeedsCalibration}}<p class="error">{{t "rule.uncalibrated"}}</p>{{end}}
 <form method="post" action="/alerts/rules/{{.Rule.Key}}" class="card form-grid">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-  <span></span><label class="check"><input type="checkbox" name="enabled" value="1" {{if .Config.Enabled}}checked{{end}}> Enabled</label>
+  <span></span><label class="check"><input type="checkbox" name="enabled" value="1" {{if .Config.Enabled}}checked{{end}}> {{t "common.enabled"}}</label>
   {{- range .Fields}}
   <label for="p_{{.Name}}">{{.Label}} ({{.Unit}})</label>
   <input id="p_{{.Name}}" name="p_{{.Name}}" type="number" step="{{.Step}}" min="{{.Min}}" max="{{.Max}}" value="{{.Value}}" required>
   {{- end}}
   {{- if not .IsEvent}}
-  <label for="for_s">Must last at least (seconds)</label>
+  <label for="for_s">{{t "rule.for"}}</label>
   <input id="for_s" name="for_s" type="number" min="0" max="86400" value="{{.For}}">
-  <label for="min_samples">Consecutive polls required</label>
+  <label for="min_samples">{{t "rule.min_samples"}}</label>
   <input id="min_samples" name="min_samples" type="number" min="1" max="100" value="{{.Config.MinSamples}}">
-  <label for="repeat_h">Repeat while critical every (hours, 0 = never)</label>
+  <label for="repeat_h">{{t "rule.repeat"}}</label>
   <input id="repeat_h" name="repeat_h" type="number" min="0" max="168" step="any" value="{{.Repeat}}">
-  <span></span><label class="check"><input type="checkbox" name="notify_resolved" value="1" {{if .Config.NotifyResolved}}checked{{end}}> Send an “all clear” when resolved</label>
+  <span></span><label class="check"><input type="checkbox" name="notify_resolved" value="1" {{if .Config.NotifyResolved}}checked{{end}}> {{t "rule.notify_resolved"}}</label>
   {{- else}}
   <input type="hidden" name="for_s" value="0"><input type="hidden" name="min_samples" value="1"><input type="hidden" name="repeat_h" value="0">
   {{- end}}
-  <label for="cooldown_min">Minimum minutes between notifications</label>
+  <label for="cooldown_min">{{t "rule.cooldown"}}</label>
   <input id="cooldown_min" name="cooldown_min" type="number" min="0" max="10080" value="{{.Cooldown}}">
   <span></span>
   <div class="actions">
-    <button type="submit" name="action" value="preview" class="secondary">Test against the last 24 hours</button>
-    <button type="submit" name="action" value="save">Save</button>
-    <button type="submit" name="action" value="reset" class="link">Reset to defaults</button>
+    <button type="submit" name="action" value="preview" class="secondary">{{t "rule.preview"}}</button>
+    <button type="submit" name="action" value="save">{{t "common.save"}}</button>
+    <button type="submit" name="action" value="reset" class="link">{{t "rule.reset"}}</button>
   </div>
 </form>
 {{- if .Previewed}}
 <section class="card" aria-labelledby="preview-title">
-  <h2 id="preview-title">Preview: last 24 hours</h2>
+  <h2 id="preview-title">{{t "rule.preview_title"}}</h2>
   {{- if .Preview}}
   <ul class="alerts">{{range .Preview}}<li class="sev-{{.Severity}}"><span class="badge">{{.Kind}}</span> {{.When}} — {{.Message}}</li>{{end}}</ul>
-  {{- else}}<p>With these settings this rule would not have produced any notification in the last 24 hours.</p>{{end}}
+  {{- else}}<p>{{t "rule.preview_none"}}</p>{{end}}
 </section>
 {{- end}}
 {{end}}

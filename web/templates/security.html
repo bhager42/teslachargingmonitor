@@ -3,38 +3,38 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "content"}}
-<h1>Security</h1>
+<h1>{{t "security.title"}}</h1>
 <section class="card" aria-labelledby="pw-title">
-  <h2 id="pw-title">Change password</h2>
+  <h2 id="pw-title">{{t "security.change_title"}}</h2>
   {{- if .EnvManaged}}
-  <p>The password is set by <code>TCMON_PASSWORD_FILE</code> or <code>TCMON_PASSWORD_HASH</code>. Change it there and restart the app.</p>
+  <p>{{th "security.env_managed_html"}}</p>
   {{- else}}
   <form method="post" action="/settings/password">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <input type="text" name="username" value="tcmon" autocomplete="username" hidden>
-    <label for="current">Current password</label>
+    <label for="current">{{t "security.current"}}</label>
     <input id="current" name="current" type="password" autocomplete="current-password" required maxlength="1024">
-    <label for="password">New password (at least {{.MinLength}} characters)</label>
+    <label for="password">{{t "security.new" "min" .MinLength}}</label>
     <input id="password" name="password" type="password" autocomplete="new-password" required minlength="{{.MinLength}}" maxlength="1024">
-    <label for="confirm">Repeat new password</label>
+    <label for="confirm">{{t "common.repeat_password"}}</label>
     <input id="confirm" name="confirm" type="password" autocomplete="new-password" required minlength="{{.MinLength}}" maxlength="1024">
-    <button type="submit">Change password</button>
+    <button type="submit">{{t "security.change_submit"}}</button>
   </form>
-  <p class="hint">Changing the password signs out every other device.</p>
+  <p class="hint">{{t "security.change_hint"}}</p>
   {{- end}}
 </section>
 <section class="card" aria-labelledby="sessions-title">
-  <h2 id="sessions-title">Signed-in devices</h2>
-  <p>{{.Sessions}} active session(s), including this one.</p>
+  <h2 id="sessions-title">{{t "security.sessions_title"}}</h2>
+  <p>{{t "security.sessions" "count" .Sessions}}</p>
   <form method="post" action="/settings/sessions/revoke">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-    <button type="submit" class="secondary">Sign out all other devices</button>
+    <button type="submit" class="secondary">{{t "security.revoke"}}</button>
   </form>
 </section>
 <section class="card" aria-labelledby="audit-title">
-  <h2 id="audit-title">Recent security events</h2>
+  <h2 id="audit-title">{{t "security.audit_title"}}</h2>
   <table>
-    <thead><tr><th scope="col">Time</th><th scope="col">Event</th><th scope="col">From</th></tr></thead>
+    <thead><tr><th scope="col">{{t "security.col_time"}}</th><th scope="col">{{t "security.col_event"}}</th><th scope="col">{{t "security.col_from"}}</th></tr></thead>
     <tbody>
     {{- range .Audit}}<tr><td>{{.When}}</td><td>{{.Action}}</td><td>{{.IP}}</td></tr>{{end}}
     </tbody>

@@ -9,13 +9,13 @@ Copyright (C) 2026 Brad Hager and contributors
   <div class="actions">
     <form method="post" action="/devices/{{.Device.ID}}/poll" class="inline">
       <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-      <button type="submit" class="secondary">Poll now</button>
+      <button type="submit" class="secondary">{{t "common.poll_now"}}</button>
     </form>
-    <a class="button secondary" href="/settings/devices/{{.Device.ID}}">Settings</a>
+    <a class="button secondary" href="/settings/devices/{{.Device.ID}}">{{t "device.settings"}}</a>
   </div>
 </div>
-<section class="card device state-{{$c.StateClass}}" data-live data-device-id="{{$c.ID}}" aria-label="Current status">
-  <p class="state" data-role="state"><span class="dot" aria-hidden="true"></span><span data-role="state-text">{{$c.State}}</span> · <span class="hint">updated <span data-role="updated" data-ts="{{if not $c.UpdatedAt.IsZero}}{{$c.UpdatedAt.Format "2006-01-02T15:04:05Z07:00"}}{{end}}">{{$c.Updated}}</span></span></p>
+<section class="card device state-{{$c.StateClass}}" data-live data-device-id="{{$c.ID}}" aria-label="{{t "device.status_label"}}">
+  <p class="state" data-role="state"><span class="dot" aria-hidden="true"></span><span data-role="state-text">{{$c.State}}</span> · <span class="hint">{{t "device.updated"}} <span data-role="updated" data-ts="{{if not $c.UpdatedAt.IsZero}}{{$c.UpdatedAt.Format "2006-01-02T15:04:05Z07:00"}}{{end}}">{{$c.Updated}}</span></span></p>
   <dl class="fields">
   {{- range .CardFields}}
     <div><dt>{{.Label}}</dt><dd data-field="{{.Key}}">{{field $c.Fields .Key}}</dd></div>
@@ -24,8 +24,8 @@ Copyright (C) 2026 Brad Hager and contributors
 </section>
 <section class="card" aria-labelledby="charts-title">
   <div class="page-head">
-    <h2 id="charts-title">History</h2>
-    <nav class="tabs" aria-label="Time range">
+    <h2 id="charts-title">{{t "device.history_title"}}</h2>
+    <nav class="tabs" aria-label="{{t "device.range_label"}}">
     {{- range .Ranges}}<a href="?range={{.Key}}" {{if eq .Key $.Range}}aria-current="page"{{end}}>{{.Key}}</a>{{end}}
     </nav>
   </div>
@@ -33,25 +33,25 @@ Copyright (C) 2026 Brad Hager and contributors
   {{- range .Charts}}
     <figure class="chart">
       <figcaption>{{.Label}} <span class="hint">({{.Unit}})</span></figcaption>
-      <tcmon-chart data-device="{{$.Device.ID}}" data-metric="{{.Metric}}" data-range="{{$.Range}}" data-label="{{.Label}}"><p class="hint">Loading…</p></tcmon-chart>
+      <tcmon-chart data-device="{{$.Device.ID}}" data-metric="{{.Metric}}" data-range="{{$.Range}}" data-label="{{.Label}}"><p class="hint">{{t "device.loading"}}</p></tcmon-chart>
     </figure>
   {{- end}}
   </div>
-  <p><a href="/devices/{{.Device.ID}}/export.csv?range={{.Range}}" download>Download readings as CSV ({{.Range}})</a></p>
+  <p><a href="/devices/{{.Device.ID}}/export.csv?range={{.Range}}" download>{{t "device.download_csv" "range" .Range}}</a></p>
 </section>
 <div class="grid-2">
 {{- if .Lifetime}}
-<section class="card"><h2>Lifetime</h2><dl class="kv">{{range .Lifetime}}<dt>{{.K}}</dt><dd>{{.V}}</dd>{{end}}</dl></section>
+<section class="card"><h2>{{t "device.lifetime_title"}}</h2><dl class="kv">{{range .Lifetime}}<dt>{{.K}}</dt><dd>{{.V}}</dd>{{end}}</dl></section>
 {{- end}}
 {{- if .Identity}}
-<section class="card"><h2>Device</h2><dl class="kv">{{range .Identity}}<dt>{{.K}}</dt><dd>{{.V}}</dd>{{end}}{{range .Codes}}<dt>{{.K}}</dt><dd>{{.V}}</dd>{{end}}</dl></section>
+<section class="card"><h2>{{t "device.device_title"}}</h2><dl class="kv">{{range .Identity}}<dt>{{.K}}</dt><dd>{{.V}}</dd>{{end}}{{range .Codes}}<dt>{{.K}}</dt><dd>{{.V}}</dd>{{end}}</dl></section>
 {{- end}}
 </div>
-<section class="card"><h2>Device events</h2>
-{{- if .Events}}<ul class="plain">{{range .Events}}<li><span class="hint">{{.K}}</span> {{.V}}</li>{{end}}</ul>{{else}}<p>No reboots, firmware or configuration changes seen.</p>{{end}}
+<section class="card"><h2>{{t "device.events_title"}}</h2>
+{{- if .Events}}<ul class="plain">{{range .Events}}<li><span class="hint">{{.K}}</span> {{.V}}</li>{{end}}</ul>{{else}}<p>{{t "device.no_events"}}</p>{{end}}
 </section>
 {{- if .Raw}}
-<details class="card"><summary>Latest raw responses from the Wall Connector</summary>
+<details class="card"><summary>{{t "device.raw_title"}}</summary>
 {{- range .Raw}}<h3><code>{{.K}}</code></h3><pre>{{.V}}</pre>{{end}}
 </details>
 {{- end}}

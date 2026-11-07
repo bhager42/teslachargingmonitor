@@ -508,6 +508,9 @@ func TestHeartbeatSettings(t *testing.T) {
 			t.Errorf("%s: token shown or destination missing", p)
 		}
 	}
+	if _, body := f.get("/settings"); !strings.Contains(body, "</code>; last successful ping ") {
+		t.Error("settings do not show the last successful ping")
+	}
 
 	// A failing URL: error shown, never the token; Diagnostics reports it.
 	bad := f.beat.URL + "/gone/" + beatToken

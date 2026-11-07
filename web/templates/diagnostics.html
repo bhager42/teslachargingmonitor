@@ -3,36 +3,36 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "content"}}
-<h1>Diagnostics</h1>
+<h1>{{t "diagnostics.title"}}</h1>
 {{- range .Devices}}
 <section class="card"><h2>{{.Name}}</h2>
-  <h3>Data quality{{with .RawAt}} <span class="hint">(latest responses, {{.}})</span>{{end}}</h3>
+  <h3>{{t "diagnostics.quality_title"}}{{with .RawAt}} <span class="hint">{{t "diagnostics.quality_at" "time" .}}</span>{{end}}</h3>
   {{- if .Problems}}<ul class="plain">{{range .Problems}}<li>{{.}}</li>{{end}}</ul>
-  {{- else}}<p>The latest responses matched the expected format exactly.</p>{{end}}
-  <h3>Recent polls</h3>
+  {{- else}}<p>{{t "diagnostics.quality_ok"}}</p>{{end}}
+  <h3>{{t "diagnostics.polls_title"}}</h3>
   <div class="table-wrap"><table>
-    <thead><tr><th scope="col">Time</th><th scope="col">Result</th><th scope="col">Took</th><th scope="col">Error</th></tr></thead>
+    <thead><tr><th scope="col">{{t "diagnostics.col_time"}}</th><th scope="col">{{t "diagnostics.col_result"}}</th><th scope="col">{{t "diagnostics.col_took"}}</th><th scope="col">{{t "diagnostics.col_error"}}</th></tr></thead>
     <tbody>{{range .Polls}}<tr><td>{{.When}}</td><td>{{.Result}}</td><td>{{.Took}}</td><td>{{.Error}}</td></tr>{{end}}</tbody>
   </table></div>
 </section>
 {{- end}}
 {{- with .Heartbeat}}
-<section class="card"><h2>Dead-man's switch</h2>
+<section class="card"><h2>{{t "common.heartbeat_title"}}</h2>
   {{- if .Configured}}
-  <p>Pinging <code>{{.Display}}</code> after each successful poll.</p>
+  <p>{{th "diagnostics.beat_pinging_html" "url" .Display}}</p>
   <dl class="kv">
-    <dt>Last attempt</dt><dd>{{or .LastAttempt "none since tcmon started"}}</dd>
-    <dt>Last success</dt><dd>{{or .LastSuccess "none since tcmon started"}}</dd>
-    {{- if .LastError}}<dt>Last error</dt><dd>{{.LastError}} ({{.LastErrorAt}}{{if gt .Failures 1}}, {{.Failures}} failures in a row{{end}})</dd>{{end}}
+    <dt>{{t "diagnostics.beat_last_attempt"}}</dt><dd>{{or .LastAttempt (t "diagnostics.beat_none")}}</dd>
+    <dt>{{t "diagnostics.beat_last_success"}}</dt><dd>{{or .LastSuccess (t "diagnostics.beat_none")}}</dd>
+    {{- if .LastError}}<dt>{{t "diagnostics.beat_last_error"}}</dt><dd>{{.LastError}} ({{.LastErrorAt}}{{if gt .Failures 1}}{{t "diagnostics.beat_failures" "n" .Failures}}{{end}})</dd>{{end}}
   </dl>
   {{- else}}
-  <p>Off{{with .LastError}}: {{.}}{{else}}. Set a ping URL in <a href="/settings#heartbeat">Settings</a>.{{end}}</p>
+  <p>{{t "diagnostics.beat_off"}}{{with .LastError}}: {{.}}{{else}}{{th "diagnostics.beat_set_html"}}{{end}}</p>
   {{- end}}
 </section>
 {{- end}}
-<section class="card"><h2>Database</h2>
-  <p>Size {{.DBSize}} · schema version {{.Schema}} · {{.GoVersion}} · {{.LiveClients}} live browser connection(s)</p>
-  <div class="table-wrap"><table><thead><tr><th scope="col">Table</th><th scope="col">Rows</th></tr></thead>
+<section class="card"><h2>{{t "diagnostics.db_title"}}</h2>
+  <p>{{t "diagnostics.db_summary" "size" .DBSize "schema" .Schema "go" .GoVersion "clients" .LiveClients}}</p>
+  <div class="table-wrap"><table><thead><tr><th scope="col">{{t "diagnostics.col_table"}}</th><th scope="col">{{t "diagnostics.col_rows"}}</th></tr></thead>
   <tbody>{{range .Rows}}<tr><td><code>{{.K}}</code></td><td>{{.V}}</td></tr>{{end}}</tbody></table></div>
 </section>
 {{end}}
