@@ -3,16 +3,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "content"}}
-<div class="page-head"><h1>Charging costs</h1><a class="button secondary" href="/settings/energy">Electricity price</a></div>
-<p class="hint">Price: {{.Rate}}. Energy is measured by the Wall Connector, which is what your utility bills; your car may show a little less because of charging losses. Days follow the server's time zone ({{.TZ}}).</p>
+<div class="page-head"><h1>{{t "costs.title"}}</h1><a class="button secondary" href="/settings/energy">{{t "costs.price_link"}}</a></div>
+<p class="hint">{{t "costs.intro" "rate" .Rate "tz" .TZ}}</p>
 <section class="card" aria-labelledby="totals-title">
-  <h2 id="totals-title">Totals</h2>
+  <h2 id="totals-title">{{t "costs.totals_title"}}</h2>
   <dl class="fields">{{range .Totals}}<div><dt>{{.K}}</dt><dd>{{.V}}</dd></div>{{end}}</dl>
 </section>
 <section class="card" aria-labelledby="chart-title">
   <div class="page-head">
-    <h2 id="chart-title">Cost per {{.Period}} <span class="hint">({{.PeriodLabel}})</span></h2>
-    <nav class="tabs" aria-label="Period">{{range .Periods}}<a href="?period={{.Key}}" {{if eq .Key $.Period}}aria-current="page"{{end}}>{{.Key}}</a>{{end}}</nav>
+    <h2 id="chart-title">{{t "costs.chart_title" "period" .Period}} <span class="hint">({{.PeriodLabel}})</span></h2>
+    <nav class="tabs" aria-label="{{t "costs.period_label"}}">{{range .Periods}}<a href="?period={{.Key}}" {{if eq .Key $.Period}}aria-current="page"{{end}}>{{.Key}}</a>{{end}}</nav>
   </div>
   <figure class="chart">
     <svg class="bars" viewBox="0 0 {{.ChartW}} {{.ChartH}}" role="img" aria-label="{{.Summary}}">
@@ -24,23 +24,23 @@ Copyright (C) 2026 Brad Hager and contributors
     </svg>
     <figcaption class="hint">{{.Summary}}</figcaption>
   </figure>
-  <details><summary>Show the numbers</summary>
+  <details><summary>{{t "costs.show_numbers"}}</summary>
     <div class="table-wrap"><table>
-      <thead><tr><th scope="col">{{.Period}}</th><th scope="col">kWh</th><th scope="col">Cost</th></tr></thead>
+      <thead><tr><th scope="col">{{.Period}}</th><th scope="col">kWh</th><th scope="col">{{t "costs.col_cost"}}</th></tr></thead>
       <tbody>{{range .Rows}}<tr><td>{{.Period}}</td><td>{{.KWh}}</td><td>{{.Cost}}</td></tr>{{end}}</tbody>
     </table></div>
   </details>
-  <p><a href="/costs/daily" download>Download daily kWh and cost (CSV, last 365 days)</a></p>
+  <p><a href="/costs/daily" download>{{t "costs.download_daily"}}</a></p>
 </section>
 <section class="card" aria-labelledby="sessions-title">
-  <h2 id="sessions-title">Charging sessions <span class="hint">(last 90 days)</span></h2>
+  <h2 id="sessions-title">{{t "costs.sessions_title"}} <span class="hint">{{t "costs.sessions_range"}}</span></h2>
   {{- if .Sessions}}
   <div class="table-wrap"><table>
-    <thead><tr><th scope="col">Started</th><th scope="col">Ended</th><th scope="col">Duration</th><th scope="col">kWh</th><th scope="col">Cost</th><th scope="col">Peak current</th></tr></thead>
+    <thead><tr><th scope="col">{{t "costs.col_started"}}</th><th scope="col">{{t "costs.col_ended"}}</th><th scope="col">{{t "costs.col_duration"}}</th><th scope="col">kWh</th><th scope="col">{{t "costs.col_cost"}}</th><th scope="col">{{t "costs.col_peak"}}</th></tr></thead>
     <tbody>{{range .Sessions}}<tr><td>{{.Start}}</td><td>{{.End}}</td><td>{{.Duration}}</td><td>{{.KWh}}</td><td>{{.Cost}}</td><td>{{.Peak}}</td></tr>{{end}}</tbody>
   </table></div>
-  <p class="hint">Start and end times are accurate to the polling interval (5 minutes while a car is plugged in).</p>
-  {{- else}}<p>No charging sessions recorded yet.</p>{{end}}
-  <p><a href="/costs/sessions" download>Download all sessions (CSV)</a></p>
+  <p class="hint">{{t "costs.sessions_hint"}}</p>
+  {{- else}}<p>{{t "costs.sessions_empty"}}</p>{{end}}
+  <p><a href="/costs/sessions" download>{{t "costs.download_sessions"}}</a></p>
 </section>
 {{end}}

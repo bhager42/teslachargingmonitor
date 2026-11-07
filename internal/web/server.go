@@ -21,6 +21,7 @@ import (
 	"html/template"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"mime"
 	"net"
 	"net/http"
@@ -32,6 +33,7 @@ import (
 	"github.com/bhager42/teslachargingmonitor/internal/alerts"
 	"github.com/bhager42/teslachargingmonitor/internal/auth"
 	"github.com/bhager42/teslachargingmonitor/internal/heartbeat"
+	"github.com/bhager42/teslachargingmonitor/internal/i18n"
 	"github.com/bhager42/teslachargingmonitor/internal/notify"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
 	webui "github.com/bhager42/teslachargingmonitor/web"
@@ -152,6 +154,7 @@ func (s *Server) loadAssets() error {
 		"eq":   func(a, b any) bool { return a == b },
 		"num":  func(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) },
 	}
+	maps.Copy(funcs, i18n.English().Funcs())
 	s.pages = map[string]*template.Template{}
 	for _, p := range []string{"login", "setup", "setup_closed", "home", "security", "about", "error", "device",
 		"devices", "device_form", "alerts", "rule", "notifications", "channel", "settings", "diagnostics", "costs", "energy", "digest"} {

@@ -5,51 +5,51 @@ Copyright (C) 2026 Brad Hager and contributors
 {{define "content"}}
 {{- $f := .Form}}
 <h1>{{.Title}}</h1>
-<p class="hint"><a href="/settings/devices">← Wall Connectors</a></p>
+<p class="hint"><a href="/settings/devices">{{t "device_form.back"}}</a></p>
 {{- with .Probe}}
 <div class="{{if .OK}}flash{{else}}error{{end}}" role="status">
   <p>{{.Message}}</p>
-  {{- if .OK}}<p>Firmware {{.Firmware}} · part {{.Part}} · serial {{.Serial}} · {{.State}}</p>{{end}}
+  {{- if .OK}}<p>{{t "device_form.probe" "firmware" .Firmware "part" .Part "serial" .Serial "state" .State}}</p>{{end}}
 </div>
 {{- end}}
 <form method="post" action="{{if $f.ID}}/settings/devices/{{$f.ID}}{{else}}/settings/devices/new{{end}}" class="card form-grid">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-  <label for="name">Name</label>
+  <label for="name">{{t "device_form.name"}}</label>
   <input id="name" name="name" value="{{$f.Name}}" required maxlength="64">
-  <label for="address">IP address or hostname</label>
+  <label for="address">{{t "device_form.address"}}</label>
   <div><input id="address" name="address" value="{{$f.Address}}" required maxlength="260" placeholder="192.168.1.50" spellcheck="false" autocomplete="off" inputmode="url" aria-describedby="address-hint">
-  <p class="hint" id="address-hint">Find it in your router's list of connected devices or in the Tesla One app, and reserve it in the router so it doesn't change.</p></div>
-  <label for="breaker">Circuit breaker (A)</label>
+  <p class="hint" id="address-hint">{{t "device_form.address_hint"}}</p></div>
+  <label for="breaker">{{t "device_form.breaker"}}</label>
   <div><input id="breaker" name="breaker" value="{{$f.Breaker}}" inputmode="decimal" aria-describedby="breaker-hint">
-  <p class="hint" id="breaker-hint">The maximum current defaults to 80 % of this (60 A → 48 A).</p></div>
-  <label for="max_current">Max charging current (A)</label>
-  <input id="max_current" name="max_current" value="{{$f.MaxCurrent}}" inputmode="decimal" placeholder="80 % of the breaker">
-  <label for="voltage">Nominal voltage</label>
+  <p class="hint" id="breaker-hint">{{t "device_form.breaker_hint"}}</p></div>
+  <label for="max_current">{{t "device_form.max_current"}}</label>
+  <input id="max_current" name="max_current" value="{{$f.MaxCurrent}}" inputmode="decimal" placeholder="{{t "device_form.max_current_placeholder"}}">
+  <label for="voltage">{{t "device_form.voltage"}}</label>
   <select id="voltage" name="voltage">{{range .Voltages}}<option value="{{.}}" {{if eq . $f.Voltage}}selected{{end}}>{{.}} V</option>{{end}}</select>
-  <label for="hz">Grid frequency</label>
+  <label for="hz">{{t "device_form.hz"}}</label>
   <select id="hz" name="hz"><option value="60" {{if eq $f.Hz "60"}}selected{{end}}>60 Hz</option><option value="50" {{if eq $f.Hz "50"}}selected{{end}}>50 Hz</option></select>
-  <label for="interval">Poll every (minutes)</label>
+  <label for="interval">{{t "device_form.interval"}}</label>
   <input id="interval" name="interval" type="number" min="1" max="1440" value="{{$f.Interval}}" required>
-  <label for="plugged_interval">While a car is plugged in, poll every (minutes)</label>
+  <label for="plugged_interval">{{t "device_form.plugged_interval"}}</label>
   <input id="plugged_interval" name="plugged_interval" type="number" min="1" max="1440" value="{{$f.Plugged}}" required>
-  <span></span><label class="check"><input type="checkbox" name="fast_when_plugged" value="1" {{if $f.FastWhenPlugged}}checked{{end}}> Poll more often while a car is plugged in</label>
-  <span></span><label class="check"><input type="checkbox" name="enabled" value="1" {{if $f.Enabled}}checked{{end}}> Enabled</label>
-  <span></span><label class="check"><input type="checkbox" name="allow_non_lan" value="1" {{if $f.AllowNonLAN}}checked{{end}}> Allow an address outside the local network (not recommended)</label>
-  <span></span><label class="check"><input type="checkbox" name="skip_test" value="1"> Save without testing the connection</label>
+  <span></span><label class="check"><input type="checkbox" name="fast_when_plugged" value="1" {{if $f.FastWhenPlugged}}checked{{end}}> {{t "device_form.fast_when_plugged"}}</label>
+  <span></span><label class="check"><input type="checkbox" name="enabled" value="1" {{if $f.Enabled}}checked{{end}}> {{t "common.enabled"}}</label>
+  <span></span><label class="check"><input type="checkbox" name="allow_non_lan" value="1" {{if $f.AllowNonLAN}}checked{{end}}> {{t "device_form.allow_non_lan"}}</label>
+  <span></span><label class="check"><input type="checkbox" name="skip_test" value="1"> {{t "device_form.skip_test"}}</label>
   <span></span>
   <div class="actions">
-    <button type="submit" name="action" value="test" class="secondary">Test connection</button>
-    <button type="submit" name="action" value="save">Save</button>
+    <button type="submit" name="action" value="test" class="secondary">{{t "device_form.test"}}</button>
+    <button type="submit" name="action" value="save">{{t "common.save"}}</button>
   </div>
 </form>
 {{- if $f.ID}}
 <form method="post" action="/settings/devices/{{$f.ID}}/delete" class="card danger-zone">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-  <h2>Remove this Wall Connector</h2>
-  <p>This permanently deletes all of its readings, alerts and history.</p>
-  <label for="confirm">Type <strong>{{$f.Name}}</strong> to confirm</label>
+  <h2>{{t "device_form.remove_title"}}</h2>
+  <p>{{t "device_form.remove_body"}}</p>
+  <label for="confirm">{{th "device_form.confirm_html" "name" $f.Name}}</label>
   <input id="confirm" name="confirm" autocomplete="off" required>
-  <button type="submit" class="danger">Remove</button>
+  <button type="submit" class="danger">{{t "device_form.remove"}}</button>
 </form>
 {{- end}}
 {{end}}

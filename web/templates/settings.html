@@ -3,17 +3,17 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "content"}}
-<h1>Settings</h1>
-<nav class="tabs" aria-label="Settings sections"><a href="/settings/devices">Wall Connectors</a><a href="/settings/energy">Electricity price</a><a href="/notifications">Notifications</a><a href="/alerts">Alert rules</a><a href="/settings/security">Security</a></nav>
+<h1>{{t "settings.title"}}</h1>
+<nav class="tabs" aria-label="{{t "settings.sections_label"}}"><a href="/settings/devices">{{t "settings.tab_devices"}}</a><a href="/settings/energy">{{t "settings.tab_energy"}}</a><a href="/notifications">{{t "settings.tab_notifications"}}</a><a href="/alerts">{{t "settings.tab_alerts"}}</a><a href="/settings/security">{{t "settings.tab_security"}}</a></nav>
 <form method="post" action="/settings" class="card">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-  <h2>Display</h2>
-  <fieldset class="radio-row"><legend>Temperatures</legend>
+  <h2>{{t "settings.display_title"}}</h2>
+  <fieldset class="radio-row"><legend>{{t "settings.temperatures"}}</legend>
     <label class="check"><input type="radio" name="temp_unit" value="C" {{if eq .Display.TempUnit "C"}}checked{{end}}> °C</label>
     <label class="check"><input type="radio" name="temp_unit" value="F" {{if eq .Display.TempUnit "F"}}checked{{end}}> °F</label>
   </fieldset>
-  <h2>Data retention</h2>
-  <p class="hint">Database size {{.DBSize}}{{with .Oldest}}, oldest reading {{.}}{{end}}. Hourly polling stores about 16 MB per year.</p>
+  <h2>{{t "settings.retention_title"}}</h2>
+  <p class="hint">{{with .Oldest}}{{t "settings.db_size_oldest" "size" $.DBSize "time" .}}{{else}}{{t "settings.db_size" "size" .DBSize}}{{end}}</p>
   <div class="form-grid">
   {{- range .Retention}}
   {{- $r := .}}
@@ -21,42 +21,41 @@ Copyright (C) 2026 Brad Hager and contributors
     <div class="retention">
       <select id="{{.Name}}" name="{{.Name}}">
         {{- range $.Presets}}<option value="{{.Days}}" {{if eq .Days $r.Days}}selected{{end}}>{{.Label}}</option>{{end}}
-        <option value="custom" {{if .Custom}}selected{{end}}>Custom…</option>
+        <option value="custom" {{if .Custom}}selected{{end}}>{{t "settings.custom"}}</option>
       </select>
-      <label for="{{.Name}}_custom" class="sr-only">{{.Label}}: custom number of days</label>
+      <label for="{{.Name}}_custom" class="sr-only">{{t "settings.custom_days" "label" .Label}}</label>
       <input id="{{.Name}}_custom" name="{{.Name}}_custom" type="number" min="1" max="36500" value="{{if .Days}}{{.Days}}{{end}}" class="days" aria-describedby="{{.Name}}-help">
-      <span class="hint" id="{{.Name}}-help">days (used when “Custom…” is chosen). {{.Help}}</span>
+      <span class="hint" id="{{.Name}}-help">{{t "settings.days_hint"}} {{.Help}}</span>
     </div>
   {{- end}}
   </div>
-  <label class="check"><input type="checkbox" name="confirm_delete" value="1"> I understand that shorter retention permanently deletes older data</label>
-  <div class="actions"><button type="submit">Save settings</button></div>
+  <label class="check"><input type="checkbox" name="confirm_delete" value="1"> {{t "settings.confirm_delete"}}</label>
+  <div class="actions"><button type="submit">{{t "settings.save"}}</button></div>
 </form>
 {{- with .Heartbeat}}
 <form method="post" action="/settings/heartbeat" class="card" id="heartbeat">
   <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
-  <h2>Dead-man's switch</h2>
-  <p>Optional. tcmon visits this address after each successful poll, so a monitoring service such as healthchecks.io or Uptime Kuma (push monitor) can warn you if tcmon stops working or can no longer reach the Wall Connector.
-    Set the service's period or grace time longer than the polling interval: at least 70 minutes with the default 60-minute polling.</p>
-  <p>{{if .Configured}}Pinging <code>{{.Display}}</code>{{with .LastSuccess}}; last successful ping {{.}}{{end}}.{{else}}Off: no ping URL is set.{{end}}</p>
+  <h2>{{t "common.heartbeat_title"}}</h2>
+  <p>{{t "settings.beat_intro"}}</p>
+  <p>{{if .Configured}}{{with .LastSuccess}}{{th "settings.beat_pinging_last_html" "url" $.Heartbeat.Display "time" .}}{{else}}{{th "settings.beat_pinging_html" "url" $.Heartbeat.Display}}{{end}}{{else}}{{t "settings.beat_off"}}{{end}}</p>
   <div class="form-grid">
-    <label for="ping_url">{{if .Configured}}New ping URL{{else}}Ping URL{{end}}</label>
+    <label for="ping_url">{{if .Configured}}{{t "settings.beat_new_url"}}{{else}}{{t "settings.beat_url"}}{{end}}</label>
     <div>
       <input id="ping_url" name="ping_url" type="url" inputmode="url" autocomplete="off" spellcheck="false" maxlength="2048" placeholder="https://hc-ping.com/…" aria-describedby="ping_url-help">
-      <span class="hint" id="ping_url-help">HTTPS only. Stored encrypted and never shown again, because it usually contains a secret token.{{if .Configured}} Leave empty to keep the current one.{{end}}</span>
+      <span class="hint" id="ping_url-help">{{t "settings.beat_url_hint"}}{{if .Configured}}{{t "settings.beat_keep"}}{{end}}</span>
     </div>
   </div>
   <div class="actions">
-    <button type="submit" name="action" value="save">Save</button>
-    <button type="submit" name="action" value="test" class="secondary">{{if .Configured}}Send test ping{{else}}Save and send test ping{{end}}</button>
-    {{- if .Configured}}<button type="submit" name="action" value="remove" class="secondary">Remove</button>{{end}}
+    <button type="submit" name="action" value="save">{{t "common.save"}}</button>
+    <button type="submit" name="action" value="test" class="secondary">{{if .Configured}}{{t "settings.beat_test"}}{{else}}{{t "settings.beat_save_test"}}{{end}}</button>
+    {{- if .Configured}}<button type="submit" name="action" value="remove" class="secondary">{{t "settings.beat_remove"}}</button>{{end}}
   </div>
 </form>
 {{- end}}
 <form method="post" action="/settings/backup" class="card">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-  <h2>Backup</h2>
-  <p>Download a consistent copy of the database. Also keep a copy of <code>secret.key</code> (encrypts the email password and the ping URL) and the <code>tls</code> folder from the data directory.</p>
-  <button type="submit" class="secondary">Download database backup</button>
+  <h2>{{t "settings.backup_title"}}</h2>
+  <p>{{th "settings.backup_body_html"}}</p>
+  <button type="submit" class="secondary">{{t "settings.backup"}}</button>
 </form>
 {{end}}

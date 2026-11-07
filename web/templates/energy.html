@@ -4,44 +4,44 @@ Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "content"}}
 {{- $f := .Form}}
-<h1>Electricity price</h1>
-<p class="hint"><a href="/settings">← Settings</a> · <a href="/costs">Charging costs</a></p>
-{{- if .Default}}<p class="flash" role="status">Using the default price of $0.155 per kWh until you save one.</p>{{end}}
+<h1>{{t "energy.title"}}</h1>
+<p class="hint"><a href="/settings">{{t "devices.back"}}</a> · <a href="/costs">{{t "energy.costs_link"}}</a></p>
+{{- if .Default}}<p class="flash" role="status">{{t "energy.default"}}</p>{{end}}
 <form method="post" action="/settings/energy" class="card form-grid">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-  <label for="price">Price per kWh</label>
+  <label for="price">{{t "energy.price"}}</label>
   <div><input id="price" name="price" type="number" step="any" min="0" max="99" value="{{index $f "Price"}}" required aria-describedby="price-hint">
-  <p class="hint" id="price-hint">From your electricity bill, e.g. 0.155.</p></div>
-  <label for="currency">Currency symbol</label>
+  <p class="hint" id="price-hint">{{t "energy.price_hint"}}</p></div>
+  <label for="currency">{{t "energy.currency"}}</label>
   <input id="currency" name="currency" value="{{index $f "Currency"}}" maxlength="4" required>
-  <label for="from">Applies from</label>
+  <label for="from">{{t "energy.from"}}</label>
   <input id="from" name="from" type="date" value="{{index $f "From"}}">
-  <span></span><label class="check"><input type="checkbox" name="apply_past" value="1"> Apply to all past data too</label>
-  <label for="fee">Monthly fee or taxes (optional)</label>
+  <span></span><label class="check"><input type="checkbox" name="apply_past" value="1"> {{t "energy.apply_past"}}</label>
+  <label for="fee">{{t "energy.fee"}}</label>
   <div><input id="fee" name="fee" type="number" step="any" min="0" value="{{index $f "Fee"}}" aria-describedby="fee-hint">
-  <p class="hint" id="fee-hint">Added once to each month with charging. Leave 0 to count energy only.</p></div>
-  <details class="span-2"><summary>Time-of-use (cheaper off-peak hours)</summary>
+  <p class="hint" id="fee-hint">{{t "energy.fee_hint"}}</p></div>
+  <details class="span-2"><summary>{{t "energy.tou"}}</summary>
     <div class="form-grid">
-      <label for="offpeak_price">Off-peak price per kWh</label>
+      <label for="offpeak_price">{{t "energy.offpeak_price"}}</label>
       <div><input id="offpeak_price" name="offpeak_price" type="number" step="any" min="0" max="99" value="{{index $f "OffPrice"}}" aria-describedby="op-hint">
-      <p class="hint" id="op-hint">Leave empty for a single flat price.</p></div>
-      <label for="offpeak_start">Off-peak starts</label>
+      <p class="hint" id="op-hint">{{t "energy.offpeak_hint"}}</p></div>
+      <label for="offpeak_start">{{t "energy.offpeak_start"}}</label>
       <input id="offpeak_start" name="offpeak_start" type="time" value="{{index $f "OffStart"}}">
-      <label for="offpeak_end">Off-peak ends</label>
+      <label for="offpeak_end">{{t "energy.offpeak_end"}}</label>
       <input id="offpeak_end" name="offpeak_end" type="time" value="{{index $f "OffEnd"}}">
     </div>
   </details>
-  <span></span><div class="actions"><button type="submit">Save price</button></div>
+  <span></span><div class="actions"><button type="submit">{{t "energy.save"}}</button></div>
 </form>
 {{- if .Rates}}
 <section class="card" aria-labelledby="history-title">
-  <h2 id="history-title">Price history</h2>
+  <h2 id="history-title">{{t "energy.history_title"}}</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th scope="col">From</th><th scope="col">Price per kWh</th><th scope="col">Off-peak</th><th scope="col">Monthly fee</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+    <thead><tr><th scope="col">{{t "energy.col_from"}}</th><th scope="col">{{t "energy.price"}}</th><th scope="col">{{t "energy.col_offpeak"}}</th><th scope="col">{{t "energy.col_fee"}}</th><th scope="col"><span class="sr-only">{{t "common.actions"}}</span></th></tr></thead>
     <tbody>{{range .Rates}}<tr><td>{{.From}}</td><td>{{.Price}}</td><td>{{.OffPeak}}</td><td>{{.Fee}}</td>
-      <td><form method="post" action="/settings/energy/{{.ID}}/delete" class="inline"><input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button type="submit" class="link">Remove<span class="sr-only"> price from {{.From}}</span></button></form></td></tr>{{end}}</tbody>
+      <td><form method="post" action="/settings/energy/{{.ID}}/delete" class="inline"><input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button type="submit" class="link">{{t "energy.remove"}}<span class="sr-only">{{t "energy.remove_which" "date" .From}}</span></button></form></td></tr>{{end}}</tbody>
   </table></div>
-  <p class="hint">Each price applies from its date until the next one. The earliest price also covers any older data.</p>
+  <p class="hint">{{t "energy.history_hint"}}</p>
 </section>
 {{- end}}
 {{end}}

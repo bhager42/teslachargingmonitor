@@ -4,46 +4,46 @@ Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "layout" -}}
 <!doctype html>
-<html lang="en" data-theme="{{.Theme}}">
+<html lang="{{lang}}" data-theme="{{.Theme}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark light">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0f1115">
-<title>{{.Title}} · Tesla Charger Monitoring</title>
+<title>{{.Title}} · {{t "app.name"}}</title>
 <link rel="stylesheet" href="{{asset "app.css"}}">
 <link rel="icon" href="{{asset "icon.svg"}}" type="image/svg+xml">
 <link rel="manifest" href="{{asset "manifest.webmanifest"}}">
 <script type="module" src="{{asset "js/app.mjs"}}"></script>
 </head>
 <body>
-<a class="skip" href="#main">Skip to content</a>
+<a class="skip" href="#main">{{t "layout.skip"}}</a>
 {{- if .InsecureHTTP}}
-<p class="banner banner-danger" role="alert">This connection is not encrypted (plain HTTP). Anyone on your network could read your password. Enable HTTPS (TCMON_TLS=auto).</p>
+<p class="banner banner-danger" role="alert">{{t "layout.insecure_http"}}</p>
 {{- end}}
 <header class="site-header">
-  <a class="brand" href="/"><img src="{{asset "icon.svg"}}" alt="" width="24" height="24"> Tesla Charger Monitoring</a>
+  <a class="brand" href="/"><img src="{{asset "icon.svg"}}" alt="" width="24" height="24"> {{t "app.name"}}</a>
   {{- if .SignedIn}}
-  <nav aria-label="Main">
-    <a href="/" {{if eq .Nav "home"}}aria-current="page"{{end}}>Dashboard</a>
-    <a href="/costs" {{if eq .Nav "costs"}}aria-current="page"{{end}}>Costs</a>
-    <a href="/alerts" {{if eq .Nav "alerts"}}aria-current="page"{{end}}>Alerts</a>
-    <a href="/notifications" {{if eq .Nav "notifications"}}aria-current="page"{{end}}>Notifications</a>
-    <a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}>Settings</a>
-    <a href="/diagnostics" {{if eq .Nav "diagnostics"}}aria-current="page"{{end}}>Diagnostics</a>
-    <a href="/settings/security" {{if eq .Nav "security"}}aria-current="page"{{end}}>Security</a>
-    <a href="/about" {{if eq .Nav "about"}}aria-current="page"{{end}}>About</a>
+  <nav aria-label="{{t "layout.nav_label"}}">
+    <a href="/" {{if eq .Nav "home"}}aria-current="page"{{end}}>{{t "nav.home"}}</a>
+    <a href="/costs" {{if eq .Nav "costs"}}aria-current="page"{{end}}>{{t "nav.costs"}}</a>
+    <a href="/alerts" {{if eq .Nav "alerts"}}aria-current="page"{{end}}>{{t "nav.alerts"}}</a>
+    <a href="/notifications" {{if eq .Nav "notifications"}}aria-current="page"{{end}}>{{t "nav.notifications"}}</a>
+    <a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}>{{t "nav.settings"}}</a>
+    <a href="/diagnostics" {{if eq .Nav "diagnostics"}}aria-current="page"{{end}}>{{t "nav.diagnostics"}}</a>
+    <a href="/settings/security" {{if eq .Nav "security"}}aria-current="page"{{end}}>{{t "nav.security"}}</a>
+    <a href="/about" {{if eq .Nav "about"}}aria-current="page"{{end}}>{{t "nav.about"}}</a>
     <form method="post" action="/logout" class="inline">
       <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-      <button type="submit" class="link">Sign out</button>
+      <button type="submit" class="link">{{t "layout.sign_out"}}</button>
     </form>
   </nav>
   {{- end}}
-  <div class="theme" role="group" aria-label="Color theme">
-    <button type="button" class="chip" data-set-theme="system" aria-pressed="{{if eq .Theme "system"}}true{{else}}false{{end}}">Auto</button>
-    <button type="button" class="chip" data-set-theme="dark" aria-pressed="{{if eq .Theme "dark"}}true{{else}}false{{end}}">Dark</button>
-    <button type="button" class="chip" data-set-theme="light" aria-pressed="{{if eq .Theme "light"}}true{{else}}false{{end}}">Light</button>
+  <div class="theme" role="group" aria-label="{{t "layout.theme_label"}}">
+    <button type="button" class="chip" data-set-theme="system" aria-pressed="{{if eq .Theme "system"}}true{{else}}false{{end}}">{{t "layout.theme_auto"}}</button>
+    <button type="button" class="chip" data-set-theme="dark" aria-pressed="{{if eq .Theme "dark"}}true{{else}}false{{end}}">{{t "layout.theme_dark"}}</button>
+    <button type="button" class="chip" data-set-theme="light" aria-pressed="{{if eq .Theme "light"}}true{{else}}false{{end}}">{{t "layout.theme_light"}}</button>
   </div>
 </header>
 <main id="main" tabindex="-1">
@@ -53,8 +53,8 @@ Copyright (C) 2026 Brad Hager and contributors
 {{template "content" .}}
 </main>
 <footer class="site-footer">
-  <p>Tesla Charger Monitoring {{.Version}} · <a href="{{.SourceURL}}" rel="noopener">Source code</a> (AGPL-3.0-or-later)</p>
-  <p>Not affiliated with or endorsed by Tesla, Inc. “Tesla” and “Wall Connector” are trademarks of Tesla, Inc.</p>
+  <p>{{th "layout.footer_version_html" "version" .Version "source" .SourceURL}}</p>
+  <p>{{t "layout.footer_trademark"}}</p>
 </footer>
 </body>
 </html>

@@ -4,9 +4,9 @@ Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "content"}}
 <h1>{{.Title}}</h1>
-<p class="hint"><a href="/notifications">← Notifications</a></p>
+<p class="hint"><a href="/notifications">{{t "common.back_notifications"}}</a></p>
 <section class="card" aria-labelledby="digest-subject">
-  <p>Email channels with “Weekly summary” turned on receive this every Monday at {{printf "%02d" .SendHour}}:00, covering the previous Monday to Sunday. The email itself is formatted; this is its plain-text version.</p>
+  <p>{{t "digest.intro" "hour" (printf "%02d" .SendHour)}}</p>
   <h2 id="digest-subject">{{.Subject}}</h2>
   <pre class="digest">{{.Text}}</pre>
 </section>
