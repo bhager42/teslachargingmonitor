@@ -110,10 +110,14 @@ type costRow struct{ Period, KWh, Cost string }
 type sessionRow struct{ Start, End, Duration, KWh, Cost, Peak string }
 
 var periods = []struct {
-	Key, Label string
-	Per        energy.Period
-	N          int
-}{{"day", "Last 30 days", energy.Day, 30}, {"week", "Last 12 weeks", energy.Week, 12}, {"month", "Last 12 months", energy.Month, 12}}
+	Key, Name, Label string
+	Per              energy.Period
+	N                int
+}{
+	{"day", tr.T("costs.period_day"), tr.T("costs.last_30_days"), energy.Day, 30},
+	{"week", tr.T("costs.period_week"), tr.T("costs.last_12_weeks"), energy.Week, 12},
+	{"month", tr.T("costs.period_month"), tr.T("costs.last_12_months"), energy.Month, 12},
+}
 
 func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	ctx := r.Context()
@@ -141,7 +145,8 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 	for _, t := range []struct {
 		label    string
 		from, to time.Time
-	}{{"This month", monthStart, end}, {"Last month", lastMonth, monthStart}, {"This year", yearStart, end}, {"All time", time.Unix(0, 0), end}} {
+	}{{tr.T("costs.this_month"), monthStart, end}, {tr.T("costs.last_month"), lastMonth, monthStart},
+		{tr.T("costs.this_year"), yearStart, end}, {tr.T("costs.all_time"), time.Unix(0, 0), end}} {
 		b := p.Total(all, t.from, t.to)
 		totals = append(totals, kv{t.label, money(b.Cost, cur) + " · " + fmtNum(b.KWh, "kWh", 1)})
 	}
@@ -175,8 +180,8 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 		rows = append(rows, costRow{Period: label, KWh: fmt.Sprintf("%.1f", b.KWh), Cost: money(b.Cost, cur)})
 	}
 	total := p.Total(all, chartFrom, end)
-	summary := fmt.Sprintf("Charging cost per %s, %s: total %s for %.1f kWh, highest %s.", sel.Key,
-		strings.ToLower(sel.Label), money(total.Cost, cur), total.KWh, money(maxCost, cur))
+	summary := tr.T("costs.summary", "period", sel.Name, "range", strings.ToLower(sel.Label),
+		"total", money(total.Cost, cur), "kwh", fmt.Sprintf("%.1f", total.KWh), "max", money(maxCost, cur))
 
 	var sessions []sessionRow
 	devices, _ := s.st.Devices(ctx)
@@ -190,7 +195,7 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 			x := ss[i]
 			endTxt := x.End.In(p.Loc).Format("2 Jan 15:04")
 			if x.Ongoing {
-				endTxt = "in progress"
+				endTxt = tr.T("costs.in_progress")
 			}
 			sessions = append(sessions, sessionRow{Start: x.Start.In(p.Loc).Format("Mon 2 Jan 15:04"), End: endTxt,
 				Duration: fmtDuration(x.End.Sub(x.Start)), KWh: fmt.Sprintf("%.1f", x.KWh), Cost: money(x.Cost, cur),
@@ -198,15 +203,15 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 		}
 	}
 	rate := p.RateAt(now)
-	rateText := price(rate.Price, cur) + " per kWh"
+	rateText := tr.T("costs.rate", "price", price(rate.Price, cur))
 	if rate.HasOffPeak() {
-		rateText += fmt.Sprintf(", off-peak %s %s–%s", price(*rate.OffPeakPrice, cur), hhmm(rate.OffPeakStart), hhmm(rate.OffPeakEnd))
+		rateText += tr.T("costs.rate_offpeak", "price", price(*rate.OffPeakPrice, cur), "from", hhmm(rate.OffPeakStart), "to", hhmm(rate.OffPeakEnd))
 	}
 	if rate.MonthlyFee > 0 {
-		rateText += ", plus " + money(rate.MonthlyFee, cur) + " per month"
+		rateText += tr.T("costs.rate_fee", "fee", money(rate.MonthlyFee, cur))
 	}
-	s.render(w, r, http.StatusOK, "costs", s.base(page{"Title": "Charging costs", "Totals": totals, "Bars": bars,
-		"Rows": rows, "Summary": summary, "Periods": periods, "Period": sel.Key, "PeriodLabel": sel.Label,
+	s.render(w, r, http.StatusOK, "costs", s.base(page{"Title": tr.T("costs.title"), "Totals": totals, "Bars": bars,
+		"Rows": rows, "Summary": summary, "Periods": periods, "Period": sel.Key, "PeriodName": sel.Name, "PeriodLabel": sel.Label,
 		"Sessions": sessions, "Rate": rateText, "TZ": time.Local.String(), "ChartW": W, "ChartH": H,
 		"Baseline": H - bottom, "LabelY": H - 6}, sess, "costs"))
 }
@@ -269,7 +274,7 @@ func (s *Server) renderEnergy(w http.ResponseWriter, r *http.Request, sess auth.
 		row := rateRow{ID: x.ID, From: x.EffectiveFrom.In(time.Local).Format("2 Jan 2006"), Price: price(x.Price, cs.Currency),
 			OffPeak: "–", Fee: money(x.MonthlyFee, cs.Currency)}
 		if x.EffectiveFrom.Unix() <= 0 {
-			row.From = "all past data"
+			row.From = tr.T("energy.all_past")
 		}
 		if x.HasOffPeak() {
 			row.OffPeak = fmt.Sprintf("%s %s–%s", price(*x.OffPeakPrice, cs.Currency), hhmm(x.OffPeakStart), hhmm(x.OffPeakEnd))
@@ -289,7 +294,7 @@ func (s *Server) renderEnergy(w http.ResponseWriter, r *http.Request, sess auth.
 		}
 		p["Form"] = f
 	}
-	p["Title"], p["Rates"], p["Default"] = "Energy cost", rows, len(rates) == 0
+	p["Title"], p["Rates"], p["Default"] = tr.T("energy.page_title"), rows, len(rates) == 0
 	s.render(w, r, status, "energy", s.base(p, sess, "settings"))
 }
 
@@ -310,13 +315,13 @@ func (s *Server) saveEnergy(w http.ResponseWriter, r *http.Request, sess auth.Se
 	}
 	price, err := strconv.ParseFloat(form["price"], 64)
 	if err != nil {
-		fail("Enter the price per kWh as a number, e.g. 0.155.")
+		fail(tr.T("energy.err_price"))
 		return
 	}
 	rate := energy.Rate{Price: price}
 	if form["fee"] != "" {
 		if rate.MonthlyFee, err = strconv.ParseFloat(form["fee"], 64); err != nil {
-			fail("The monthly fee must be a number.")
+			fail(tr.T("energy.err_fee"))
 			return
 		}
 	}
@@ -325,7 +330,7 @@ func (s *Server) saveEnergy(w http.ResponseWriter, r *http.Request, sess auth.Se
 		start, ok1 := parseClock(form["offpeak_start"])
 		end, ok2 := parseClock(form["offpeak_end"])
 		if err != nil || !ok1 || !ok2 || start == end {
-			fail("For off-peak pricing enter a price and different start and end times (HH:MM).")
+			fail(tr.T("energy.err_offpeak"))
 			return
 		}
 		rate.OffPeakPrice, rate.OffPeakStart, rate.OffPeakEnd = &op, start, end
@@ -335,14 +340,14 @@ func (s *Server) saveEnergy(w http.ResponseWriter, r *http.Request, sess auth.Se
 	} else {
 		d, err := time.ParseInLocation(time.DateOnly, form["from"], time.Local)
 		if err != nil {
-			fail("Choose the date the price starts.")
+			fail(tr.T("energy.err_from"))
 			return
 		}
 		rate.EffectiveFrom = d
 	}
 	cur := form["currency"]
 	if n := len([]rune(cur)); n < 1 || n > 4 || strings.ContainsAny(cur, "<>\"'&0123456789") {
-		fail("The currency symbol must be 1–4 characters, e.g. $ or €.")
+		fail(tr.T("energy.err_currency"))
 		return
 	}
 	if _, err := s.st.AddRate(ctx, rate, s.now()); err != nil {
@@ -350,7 +355,7 @@ func (s *Server) saveEnergy(w http.ResponseWriter, r *http.Request, sess auth.Se
 		return
 	}
 	if err := s.st.SetSetting(ctx, costKey, CostSettings{Currency: cur}, s.now()); err != nil {
-		fail("Could not save the currency.")
+		fail(tr.T("energy.err_save_currency"))
 		return
 	}
 	s.auditUI(r, "energy_rate_saved", map[string]string{"price": form["price"]})

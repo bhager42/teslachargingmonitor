@@ -32,7 +32,7 @@ type deliveryRow struct{ When, Channel, Status, Subject, Error string }
 
 func (s *Server) notificationsPage(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	if s.notify == nil {
-		s.renderError(w, r, http.StatusServiceUnavailable, "Unavailable", "Notifications are not configured in this process.")
+		s.renderError(w, r, http.StatusServiceUnavailable, tr.T("error.unavailable_title"), tr.T("notifications.err_unconfigured_process"))
 		return
 	}
 	ctx := r.Context()
@@ -47,7 +47,7 @@ func (s *Server) notificationsPage(w http.ResponseWriter, r *http.Request, sess 
 		log = append(log, deliveryRow{When: d.CreatedAt.Local().Format("2 Jan 15:04"), Channel: names[d.ChannelID],
 			Status: d.Status, Subject: d.Subject, Error: d.LastError})
 	}
-	s.render(w, r, http.StatusOK, "notifications", s.base(page{"Title": "Notifications", "Channels": chs, "Log": log,
+	s.render(w, r, http.StatusOK, "notifications", s.base(page{"Title": tr.T("notifications.title"), "Channels": chs, "Log": log,
 		"Now": s.now(), "DigestAt": fmt.Sprintf("%02d:00", digest.SendHour)}, sess, "notifications"))
 }
 
@@ -62,14 +62,14 @@ func (s *Server) renderChannel(w http.ResponseWriter, r *http.Request, sess auth
 	if p == nil {
 		p = page{}
 	}
-	p["Form"], p["Title"] = f, "Email notifications"
+	p["Form"], p["Title"] = f, tr.T("channel.title")
 	p["Severities"] = []string{"info", "warning", "critical"}
 	s.render(w, r, status, "channel", s.base(p, sess, "notifications"))
 }
 
 func (s *Server) newChannel(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	g := notify.GmailPreset("")
-	s.renderChannel(w, r, sess, http.StatusOK, channelForm{Name: "Gmail", Host: g.Host, Port: strconv.Itoa(g.Port),
+	s.renderChannel(w, r, sess, http.StatusOK, channelForm{Name: tr.T("channel.default_name"), Host: g.Host, Port: strconv.Itoa(g.Port),
 		Security: g.Security, FromName: g.FromName, MinSeverity: "info", Enabled: true}, nil)
 }
 
@@ -80,7 +80,7 @@ func (s *Server) channelFromPath(w http.ResponseWriter, r *http.Request) (notify
 			return c, true
 		}
 	}
-	s.renderError(w, r, http.StatusNotFound, "Not found", "That notification channel does not exist.")
+	s.renderError(w, r, http.StatusNotFound, tr.T("error.not_found_title"), tr.T("error.no_channel"))
 	return notify.ChannelInfo{}, false
 }
 
@@ -94,7 +94,7 @@ func (s *Server) editChannel(w http.ResponseWriter, r *http.Request, sess auth.S
 
 func (s *Server) saveChannel(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	if s.notify == nil {
-		s.renderError(w, r, http.StatusServiceUnavailable, "Unavailable", "Notifications are not configured.")
+		s.renderError(w, r, http.StatusServiceUnavailable, tr.T("error.unavailable_title"), tr.T("notifications.err_unconfigured"))
 		return
 	}
 	ctx := r.Context()
@@ -115,12 +115,12 @@ func (s *Server) saveChannel(w http.ResponseWriter, r *http.Request, sess auth.S
 	fail := func(msg string) { s.renderChannel(w, r, sess, http.StatusBadRequest, f, page{"Error": msg}) }
 	port, err := strconv.Atoi(strings.TrimSpace(f.Port))
 	if err != nil {
-		fail("Port must be a number.")
+		fail(tr.T("channel.err_port"))
 		return
 	}
 	sev, err := alerts.ParseSeverity(f.MinSeverity)
 	if err != nil {
-		fail("Choose a minimum severity.")
+		fail(tr.T("channel.err_severity"))
 		return
 	}
 	from := f.From
@@ -152,7 +152,7 @@ func (s *Server) saveChannel(w http.ResponseWriter, r *http.Request, sess auth.S
 	if r.PostFormValue("action") == "save_test" {
 		if err := s.notify.Test(ctx, ci.ID); err != nil {
 			f.ID, f.PasswordSet = ci.ID, ci.PasswordSet
-			s.renderChannel(w, r, sess, http.StatusBadRequest, f, page{"Error": "Saved, but the test email failed: " + notify.Describe(err)})
+			s.renderChannel(w, r, sess, http.StatusBadRequest, f, page{"Error": tr.T("channel.err_saved_test", "error", notify.Describe(err))})
 			return
 		}
 		http.Redirect(w, r, "/notifications?ok=test-sent", http.StatusSeeOther)
@@ -167,7 +167,7 @@ func (s *Server) testChannel(w http.ResponseWriter, r *http.Request, sess auth.S
 		return
 	}
 	if err := s.notify.Test(r.Context(), c.ID); err != nil {
-		s.renderChannel(w, r, sess, http.StatusBadRequest, channelToForm(c), page{"Error": "Test email failed: " + notify.Describe(err)})
+		s.renderChannel(w, r, sess, http.StatusBadRequest, channelToForm(c), page{"Error": tr.T("channel.err_test", "error", notify.Describe(err))})
 		return
 	}
 	http.Redirect(w, r, "/notifications?ok=test-sent", http.StatusSeeOther)

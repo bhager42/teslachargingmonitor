@@ -23,30 +23,44 @@ import (
 
 type page map[string]any
 
-// flashes maps fixed codes to messages so no user input is reflected.
+// jsMessageKeys are the catalog messages app.mjs uses; each page carries
+// them in a JSON data block (not executable, so the CSP is unaffected).
+var jsMessageKeys = []string{"time.never", "time.just_now", "time.min_ago", "time.h_ago", "time.days_ago",
+	"live.resolved", "live.new_alert", "live.view_alerts", "chart.load_failed", "chart.no_data", "chart.summary"}
+
+var jsMessages = func() map[string]string {
+	m := make(map[string]string, len(jsMessageKeys))
+	for _, k := range jsMessageKeys {
+		msg, _ := tr.Lookup(k)
+		m[k] = msg.Other
+	}
+	return m
+}()
+
+// flashes maps fixed codes to catalog keys so no user input is reflected.
 var flashes = map[string]string{
-	"password-changed": "Password changed. Other devices have been signed out.",
-	"device-saved":     "Wall Connector saved. It will be polled right away.",
-	"device-deleted":   "Wall Connector removed.",
-	"polling":          "Polling now. The page updates when the result arrives.",
-	"poll-limited":     "A poll was just requested; wait a few seconds before asking again.",
-	"rule-saved":       "Alert rule saved.",
-	"rule-reset":       "Alert rule reset to its defaults.",
-	"acked":            "Alert acknowledged.",
-	"snoozed":          "Alerts snoozed.",
-	"unsnoozed":        "Snooze ended.",
-	"channel-saved":    "Email settings saved.",
-	"channel-deleted":  "Notification channel removed.",
-	"test-sent":        "Test email sent. Check your inbox (and spam folder).",
-	"digest-sent":      "Weekly summary sent. Check your inbox (and spam folder).",
-	"settings-saved":   "Settings saved.",
-	"beat-saved":       "Ping URL saved. tcmon pings it after each successful poll.",
-	"beat-tested":      "Test ping sent. Check that your monitoring service received it.",
-	"beat-removed":     "Ping URL removed; pings are off.",
-	"rate-saved":       "Electricity price saved. Costs are recalculated from it.",
-	"rate-deleted":     "Price removed.",
-	"sessions-revoked": "All other devices have been signed out.",
-	"signed-out":       "You have been signed out.",
+	"password-changed": "flash.password_changed",
+	"device-saved":     "flash.device_saved",
+	"device-deleted":   "flash.device_deleted",
+	"polling":          "flash.polling",
+	"poll-limited":     "flash.poll_limited",
+	"rule-saved":       "flash.rule_saved",
+	"rule-reset":       "flash.rule_reset",
+	"acked":            "flash.acked",
+	"snoozed":          "flash.snoozed",
+	"unsnoozed":        "flash.unsnoozed",
+	"channel-saved":    "flash.channel_saved",
+	"channel-deleted":  "flash.channel_deleted",
+	"test-sent":        "flash.test_sent",
+	"digest-sent":      "flash.digest_sent",
+	"settings-saved":   "flash.settings_saved",
+	"beat-saved":       "flash.beat_saved",
+	"beat-tested":      "flash.beat_tested",
+	"beat-removed":     "flash.beat_removed",
+	"rate-saved":       "flash.rate_saved",
+	"rate-deleted":     "flash.rate_deleted",
+	"sessions-revoked": "flash.sessions_revoked",
+	"signed-out":       "flash.signed_out",
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, p page) {
@@ -57,11 +71,12 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 	p["Version"], p["SourceURL"] = info.Version, info.SourceLink()
 	p["InsecureHTTP"] = s.cfg.TLSMode == TLSOff && s.cfg.AllowInsecureHTTP
 	p["MinLength"] = auth.MinPasswordLength
-	if f, ok := flashes[r.URL.Query().Get("ok")]; ok {
-		p["Flash"] = f
+	p["JSMessages"] = jsMessages
+	if key, ok := flashes[r.URL.Query().Get("ok")]; ok {
+		p["Flash"] = tr.T(key)
 	}
 	if _, ok := p["Title"]; !ok {
-		p["Title"] = "Tesla Charger Monitoring"
+		p["Title"] = tr.T("app.name")
 	}
 	// The theme is read server-side so the first paint is already correct.
 	p["Theme"] = "system"
@@ -118,14 +133,14 @@ func (s *Server) authed(h authedHandler) http.Handler {
 		sess, ok := s.session(r)
 		if !ok {
 			if r.Method != http.MethodGet {
-				s.renderError(w, r, http.StatusUnauthorized, "Signed out", "Your session has ended. Please sign in again.")
+				s.renderError(w, r, http.StatusUnauthorized, tr.T("error.signed_out_title"), tr.T("error.signed_out"))
 				return
 			}
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && !sess.CheckCSRF(r.PostFormValue("csrf_token")) {
-			s.renderError(w, r, http.StatusForbidden, "Request blocked", "The form expired or did not come from this app. Reload the page and try again.")
+			s.renderError(w, r, http.StatusForbidden, tr.T("error.blocked_title"), tr.T("error.csrf"))
 			return
 		}
 		h(w, r, sess)
@@ -171,13 +186,13 @@ func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/setup", http.StatusSeeOther)
 		return
 	}
-	s.render(w, r, http.StatusOK, "login", page{"Title": "Sign in", "FormToken": s.issueFormToken(w)})
+	s.render(w, r, http.StatusOK, "login", page{"Title": tr.T("login.title"), "FormToken": s.issueFormToken(w)})
 }
 
 func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	if !s.checkFormToken(r) {
-		s.render(w, r, http.StatusForbidden, "login", page{"Title": "Sign in", "FormToken": s.issueFormToken(w),
-			"Error": "The sign-in form expired. Please try again."})
+		s.render(w, r, http.StatusForbidden, "login", page{"Title": tr.T("login.title"), "FormToken": s.issueFormToken(w),
+			"Error": tr.T("login.form_expired")})
 		return
 	}
 	ip := clientIP(r).String()
@@ -186,14 +201,14 @@ func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.As(err, &te):
 		w.Header().Set("Retry-After", strconv.Itoa(int(te.RetryAfter.Seconds())+1))
-		s.render(w, r, http.StatusTooManyRequests, "login", page{"Title": "Sign in", "Error": te.Error(), "FormToken": s.issueFormToken(w)})
+		s.render(w, r, http.StatusTooManyRequests, "login", page{"Title": tr.T("login.title"), "Error": te.Error(), "FormToken": s.issueFormToken(w)})
 	case errors.Is(err, auth.ErrNoPassword):
 		http.Redirect(w, r, "/setup", http.StatusSeeOther)
 	case errors.Is(err, auth.ErrBadPassword):
-		s.render(w, r, http.StatusUnauthorized, "login", page{"Title": "Sign in", "Error": "Incorrect password.", "FormToken": s.issueFormToken(w)})
+		s.render(w, r, http.StatusUnauthorized, "login", page{"Title": tr.T("login.title"), "Error": tr.T("login.incorrect"), "FormToken": s.issueFormToken(w)})
 	case err != nil:
 		s.log.Error("login", "err", err)
-		s.renderError(w, r, http.StatusInternalServerError, "Error", "Sign-in failed because of an internal error. See the container log.")
+		s.renderError(w, r, http.StatusInternalServerError, tr.T("error.title"), tr.T("login.internal_error"))
 	default:
 		s.setCookie(w, c)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -206,16 +221,16 @@ func (s *Server) setupPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.auth.SetupOpen(r.Context()) {
-		s.render(w, r, http.StatusGone, "setup_closed", page{"Title": "Setup closed"})
+		s.render(w, r, http.StatusGone, "setup_closed", page{"Title": tr.T("setup_closed.page_title")})
 		return
 	}
-	s.render(w, r, http.StatusOK, "setup", page{"Title": "Set your password", "FormToken": s.issueFormToken(w)})
+	s.render(w, r, http.StatusOK, "setup", page{"Title": tr.T("setup.title"), "FormToken": s.issueFormToken(w)})
 }
 
 func (s *Server) setupSubmit(w http.ResponseWriter, r *http.Request) {
 	if !s.checkFormToken(r) {
-		s.render(w, r, http.StatusForbidden, "setup", page{"Title": "Set your password", "FormToken": s.issueFormToken(w),
-			"Error": "The setup form expired. Please try again."})
+		s.render(w, r, http.StatusForbidden, "setup", page{"Title": tr.T("setup.title"), "FormToken": s.issueFormToken(w),
+			"Error": tr.T("setup.form_expired")})
 		return
 	}
 	c, err := s.auth.CompleteSetup(r.Context(), r.PostFormValue("token"), r.PostFormValue("password"),
@@ -223,16 +238,16 @@ func (s *Server) setupSubmit(w http.ResponseWriter, r *http.Request) {
 	var te *auth.ThrottledError
 	switch {
 	case errors.Is(err, auth.ErrSetupClosed):
-		s.render(w, r, http.StatusGone, "setup_closed", page{"Title": "Setup closed"})
+		s.render(w, r, http.StatusGone, "setup_closed", page{"Title": tr.T("setup_closed.page_title")})
 	case errors.As(err, &te):
-		s.render(w, r, http.StatusTooManyRequests, "setup", page{"Title": "Set your password", "Error": te.Error(), "FormToken": s.issueFormToken(w)})
+		s.render(w, r, http.StatusTooManyRequests, "setup", page{"Title": tr.T("setup.title"), "Error": te.Error(), "FormToken": s.issueFormToken(w)})
 	case err != nil:
 		msg := auth.UserMessage(err)
 		if msg == "" {
 			s.log.Error("setup", "err", err)
-			msg = "Setup failed because of an internal error. See the container log."
+			msg = tr.T("setup.internal_error")
 		}
-		s.render(w, r, http.StatusBadRequest, "setup", page{"Title": "Set your password", "Error": msg, "FormToken": s.issueFormToken(w)})
+		s.render(w, r, http.StatusBadRequest, "setup", page{"Title": tr.T("setup.title"), "Error": msg, "FormToken": s.issueFormToken(w)})
 	default:
 		s.setCookie(w, c)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -253,7 +268,7 @@ type alertRow struct {
 
 func (s *Server) about(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	info := buildinfo.Get()
-	p := page{"Title": "About", "Commit": info.Commit}
+	p := page{"Title": tr.T("about.title"), "Commit": info.Commit}
 	if s.certs != nil {
 		p["CertFingerprint"] = s.certs.Fingerprint()
 	}
@@ -273,7 +288,7 @@ func (s *Server) renderSecurity(w http.ResponseWriter, r *http.Request, sess aut
 	for _, e := range entries {
 		audit = append(audit, auditRow{When: e.TS.Local().Format("2 Jan 15:04"), Action: e.Action, IP: e.IP})
 	}
-	p := page{"Title": "Security", "EnvManaged": s.auth.EnvManaged(), "Sessions": n, "Audit": audit}
+	p := page{"Title": tr.T("security.title"), "EnvManaged": s.auth.EnvManaged(), "Sessions": n, "Audit": audit}
 	if errMsg != "" {
 		p["Error"] = errMsg
 	}
@@ -292,7 +307,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request, sess aut
 		msg := auth.UserMessage(err)
 		if msg == "" {
 			s.log.Error("changing password", "err", err)
-			status, msg = http.StatusInternalServerError, "The password could not be changed because of an internal error."
+			status, msg = http.StatusInternalServerError, tr.T("security.internal_error")
 		}
 		s.renderSecurity(w, r, sess, status, msg)
 		return
@@ -303,7 +318,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request, sess aut
 
 func (s *Server) revokeSessions(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	if _, err := s.auth.SignOutOthers(r.Context(), sess, clientIP(r).String()); err != nil {
-		s.renderSecurity(w, r, sess, http.StatusInternalServerError, "Could not sign out other devices.")
+		s.renderSecurity(w, r, sess, http.StatusInternalServerError, tr.T("security.revoke_failed"))
 		return
 	}
 	http.Redirect(w, r, "/settings/security?ok=sessions-revoked", http.StatusSeeOther)
@@ -311,7 +326,7 @@ func (s *Server) revokeSessions(w http.ResponseWriter, r *http.Request, sess aut
 
 func (s *Server) certificate(w http.ResponseWriter, r *http.Request, _ auth.Session) {
 	if s.certs == nil {
-		s.renderError(w, r, http.StatusNotFound, "No certificate", "HTTPS is terminated by a proxy.")
+		s.renderError(w, r, http.StatusNotFound, tr.T("error.no_cert_title"), tr.T("error.no_cert"))
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-pem-file")

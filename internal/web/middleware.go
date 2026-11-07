@@ -73,7 +73,7 @@ func (s *Server) lanOnly(next http.Handler) http.Handler {
 		ip := s.resolveClientIP(r)
 		if !ip.IsValid() || !contains(s.cfg.AllowedClients, ip) {
 			s.log.Warn("rejected client outside allowed networks", "ip", ip.String())
-			http.Error(w, "Forbidden: this service is only available on the local network.", http.StatusForbidden)
+			http.Error(w, tr.T("error.lan_only"), http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), clientIPKey, ip)))
@@ -97,7 +97,7 @@ func (s *Server) hostCheck(next http.Handler) http.Handler {
 			ok = ok || host == h
 		}
 		if !ok {
-			http.Error(w, "Misdirected request: add this host name to TCMON_PUBLIC_HOSTNAMES.", http.StatusMisdirectedRequest)
+			http.Error(w, tr.T("error.misdirected"), http.StatusMisdirectedRequest)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -177,7 +177,7 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 					panic(p)
 				}
 				s.log.Error("panic serving request", "path", logSafe(r.URL.Path), "panic", p)
-				http.Error(sw, "Internal server error", http.StatusInternalServerError)
+				http.Error(sw, tr.T("error.internal"), http.StatusInternalServerError)
 			}
 			level := slog.LevelDebug
 			if sw.status >= 400 {

@@ -33,13 +33,25 @@ plus a small amount of wiring, not a hunt through templates and Go code.
   return an error (failing the render) for an unknown key, a missing or
   unused argument, or the wrong kind of message. Go code uses `T`/`N`, which
   return the key itself on a mistake so it is visible.
+- **Go code** uses the package-level catalog `tr` in `internal/web`
+  (`tr.T("key", "name", value)`), so formatting a message is one call.
+  Tests set `i18n.ReportErrors`, so an unknown key or a wrong argument in
+  Go code fails the test run instead of quietly showing the key.
+- **Browser script:** `app.mjs` holds no text. Each page carries the few
+  messages it needs (`jsMessageKeys`) in a
+  `<script type="application/json" id="tcmon-messages">` data block, which
+  is not executable and so needs no CSP exception; the script fills in
+  `{placeholders}` itself.
 - **Tests keep it complete:** `TestCatalogCoverage` fails when a template
-  uses a key that does not exist (or with the wrong function), or when a
-  catalog key is not used anywhere. Loading rejects duplicate keys, stray
+  or Go code uses a key that does not exist (or with the wrong function),
+  or when a catalog key is not used anywhere; `TestJavaScriptMessages` does
+  the same for `app.mjs`. Loading rejects duplicate keys, stray
   braces and disallowed markup.
 - **Not in the catalog:** log lines, CLI output and error details meant
-  for the operator; device data (names, firmware, codes); units and number
-  formats (number formatting stays as it is until a language needs it).
+  for the operator; health and API endpoints; CSV column headers (a file
+  format other tools read); device data (names, firmware, codes); units,
+  number and date formats (they stay as they are until a language needs
+  them).
 - **Language selection:** English is the only catalog, and templates are
   parsed with its functions. Adding a language means adding
   `locales/<lang>.json`, parsing the templates once per catalog, and

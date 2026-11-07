@@ -89,7 +89,7 @@ func (s *Server) alertsPage(w http.ResponseWriter, r *http.Request, sess auth.Se
 				Summary: paramSummary(def, c, unit), Enabled: c.Enabled, NeedsCalibration: def.NeedsCalibration})
 		}
 	}
-	s.render(w, r, http.StatusOK, "alerts", s.base(page{"Title": "Alerts", "Active": active, "History": history,
+	s.render(w, r, http.StatusOK, "alerts", s.base(page{"Title": tr.T("alerts.title"), "Active": active, "History": history,
 		"Rules": rules, "Snoozes": snoozes, "Devices": devices}, sess, "alerts"))
 }
 
@@ -109,17 +109,17 @@ func (s *Server) snooze(w http.ResponseWriter, r *http.Request, sess auth.Sessio
 	id, err1 := strconv.ParseInt(r.PostFormValue("device_id"), 10, 64)
 	hours, err2 := strconv.Atoi(r.PostFormValue("hours"))
 	if err1 != nil || err2 != nil || !slices.Contains([]int{1, 4, 24, 72, 168}, hours) {
-		s.renderError(w, r, http.StatusBadRequest, "Invalid snooze", "Choose a device and a duration.")
+		s.renderError(w, r, http.StatusBadRequest, tr.T("alerts.err_snooze_title"), tr.T("alerts.err_snooze_input"))
 		return
 	}
 	if _, err := s.st.Device(r.Context(), id); err != nil {
-		s.renderError(w, r, http.StatusBadRequest, "Invalid snooze", "Unknown device.")
+		s.renderError(w, r, http.StatusBadRequest, tr.T("alerts.err_snooze_title"), tr.T("alerts.err_snooze_device"))
 		return
 	}
 	now := s.now()
 	reason := strings.TrimSpace(r.PostFormValue("reason"))
 	if _, err := s.st.AddSnooze(r.Context(), store.Snooze{DeviceID: id, Until: now.Add(time.Duration(hours) * time.Hour), Reason: reason}, now); err != nil {
-		s.renderError(w, r, http.StatusBadRequest, "Invalid snooze", "Could not snooze alerts.")
+		s.renderError(w, r, http.StatusBadRequest, tr.T("alerts.err_snooze_title"), tr.T("alerts.err_snooze"))
 		return
 	}
 	s.auditUI(r, "alerts_snoozed", map[string]string{"device_id": strconv.FormatInt(id, 10), "hours": strconv.Itoa(hours)})
@@ -161,7 +161,7 @@ func (s *Server) ruleFields(def alerts.Definition, c alerts.Config, unit string)
 func (s *Server) ruleFromPath(w http.ResponseWriter, r *http.Request) (alerts.Definition, bool) {
 	def, ok := alerts.Lookup(r.PathValue("key"))
 	if !ok || s.alerts == nil {
-		s.renderError(w, r, http.StatusNotFound, "Not found", "Unknown alert rule.")
+		s.renderError(w, r, http.StatusNotFound, tr.T("error.not_found_title"), tr.T("error.no_rule"))
 	}
 	return def, ok && s.alerts != nil
 }
@@ -186,7 +186,7 @@ func (s *Server) ruleForm(w http.ResponseWriter, r *http.Request, sess auth.Sess
 	}
 	cfgs, err := s.alerts.Configs(r.Context(), 0)
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, "Error", "Could not load alert rules.")
+		s.renderError(w, r, http.StatusInternalServerError, tr.T("error.title"), tr.T("alerts.err_load"))
 		return
 	}
 	s.renderRule(w, r, sess, http.StatusOK, def, cfgs[def.Key], nil)
@@ -200,7 +200,7 @@ func (s *Server) readRule(r *http.Request, def alerts.Definition, base alerts.Co
 	for _, p := range def.Params {
 		v, err := strconv.ParseFloat(strings.TrimSpace(r.PostFormValue("p_"+p.Name)), 64)
 		if err != nil {
-			return c, p.Label + " must be a number."
+			return c, tr.T("rule.err_number", "field", p.Label)
 		}
 		if p.Unit == "°C" && unit == "F" {
 			if strings.HasPrefix(p.Name, "hysteresis") {
@@ -222,7 +222,7 @@ func (s *Server) readRule(r *http.Request, def alerts.Definition, base alerts.Co
 	rep, ok3 := num("repeat_h")
 	ms, ok4 := num("min_samples")
 	if !ok1 || !ok2 || !ok3 || !ok4 {
-		return c, "Timing fields must be non-negative numbers."
+		return c, tr.T("rule.err_timing")
 	}
 	c.For = time.Duration(forS * float64(time.Second))
 	c.Cooldown = time.Duration(cool * float64(time.Minute))

@@ -54,25 +54,25 @@ func fmtDuration(d time.Duration) string {
 	d = d.Round(time.Minute)
 	h, m := int(d.Hours()), int(d.Minutes())%60
 	if h > 0 {
-		return fmt.Sprintf("%d h %02d min", h, m)
+		return tr.T("time.hours_minutes", "h", h, "m", fmt.Sprintf("%02d", m))
 	}
-	return fmt.Sprintf("%d min", m)
+	return tr.T("time.minutes", "m", m)
 }
 
 func fmtAgo(t, now time.Time) string {
 	if t.IsZero() {
-		return "never"
+		return tr.T("time.never")
 	}
 	d := now.Sub(t)
 	switch {
 	case d < time.Minute:
-		return "just now"
+		return tr.T("time.just_now")
 	case d < time.Hour:
-		return fmt.Sprintf("%d min ago", int(d.Minutes()))
+		return tr.T("time.min_ago", "n", int(d.Minutes()))
 	case d < 48*time.Hour:
-		return fmt.Sprintf("%d h ago", int(d.Hours()))
+		return tr.T("time.h_ago", "n", int(d.Hours()))
 	default:
-		return fmt.Sprintf("%d days ago", int(d.Hours()/24))
+		return tr.T("time.days_ago", "n", int(d.Hours()/24))
 	}
 }
 
@@ -99,31 +99,32 @@ type CardAlert struct {
 
 // CardFields lists the field keys a card shows, in order, with labels.
 var CardFields = []struct{ Key, Label string }{
-	{"current", "Current"}, {"power", "Power"}, {"session_energy", "This session"}, {"session_time", "Session time"},
-	{"session_cost", "Session cost"}, {"month_cost", "This month"},
-	{"grid", "Grid"}, {"handle_temp", "Handle"}, {"pcba_temp", "Circuit board"}, {"mcu_temp", "Controller"},
-	{"wifi", "Wi-Fi"}, {"lifetime_energy", "Lifetime energy"},
+	{"current", tr.T("card.current")}, {"power", tr.T("card.power")}, {"session_energy", tr.T("card.session_energy")},
+	{"session_time", tr.T("card.session_time")}, {"session_cost", tr.T("card.session_cost")},
+	{"month_cost", tr.T("card.month_cost")}, {"grid", tr.T("card.grid")}, {"handle_temp", tr.T("card.handle_temp")},
+	{"pcba_temp", tr.T("card.pcba_temp")}, {"mcu_temp", tr.T("card.mcu_temp")}, {"wifi", tr.T("card.wifi")},
+	{"lifetime_energy", tr.T("card.lifetime_energy")},
 }
 
 func state(v wallconnector.Vitals, active []alerts.ActiveAlert) (string, string) {
 	for _, a := range active {
 		if a.Severity == alerts.Critical {
-			return "Fault: " + a.Title, "fault"
+			return tr.T("state.fault", "alert", a.Title), "fault"
 		}
 	}
 	switch {
 	case v.ContactorClosed && v.VehicleCurrentA >= 1:
-		return "Charging", "charging"
+		return tr.T("state.charging"), "charging"
 	case v.VehicleConnected || v.ContactorClosed:
-		return "Plugged in", "plugged"
+		return tr.T("state.plugged"), "plugged"
 	default:
-		return "Idle", "idle"
+		return tr.T("state.idle"), "idle"
 	}
 }
 
 // buildCard assembles a card from the latest stored poll (pt may be nil).
 func (s *Server) buildCard(d store.Device, pt *store.HistoryPoint, lastPoll *store.PollLogEntry, unit string, now time.Time) DeviceCard {
-	c := DeviceCard{ID: d.ID, Name: d.Name, Fields: map[string]string{}, State: "Waiting for first poll", StateClass: "unknown"}
+	c := DeviceCard{ID: d.ID, Name: d.Name, Fields: map[string]string{}, State: tr.T("state.waiting"), StateClass: "unknown"}
 	for _, f := range CardFields {
 		c.Fields[f.Key] = "–"
 	}
@@ -143,7 +144,7 @@ func (s *Server) buildCard(d store.Device, pt *store.HistoryPoint, lastPoll *sto
 			c.Fields["current"] = fmtNum(v.VehicleCurrentA, "A", 1)
 			if d.MaxCurrentA > 0 {
 				c.CurrentPct = int(math.Round(math.Min(v.VehicleCurrentA/d.MaxCurrentA, 1.2) * 100))
-				c.Fields["current"] += " of " + strconv.FormatFloat(d.MaxCurrentA, 'f', -1, 64) + " A"
+				c.Fields["current"] = tr.T("card.current_of_max", "current", c.Fields["current"], "max", strconv.FormatFloat(d.MaxCurrentA, 'f', -1, 64))
 			}
 			if ok("grid_v") {
 				c.Fields["power"] = fmtNum(v.VehicleCurrentA*v.GridV/1000, "kW", 2)
@@ -175,7 +176,7 @@ func (s *Server) buildCard(d store.Device, pt *store.HistoryPoint, lastPoll *sto
 		c.UpdatedAt = snap.FetchedAt
 	}
 	if lastPoll != nil && !lastPoll.OK && (pt == nil || lastPoll.TS.After(pt.Snapshot.FetchedAt)) {
-		c.State, c.StateClass = "Unreachable", "offline"
+		c.State, c.StateClass = tr.T("state.unreachable"), "offline"
 	}
 	c.Updated = fmtAgo(c.UpdatedAt, now)
 	interval := d.PollInterval

@@ -20,6 +20,9 @@ import (
 // Template calls: {{t "key" ...}}, {{th "key" ...}}, {{tn "key" ...}}, (t "key").
 var templateCall = regexp.MustCompile(`[{(]-?\s*(t|th|tn)\s+"([^"]+)"`)
 
+// Go calls: tr.T("key", ...), tr.N("key", ...).
+var goCall = regexp.MustCompile(`\btr\.(T|N)\("([^"]+)"`)
+
 // TestCatalogCoverage checks that every key the templates use exists with
 // the right kind (markup, plain, plural), and that every catalog key is
 // used somewhere (templates or Go code), so the catalog stays the single,
@@ -59,6 +62,18 @@ func TestCatalogCoverage(t *testing.T) {
 		}
 		b, err := os.ReadFile(p) //nolint:gosec // test reads the repository's own sources
 		sources.Write(b)
+		for _, m := range goCall.FindAllStringSubmatch(string(b), -1) {
+			fn, key := m[1], m[2]
+			msg, ok := c.Lookup(key)
+			switch {
+			case !ok:
+				t.Errorf("%s: unknown message %q", p, key)
+			case strings.HasSuffix(key, "_html"):
+				t.Errorf("%s: %q holds markup; Go code uses plain messages", p, key)
+			case fn == "N" != msg.Plural():
+				t.Errorf("%s: tr.%s %q: use N exactly for plural messages", p, fn, key)
+			}
+		}
 		return err
 	})
 	if err != nil {

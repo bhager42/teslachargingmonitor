@@ -118,6 +118,10 @@ func (s *Server) Handler() http.Handler { return s.handler }
 // Certs returns the certificate source (nil when TLS is off).
 func (s *Server) Certs() *CertSource { return s.certs }
 
+// tr is the message catalog for user-facing text (ADR 0006). English is the
+// only language, so one catalog serves every request.
+var tr = i18n.English()
+
 func (s *Server) loadAssets() error {
 	s.assetHash = map[string]string{}
 	err := fs.WalkDir(webui.Static, "static", func(path string, d fs.DirEntry, err error) error {
@@ -154,7 +158,7 @@ func (s *Server) loadAssets() error {
 		"eq":   func(a, b any) bool { return a == b },
 		"num":  func(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) },
 	}
-	maps.Copy(funcs, i18n.English().Funcs())
+	maps.Copy(funcs, tr.Funcs())
 	s.pages = map[string]*template.Template{}
 	for _, p := range []string{"login", "setup", "setup_closed", "home", "security", "about", "error", "device",
 		"devices", "device_form", "alerts", "rule", "notifications", "channel", "settings", "diagnostics", "costs", "energy", "digest"} {
@@ -223,13 +227,13 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("POST /settings/sessions/revoke", s.authed(s.revokeSessions))
 	mux.Handle("GET /settings/certificate.pem", s.authed(s.certificate))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		s.renderError(w, r, http.StatusNotFound, "Not found", "There is no page at this address.")
+		s.renderError(w, r, http.StatusNotFound, tr.T("error.not_found_title"), tr.T("error.not_found"))
 	})
 
 	cop := http.NewCrossOriginProtection()
 	cop.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.renderError(w, r, http.StatusForbidden, "Request blocked",
-			"This form was submitted from another website and was blocked for your protection.")
+		s.renderError(w, r, http.StatusForbidden, tr.T("error.blocked_title"),
+			tr.T("error.cross_origin"))
 	}))
 	var h http.Handler = mux
 	h = cop.Handler(h)
@@ -248,7 +252,7 @@ func (s *Server) static() http.Handler {
 		name := r.URL.Path[len("/static/"):]
 		// Serve files only: http.FileServer would list directories (ASVS V13.4.3).
 		if fi, err := fs.Stat(sub, path.Clean("/" + name)[1:]); err != nil || fi.IsDir() {
-			s.renderError(w, r, http.StatusNotFound, "Not found", "There is no page at this address.")
+			s.renderError(w, r, http.StatusNotFound, tr.T("error.not_found_title"), tr.T("error.not_found"))
 			return
 		}
 		if want, ok := s.assetHash[name]; ok && r.URL.Query().Get("v") == want {

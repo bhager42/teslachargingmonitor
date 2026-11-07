@@ -11,8 +11,8 @@ Copyright (C) 2026 Brad Hager and contributors
 </section>
 <section class="card" aria-labelledby="chart-title">
   <div class="page-head">
-    <h2 id="chart-title">{{t "costs.chart_title" "period" .Period}} <span class="hint">({{.PeriodLabel}})</span></h2>
-    <nav class="tabs" aria-label="{{t "costs.period_label"}}">{{range .Periods}}<a href="?period={{.Key}}" {{if eq .Key $.Period}}aria-current="page"{{end}}>{{.Key}}</a>{{end}}</nav>
+    <h2 id="chart-title">{{t "costs.chart_title" "period" .PeriodName}} <span class="hint">({{.PeriodLabel}})</span></h2>
+    <nav class="tabs" aria-label="{{t "costs.period_label"}}">{{range .Periods}}<a href="?period={{.Key}}" {{if eq .Key $.Period}}aria-current="page"{{end}}>{{.Name}}</a>{{end}}</nav>
   </div>
   <figure class="chart">
     <svg class="bars" viewBox="0 0 {{.ChartW}} {{.ChartH}}" role="img" aria-label="{{.Summary}}">
@@ -26,7 +26,7 @@ Copyright (C) 2026 Brad Hager and contributors
   </figure>
   <details><summary>{{t "costs.show_numbers"}}</summary>
     <div class="table-wrap"><table>
-      <thead><tr><th scope="col">{{.Period}}</th><th scope="col">kWh</th><th scope="col">{{t "costs.col_cost"}}</th></tr></thead>
+      <thead><tr><th scope="col">{{.PeriodName}}</th><th scope="col">kWh</th><th scope="col">{{t "costs.col_cost"}}</th></tr></thead>
       <tbody>{{range .Rows}}<tr><td>{{.Period}}</td><td>{{.KWh}}</td><td>{{.Cost}}</td></tr>{{end}}</tbody>
     </table></div>
   </details>
