@@ -726,7 +726,7 @@
   "digest.event_reboot": {"one": "{n} restart", "other": "{n} restarts"},
   "digest.event_firmware_changed": {"one": "{n} firmware change", "other": "{n} firmware changes"},
   "digest.event_grid_profile_changed": {"one": "{n} grid profile change", "other": "{n} grid profile changes"},
-  "digest.event_identity_mismatch": {"one": "{n} identity mismatch", "other": "{n} identity mismatchs"},
+  "digest.event_identity_mismatch": {"one": "{n} identity mismatch", "other": "{n} identity mismatches"},
   "digest.event_other": {"one": "{n} {kind}", "other": "{n} {kind}s"},
   "digest.times": {"one": "{n} time", "other": "{n} times"},
   "digest.removed_device": "removed device",
