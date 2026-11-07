@@ -258,3 +258,20 @@ func TestScheduler(t *testing.T) {
 	q.n = 1
 	tick(time.Date(2026, 11, 24, 8, 5, 0, 0, loc), -1)
 }
+
+func TestEventCount(t *testing.T) {
+	for _, c := range []struct {
+		kind string
+		n    int
+		want string
+	}{
+		{store.EventIdentityMismatch, 1, "1 identity mismatch"},
+		{store.EventIdentityMismatch, 2, "2 identity mismatches"},
+		{store.EventReboot, 3, "3 restarts"},
+		{"some_kind", 2, "2 some kinds"},
+	} {
+		if got := eventCount(c.kind, c.n); got != c.want {
+			t.Errorf("eventCount(%q, %d) = %q, want %q", c.kind, c.n, got, c.want)
+		}
+	}
+}
