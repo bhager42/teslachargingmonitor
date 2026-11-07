@@ -33,6 +33,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/bhager42/teslachargingmonitor/internal/i18n"
 	"github.com/bhager42/teslachargingmonitor/internal/secrets"
 )
 
@@ -71,31 +72,35 @@ func GmailPreset(username string, to ...string) EmailConfig {
 	}
 }
 
+// tr is the catalog for text shown in the web UI: validation errors and
+// delivery hints (hints are stored with the delivery).
+var tr = i18n.English()
+
 func noCRLF(s string) bool { return !strings.ContainsAny(s, "\r\n\x00") }
 
 // Normalize validates the configuration and canonicalizes addresses.
 func (c *EmailConfig) Normalize() error {
 	c.Host = strings.ToLower(strings.TrimSpace(c.Host))
 	if c.Host == "" || len(c.Host) > 253 || !noCRLF(c.Host) || strings.ContainsAny(c.Host, " /:@") {
-		return errors.New("SMTP server must be a hostname or IP address")
+		return tr.Err("notify.err_host")
 	}
 	if c.Port < 1 || c.Port > 65535 {
-		return errors.New("SMTP port must be 1-65535")
+		return tr.Err("notify.err_port")
 	}
 	if c.Security != SecurityStartTLS && c.Security != SecurityTLS {
-		return errors.New(`security must be "starttls" (port 587) or "tls" (port 465); plaintext SMTP is not supported`)
+		return tr.Err("notify.err_security")
 	}
 	if !noCRLF(c.Username) || len(c.Username) > 254 {
-		return errors.New("invalid username")
+		return tr.Err("notify.err_username")
 	}
 	from, err := mail.ParseAddress(c.From)
 	if err != nil || from.Name != "" {
-		return fmt.Errorf("invalid From address %q", c.From)
+		return tr.Err("notify.err_from", "address", strconv.Quote(c.From))
 	}
 	c.From = from.Address
 	c.FromName = strings.TrimSpace(c.FromName)
 	if !noCRLF(c.FromName) || !utf8.ValidString(c.FromName) || len([]rune(c.FromName)) > 64 {
-		return errors.New("the From name must be at most 64 characters on one line")
+		return tr.Err("notify.err_from_name")
 	}
 	// The From header must parse back to the same name and address. net/mail
 	// encodes some names (e.g. non-ASCII ending in a backslash) into a header
@@ -103,16 +108,16 @@ func (c *EmailConfig) Normalize() error {
 	if c.FromName != "" {
 		a, err := mail.ParseAddress((&mail.Address{Name: c.FromName, Address: c.From}).String())
 		if err != nil || a.Name != c.FromName || a.Address != c.From {
-			return errors.New("the From name contains characters that cannot be used in an email header")
+			return tr.Err("notify.err_from_name_chars")
 		}
 	}
 	if len(c.To) == 0 || len(c.To) > MaxRecipients {
-		return fmt.Errorf("enter 1-%d recipient addresses", MaxRecipients)
+		return tr.Err("notify.err_recipients", "max", MaxRecipients)
 	}
 	for i, to := range c.To {
 		a, err := mail.ParseAddress(strings.TrimSpace(to))
 		if err != nil || a.Name != "" {
-			return fmt.Errorf("invalid recipient address %q", to)
+			return tr.Err("notify.err_recipient", "address", strconv.Quote(to))
 		}
 		c.To[i] = a.Address
 	}
@@ -122,7 +127,7 @@ func (c *EmailConfig) Normalize() error {
 		c.SubjectPrefix = DefaultSubjectPrefix
 	}
 	if !noCRLF(c.SubjectPrefix) || !utf8.ValidString(c.SubjectPrefix) || len([]rune(c.SubjectPrefix)) > 64 {
-		return errors.New("subject prefix must be at most 64 characters on one line")
+		return tr.Err("notify.err_subject_prefix")
 	}
 	return nil
 }
@@ -153,34 +158,34 @@ func classify(err error, stage string) *SendError {
 	var dns *net.DNSError
 	switch {
 	case errors.Is(err, ErrPlaintextRefused):
-		se.Permanent, se.Hint = true, "The server does not support encryption on this port. For Gmail use smtp.gmail.com, port 587, STARTTLS."
+		se.Permanent, se.Hint = true, tr.T("notify.hint_no_starttls")
 	case errors.As(err, &tp):
 		se.Permanent = tp.Code >= 500
 		msg := strings.ToLower(tp.Msg)
 		switch {
 		case strings.Contains(msg, "5.7.9") || strings.Contains(msg, "application-specific password"):
-			se.Hint = "Gmail requires an app password: turn on 2-Step Verification, then create one at https://myaccount.google.com/apppasswords and paste it here."
+			se.Hint = tr.T("notify.hint_app_password")
 		case tp.Code == 535 || tp.Code == 534:
-			se.Hint = "The username or password was rejected. For Gmail, use your full address and a 16-character app password, not your normal password."
+			se.Hint = tr.T("notify.hint_auth_rejected")
 		case stage == "recipient":
-			se.Hint = "A recipient address was rejected by the mail server. Check the To addresses."
+			se.Hint = tr.T("notify.hint_recipient_rejected")
 		case tp.Code == 530:
-			se.Hint = "The server requires authentication. Enter a username and password."
+			se.Hint = tr.T("notify.hint_auth_required")
 		case tp.Code == 550 || tp.Code == 553 || tp.Code == 554:
-			se.Hint = "The message was rejected. For Gmail, the From address must be your Gmail address or a verified alias."
+			se.Hint = tr.T("notify.hint_message_rejected")
 		case tp.Code >= 400 && tp.Code < 500:
-			se.Hint = "The mail server is temporarily unavailable; delivery will be retried."
+			se.Hint = tr.T("notify.hint_temporary")
 		}
 	case errors.As(err, &cert), errors.As(err, &unk), errors.As(err, &host):
-		se.Permanent, se.Hint = true, "The mail server's TLS certificate could not be verified. Check the server name."
+		se.Permanent, se.Hint = true, tr.T("notify.hint_certificate")
 	case errors.As(err, &dns):
-		se.Hint = "The mail server name could not be resolved. Check the SMTP server and the container's DNS."
+		se.Hint = tr.T("notify.hint_dns")
 	default:
 		var ne net.Error
 		if errors.As(err, &ne) && ne.Timeout() {
-			se.Hint = "Timed out connecting to the mail server. Check the port and that outbound SMTP is allowed."
+			se.Hint = tr.T("notify.hint_timeout")
 		} else if strings.Contains(err.Error(), "connection refused") {
-			se.Hint = "Connection refused. Check the SMTP server and port."
+			se.Hint = tr.T("notify.hint_refused")
 		}
 	}
 	return se

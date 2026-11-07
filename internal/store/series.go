@@ -14,6 +14,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/bhager42/teslachargingmonitor/internal/i18n"
 )
 
 // LatestPoint returns the most recent stored poll for a device, or
@@ -58,6 +60,9 @@ func (s *Store) LatestRaw(ctx context.Context, deviceID int64) (map[string][]byt
 	return out, fromMS(ts), rows.Err()
 }
 
+// tr is the catalog for user-facing text: chart labels and validation errors.
+var tr = i18n.English()
+
 // SeriesMetric describes a chartable metric.
 type SeriesMetric struct {
 	Key    string
@@ -70,17 +75,17 @@ type SeriesMetric struct {
 
 // SeriesMetrics are the metrics the UI can chart.
 var SeriesMetrics = []SeriesMetric{
-	{"vehicle_current_a", "Charging current", "A", "readings_vitals", "vehicle_current_a", 1},
-	{"handle_temp_c", "Handle temperature", "C", "readings_vitals", "handle_temp_c", 1},
-	{"pcba_temp_c", "Circuit board temperature", "C", "readings_vitals", "pcba_temp_c", 1},
-	{"mcu_temp_c", "Controller temperature", "C", "readings_vitals", "mcu_temp_c", 1},
-	{"grid_v", "Grid voltage", "V", "readings_vitals", "grid_v", 1},
-	{"grid_hz", "Grid frequency", "Hz", "readings_vitals", "grid_hz", 1},
-	{"relay_k1_v", "Relay K1 voltage", "V", "readings_vitals", "relay_k1_v", 1},
-	{"relay_k2_v", "Relay K2 voltage", "V", "readings_vitals", "relay_k2_v", 1},
-	{"session_energy_kwh", "Session energy", "kWh", "readings_vitals", "session_energy_wh", 0.001},
-	{"wifi_rssi", "Wi-Fi signal", "dBm", "readings_wifi", "rssi", 1},
-	{"lifetime_energy_kwh", "Lifetime energy", "kWh", "readings_lifetime", "energy_wh", 0.001},
+	{"vehicle_current_a", tr.T("metric.vehicle_current_a"), "A", "readings_vitals", "vehicle_current_a", 1},
+	{"handle_temp_c", tr.T("metric.handle_temp_c"), "C", "readings_vitals", "handle_temp_c", 1},
+	{"pcba_temp_c", tr.T("metric.pcba_temp_c"), "C", "readings_vitals", "pcba_temp_c", 1},
+	{"mcu_temp_c", tr.T("metric.mcu_temp_c"), "C", "readings_vitals", "mcu_temp_c", 1},
+	{"grid_v", tr.T("metric.grid_v"), "V", "readings_vitals", "grid_v", 1},
+	{"grid_hz", tr.T("metric.grid_hz"), "Hz", "readings_vitals", "grid_hz", 1},
+	{"relay_k1_v", tr.T("metric.relay_k1_v"), "V", "readings_vitals", "relay_k1_v", 1},
+	{"relay_k2_v", tr.T("metric.relay_k2_v"), "V", "readings_vitals", "relay_k2_v", 1},
+	{"session_energy_kwh", tr.T("metric.session_energy_kwh"), "kWh", "readings_vitals", "session_energy_wh", 0.001},
+	{"wifi_rssi", tr.T("metric.wifi_rssi"), "dBm", "readings_wifi", "rssi", 1},
+	{"lifetime_energy_kwh", tr.T("metric.lifetime_energy_kwh"), "kWh", "readings_lifetime", "energy_wh", 0.001},
 }
 
 // LookupMetric finds a metric by key.

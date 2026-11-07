@@ -23,18 +23,22 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bhager42/teslachargingmonitor/internal/i18n"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
 )
 
+// tr is the catalog for messages shown to users (see UserMessage).
+var tr = i18n.English()
+
 // Errors returned to the web layer. Messages are safe to show.
 var (
-	ErrBadPassword     = errors.New("incorrect password")
-	ErrNoPassword      = errors.New("no password has been set yet")
-	ErrSetupClosed     = errors.New("setup is not available (a password is already set, or the setup token expired — restart the app for a new one)")
-	ErrBadSetupToken   = errors.New("incorrect setup token")
-	ErrEnvManaged      = errors.New("the password is managed by the TCMON_PASSWORD_FILE / TCMON_PASSWORD_HASH setting and cannot be changed here")
+	ErrBadPassword     = tr.Err("auth.err_bad_password")
+	ErrNoPassword      = tr.Err("auth.err_no_password")
+	ErrSetupClosed     = tr.Err("auth.err_setup_closed")
+	ErrBadSetupToken   = tr.Err("auth.err_bad_setup_token")
+	ErrEnvManaged      = tr.Err("auth.err_env_managed")
 	ErrNoSession       = errors.New("not signed in")
-	ErrPasswordsDiffer = errors.New("the two new passwords do not match")
+	ErrPasswordsDiffer = tr.Err("auth.err_passwords_differ")
 )
 
 // UserMessage returns err's text when it is safe and useful to show in the
@@ -55,7 +59,7 @@ func UserMessage(err error) string {
 type ThrottledError struct{ RetryAfter time.Duration }
 
 func (e *ThrottledError) Error() string {
-	return fmt.Sprintf("too many failed attempts; try again in %s", e.RetryAfter.Round(time.Second))
+	return tr.T("auth.err_throttled", "wait", e.RetryAfter.Round(time.Second))
 }
 
 // Config tunes the Manager. Zero values select defaults.

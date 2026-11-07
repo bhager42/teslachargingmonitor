@@ -9,6 +9,8 @@
 package i18n
 
 import (
+	"errors"
+	"fmt"
 	"html/template"
 	"strings"
 	"testing"
@@ -87,8 +89,25 @@ func TestFormatting(t *testing.T) {
 			t.Errorf("%s: no error", name)
 		}
 	}
-	if s := c.T("x.nope"); s != "x.nope" {
-		t.Errorf("T on unknown key = %q, want the key", s)
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("T on unknown key did not panic in a test binary")
+			}
+		}()
+		c.T("x.nope")
+	}()
+	var reported []string
+	ReportErrors = func(key string, _ error) { reported = append(reported, key) }
+	s := c.T("x.nope")
+	ReportErrors = nil
+	if s != "x.nope" || len(reported) != 1 {
+		t.Errorf("T on unknown key = %q (reported %v), want the key, reported once", s, reported)
+	}
+	var e *Error
+	if err := fmt.Errorf("wrapped: %w", c.Err("x.plain", "name", "Ann")); !errors.As(err, &e) || e.Key != "x.plain" ||
+		len(e.Args) != 2 || e.Error() != "Hello Ann, you" {
+		t.Errorf("Err = %#v", err)
 	}
 	if s := c.N("x.count", 3, "who", "you"); s != "3 sessions for you" {
 		t.Errorf("N = %q", s)

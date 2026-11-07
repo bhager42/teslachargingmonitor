@@ -20,8 +20,8 @@ import (
 // Template calls: {{t "key" ...}}, {{th "key" ...}}, {{tn "key" ...}}, (t "key").
 var templateCall = regexp.MustCompile(`[{(]-?\s*(t|th|tn)\s+"([^"]+)"`)
 
-// Go calls: tr.T("key", ...), tr.N("key", ...).
-var goCall = regexp.MustCompile(`\btr\.(T|N)\("([^"]+)"`)
+// Go calls: tr.T("key", ...), tr.N("key", ...), tr.Err("key", ...).
+var goCall = regexp.MustCompile(`\btr\.(T|N|Err)\("([^"]+)"`)
 
 // TestCatalogCoverage checks that every key the templates use exists with
 // the right kind (markup, plain, plural), and that every catalog key is

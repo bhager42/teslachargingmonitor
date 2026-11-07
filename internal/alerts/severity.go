@@ -16,6 +16,7 @@ package alerts
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -40,6 +41,20 @@ func (s Severity) String() string {
 		return "critical"
 	default:
 		return "none"
+	}
+}
+
+// Label is the severity's name for display (String is the stored name).
+func (s Severity) Label() string {
+	switch s {
+	case Info:
+		return tr.T("severity.info")
+	case Warning:
+		return tr.T("severity.warning")
+	case Critical:
+		return tr.T("severity.critical")
+	default:
+		return tr.T("severity.none")
 	}
 }
 
@@ -80,12 +95,12 @@ func ParseQuietHours(s string) (QuietHours, error) {
 	var sh, sm, eh, em int
 	if _, err := fmt.Sscanf(s, "%d:%d-%d:%d", &sh, &sm, &eh, &em); err != nil ||
 		sh < 0 || sh > 23 || eh < 0 || eh > 23 || sm < 0 || sm > 59 || em < 0 || em > 59 {
-		return QuietHours{}, fmt.Errorf("alerts: quiet hours must look like 22:00-07:00, got %q", s)
+		return QuietHours{}, tr.Err("alerts.err_quiet_hours", "value", strconv.Quote(s))
 	}
 	start := time.Duration(sh)*time.Hour + time.Duration(sm)*time.Minute
 	end := time.Duration(eh)*time.Hour + time.Duration(em)*time.Minute
 	if start == end {
-		return QuietHours{}, fmt.Errorf("alerts: quiet hours start and end are equal")
+		return QuietHours{}, tr.Err("alerts.err_quiet_hours_equal")
 	}
 	return QuietHours{Enabled: true, Start: start, End: end}, nil
 }

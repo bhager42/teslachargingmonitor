@@ -73,6 +73,23 @@ const (
 	KindEvent     = "event"
 )
 
+// KindLabel names a notice kind for display; unknown kinds are returned as is.
+func KindLabel(kind string) string {
+	switch kind {
+	case KindFiring:
+		return tr.T("alert_kind.firing")
+	case KindEscalated:
+		return tr.T("alert_kind.escalated")
+	case KindRepeat:
+		return tr.T("alert_kind.repeat")
+	case KindResolved:
+		return tr.T("alert_kind.resolved")
+	case KindEvent:
+		return tr.T("alert_kind.event")
+	}
+	return kind
+}
+
 // Notification is an alert event that should be delivered to channels.
 type Notification struct {
 	EventID    int64

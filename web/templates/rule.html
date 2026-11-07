@@ -38,7 +38,7 @@ Copyright (C) 2026 Brad Hager and contributors
 <section class="card" aria-labelledby="preview-title">
   <h2 id="preview-title">{{t "rule.preview_title"}}</h2>
   {{- if .Preview}}
-  <ul class="alerts">{{range .Preview}}<li class="sev-{{.Severity}}"><span class="badge">{{.Kind}}</span> {{.When}} — {{.Message}}</li>{{end}}</ul>
+  <ul class="alerts">{{range .Preview}}<li class="sev-{{.Severity}}"><span class="badge">{{alertkind .Kind}}</span> {{.When}} — {{.Message}}</li>{{end}}</ul>
   {{- else}}<p>{{t "rule.preview_none"}}</p>{{end}}
 </section>
 {{- end}}

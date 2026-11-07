@@ -29,6 +29,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"testing"
 )
 
 //go:embed locales/*.json
@@ -215,9 +216,19 @@ func (c *Catalog) Count(key string, n int, args ...any) (string, error) {
 func (c *Catalog) pluralOne(n int) bool { return n == 1 }
 
 // ReportErrors receives, when set, every mistake that T and N hide (unknown
-// key, missing or unused argument). Tests set it so such mistakes fail; it
-// must be set before any concurrent use and not changed afterwards.
+// key, missing or unused argument). It must be set before any concurrent use
+// and not changed afterwards. When it is not set, such a mistake panics in
+// test binaries, so every package's tests catch them without extra wiring.
 var ReportErrors func(key string, err error)
+
+func report(key string, err error) {
+	switch {
+	case ReportErrors != nil:
+		ReportErrors(key, err)
+	case testing.Testing():
+		panic(err)
+	}
+}
 
 // T is Text for Go code: a missing key or argument yields the key itself so
 // a mistake shows up in the UI instead of an empty string (and reaches
@@ -225,9 +236,7 @@ var ReportErrors func(key string, err error)
 func (c *Catalog) T(key string, args ...any) string {
 	s, err := c.Text(key, args...)
 	if err != nil {
-		if ReportErrors != nil {
-			ReportErrors(key, err)
-		}
+		report(key, err)
 		return key
 	}
 	return s
@@ -237,12 +246,27 @@ func (c *Catalog) T(key string, args ...any) string {
 func (c *Catalog) N(key string, n int, args ...any) string {
 	s, err := c.Count(key, n, args...)
 	if err != nil {
-		if ReportErrors != nil {
-			ReportErrors(key, err)
-		}
+		report(key, err)
 		return key
 	}
 	return s
+}
+
+// Error is an error whose text is a catalog message. Its Error method gives
+// the text in the catalog it was made from; Key and Args let a caller show
+// it in another language.
+type Error struct {
+	Key  string
+	Args []any
+	text string
+}
+
+func (e *Error) Error() string { return e.text }
+
+// Err returns an *Error for a message meant to be shown to users (form
+// validation and the like); see T.
+func (c *Catalog) Err(key string, args ...any) error {
+	return &Error{Key: key, Args: args, text: c.T(key, args...)}
 }
 
 func (c *Catalog) plain(key string) (string, error) {

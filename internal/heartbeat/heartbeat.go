@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bhager42/teslachargingmonitor/internal/i18n"
 	"github.com/bhager42/teslachargingmonitor/internal/poller"
 	"github.com/bhager42/teslachargingmonitor/internal/secrets"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
@@ -43,11 +44,15 @@ var aad = []byte("tcmon/heartbeat/v1")
 // MaxURLLength bounds the URL the settings form accepts.
 const MaxURLLength = 2048
 
-// ErrNotConfigured is returned by Ping when no URL is set.
-var ErrNotConfigured = errors.New("no ping URL is configured")
+// tr is the catalog for errors shown in Settings and Diagnostics.
+var tr = i18n.English()
 
-// ErrBadURL wraps validation failures; its text is written for users.
-var ErrBadURL = errors.New("invalid ping URL")
+// ErrNotConfigured is returned by Ping when no URL is set.
+var ErrNotConfigured = tr.Err("heartbeat.err_not_configured")
+
+// ErrBadURL wraps validation failures; the reason is an *i18n.Error
+// written for users.
+var ErrBadURL = tr.Err("heartbeat.err_bad_url")
 
 type stored struct {
 	URLEnc []byte `json:"url_enc"`
@@ -105,44 +110,49 @@ func New(st *store.Store, box *secrets.Box, cfg Config) *Pinger {
 	if cfg.MinGap == 0 {
 		cfg.MinGap = time.Minute
 	}
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: cfg.RootCAs}
-	client := &http.Client{Transport: tr, Timeout: cfg.Timeout, CheckRedirect: checkRedirect}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: cfg.RootCAs}
+	client := &http.Client{Transport: transport, Timeout: cfg.Timeout, CheckRedirect: checkRedirect}
 	return &Pinger{st: st, box: box, cfg: cfg, client: client}
 }
 
 // checkRedirect follows at most three redirects, and only to HTTPS.
 func checkRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= 3 {
-		return errors.New("too many redirects")
+		return tr.Err("heartbeat.err_redirects")
 	}
 	if req.URL.Scheme != "https" {
-		return errors.New("redirected to a non-HTTPS address")
+		return tr.Err("heartbeat.err_redirect_http")
 	}
 	return nil
+}
+
+// badURL wraps ErrBadURL with the reason, the catalog message key.
+func badURL(key string, args ...any) error {
+	return fmt.Errorf("%w: %w", ErrBadURL, tr.Err(key, args...))
 }
 
 // Validate checks a URL entered in the settings form and returns it trimmed.
 func Validate(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return "", fmt.Errorf("%w: enter the URL your monitoring service gave you", ErrBadURL)
+		return "", badURL("heartbeat.err_url_empty")
 	}
 	if len(raw) > MaxURLLength {
-		return "", fmt.Errorf("%w: it must be at most %d characters", ErrBadURL, MaxURLLength)
+		return "", badURL("heartbeat.err_url_long", "max", MaxURLLength)
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
-		return "", fmt.Errorf("%w: it is not a valid URL", ErrBadURL)
+		return "", badURL("heartbeat.err_url_invalid")
 	}
 	if u.Scheme != "https" {
-		return "", fmt.Errorf("%w: it must start with https://", ErrBadURL)
+		return "", badURL("heartbeat.err_url_https")
 	}
 	if u.Hostname() == "" || u.Opaque != "" {
-		return "", fmt.Errorf("%w: it has no host name", ErrBadURL)
+		return "", badURL("heartbeat.err_url_host")
 	}
 	if u.Fragment != "" || strings.Contains(raw, "#") {
-		return "", fmt.Errorf("%w: remove the part after #", ErrBadURL)
+		return "", badURL("heartbeat.err_url_fragment")
 	}
 	return raw, nil
 }
@@ -251,7 +261,7 @@ func (p *Pinger) Ping(ctx context.Context) error {
 func (p *Pinger) send(ctx context.Context, u secrets.Secret) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.Reveal(), nil)
 	if err != nil {
-		return errors.New("the ping URL is not valid")
+		return tr.Err("heartbeat.err_url_not_valid")
 	}
 	if p.cfg.UserAgent != "" {
 		req.Header.Set("User-Agent", p.cfg.UserAgent)
@@ -263,7 +273,7 @@ func (p *Pinger) send(ctx context.Context, u secrets.Secret) error {
 	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("the monitoring service answered HTTP %d", resp.StatusCode)
+		return tr.Err("heartbeat.err_http_status", "status", resp.StatusCode)
 	}
 	return nil
 }
@@ -273,7 +283,7 @@ func describe(err error, timeout time.Duration) error {
 	var ue *url.Error
 	if errors.As(err, &ue) {
 		if ue.Timeout() {
-			return fmt.Errorf("no answer within %s", timeout)
+			return tr.Err("heartbeat.err_timeout", "timeout", timeout)
 		}
 		err = ue.Err
 	}

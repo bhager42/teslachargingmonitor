@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -160,22 +161,22 @@ func policyReason(password string) string {
 	n := utf8.RuneCountInString(pw)
 	switch {
 	case !utf8.ValidString(password):
-		return "password contains invalid characters"
+		return tr.T("auth.policy_invalid_chars")
 	case n < MinPasswordLength:
-		return fmt.Sprintf("use at least %d characters (a few unrelated words work well)", MinPasswordLength)
+		return tr.T("auth.policy_too_short", "min", MinPasswordLength)
 	case n > MaxPasswordLength:
-		return fmt.Sprintf("use at most %d characters", MaxPasswordLength)
+		return tr.T("auth.policy_too_long", "max", MaxPasswordLength)
 	case isCommon(pw):
-		return "this password appears in lists of commonly used passwords; choose another"
+		return tr.T("auth.policy_common")
 	}
 	lower := strings.ToLower(pw)
 	for _, w := range contextWords {
 		if strings.Contains(lower, w) && utf8.RuneCountInString(strings.ReplaceAll(lower, w, "")) < MinPasswordLength {
-			return fmt.Sprintf("avoid building the password around %q", w)
+			return tr.T("auth.policy_context_word", "word", strconv.Quote(w))
 		}
 	}
 	if strings.Count(pw, string([]rune(pw)[0])) == n {
-		return "a password of one repeated character is too easy to guess"
+		return tr.T("auth.policy_repeated")
 	}
 	return ""
 }

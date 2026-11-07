@@ -9,6 +9,7 @@
 package web
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -16,8 +17,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/bhager42/teslachargingmonitor/internal/alerts"
 	"github.com/bhager42/teslachargingmonitor/internal/auth"
 	"github.com/bhager42/teslachargingmonitor/internal/i18n"
+	"github.com/bhager42/teslachargingmonitor/internal/store"
 	webui "github.com/bhager42/teslachargingmonitor/web"
 )
 
@@ -70,5 +73,33 @@ func TestJavaScriptMessages(t *testing.T) {
 	body := bodyOf(t, h.do("GET", "/setup", nil))
 	if !regexp.MustCompile(`<script type="application/json" id="tcmon-messages">\{"chart\.load_failed":"Could not load the chart\."`).MatchString(body) {
 		t.Error("page does not carry the script's messages")
+	}
+}
+
+// Severity, alert kind and delivery status names are stored in the
+// database and used in CSS classes; the UI shows their catalog names,
+// which in English are the stored names themselves.
+func TestDisplayNames(t *testing.T) {
+	for _, s := range []alerts.Severity{alerts.None, alerts.Info, alerts.Warning, alerts.Critical} {
+		if got := severityLabel(s); got != s.String() {
+			t.Errorf("severityLabel(%v) = %q", s, got)
+		}
+		if got := severityLabel(s.String()); got != s.String() {
+			t.Errorf("severityLabel(%q) = %q", s.String(), got)
+		}
+	}
+	for _, k := range []string{alerts.KindFiring, alerts.KindEscalated, alerts.KindRepeat, alerts.KindResolved, alerts.KindEvent, "other"} {
+		if got := alerts.KindLabel(k); got != k {
+			t.Errorf("KindLabel(%q) = %q", k, got)
+		}
+	}
+	for _, s := range []string{store.DeliveryPending, store.DeliverySent, store.DeliveryFailed, "other"} {
+		if got := deliveryLabel(s); got != s {
+			t.Errorf("deliveryLabel(%q) = %q", s, got)
+		}
+	}
+	b, _ := json.Marshal(CardAlert{Title: "Hot", Severity: "critical", SeverityLabel: alerts.Critical.Label()})
+	if string(b) != `{"title":"Hot","severity":"critical","severity_label":"critical"}` {
+		t.Errorf("CardAlert JSON = %s", b)
 	}
 }

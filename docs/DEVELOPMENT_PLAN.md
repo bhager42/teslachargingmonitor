@@ -1236,10 +1236,10 @@ Delivered as small PRs, in this order:
    (English only), without changing any text.
    *In progress:* `internal/i18n` (ADR 0006) with the English catalog;
    all web templates converted (part 1 of 3); text built in Go in
-   `internal/web` and in `app.mjs` converted (part 2a). Still to do: alert
-   rule text, severity and status names, and validation errors from other
-   packages that the UI shows (part 2b); emails and the weekly summary
-   (part 3).
+   `internal/web` and in `app.mjs` converted (part 2a); alert rule text,
+   severity and status names, charger code and chart labels, and validation
+   errors from other packages that the UI shows converted (part 2b). Still
+   to do: emails and the weekly summary (part 3).
 7. Lighthouse ≥ 95 audit in CI (carried over from Phase 6).
 8. CHANGELOG, §15 resolved or explicitly deferred, then v1.0.0.
 

@@ -157,6 +157,10 @@ func (s *Server) loadAssets() error {
 		"mins": func(d time.Duration) int { return int(d.Minutes()) },
 		"eq":   func(a, b any) bool { return a == b },
 		"num":  func(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) },
+		// Display names for stored severity, alert kind and delivery status names.
+		"severity":  severityLabel,
+		"alertkind": alerts.KindLabel,
+		"delivery":  deliveryLabel,
 	}
 	maps.Copy(funcs, tr.Funcs())
 	s.pages = map[string]*template.Template{}

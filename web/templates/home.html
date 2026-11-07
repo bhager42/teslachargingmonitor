@@ -29,7 +29,7 @@ Copyright (C) 2026 Brad Hager and contributors
   {{- end}}
   </dl>
   <ul class="card-alerts" data-role="alerts">
-  {{- range .Alerts}}<li class="sev-{{.Severity}}"><span class="badge">{{.Severity}}</span> {{.Title}}</li>{{end}}
+  {{- range .Alerts}}<li class="sev-{{.Severity}}"><span class="badge">{{severity .Severity}}</span> {{.Title}}</li>{{end}}
   </ul>
   <footer class="device-foot">
     <p class="hint">{{t "home.updated"}} <span data-role="updated" data-ts="{{if not .UpdatedAt.IsZero}}{{.UpdatedAt.Format "2006-01-02T15:04:05Z07:00"}}{{end}}">{{.Updated}}</span>{{if .Stale}} <span class="badge sev-warning" data-role="stale">{{t "home.stale"}}</span>{{end}}</p>
@@ -46,7 +46,7 @@ Copyright (C) 2026 Brad Hager and contributors
   {{- if .Recent}}
   <ul class="alerts">
   {{- range .Recent}}
-    <li class="sev-{{.Severity}}"><span class="badge">{{.Severity}}</span> <span class="hint">{{.When}}</span> {{.Message}}</li>
+    <li class="sev-{{.Severity}}"><span class="badge">{{severity .Severity}}</span> <span class="hint">{{.When}}</span> {{.Message}}</li>
   {{- end}}
   </ul>
   {{- else}}<p>{{t "common.no_alerts"}}</p>{{end}}

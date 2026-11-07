@@ -12,9 +12,11 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/bhager42/teslachargingmonitor/internal/i18n"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
 	"github.com/bhager42/teslachargingmonitor/internal/wallconnector"
 )
@@ -121,6 +123,13 @@ func event(enabled bool) Config {
 
 func f(v float64) *float64 { return &v }
 
+// tr is the catalog for rule titles, descriptions, parameter labels and
+// alert messages (messages are stored when an alert fires).
+var tr = i18n.English()
+
+// num formats v with prec decimals, like %.<prec>f.
+func num(v float64, prec int) string { return strconv.FormatFloat(v, 'f', prec, 64) }
+
 // levels maps a value to a severity with hysteresis: once at a level, the
 // value must fall below threshold-hysteresis to drop out of it.
 func levels(v, warn, crit, hyst float64, current Severity) Severity {
@@ -134,14 +143,14 @@ func levels(v, warn, crit, hyst float64, current Severity) Severity {
 	}
 }
 
-func tempRule(key, title, field, sensor string, warn, crit float64) Definition {
+func tempRule(key, field, title, desc, msgKey string, warn, crit float64) Definition {
 	return Definition{
 		Key: key, Title: title, Kind: Condition,
-		Description: fmt.Sprintf("%s temperature above the warning or critical threshold.", sensor),
+		Description: desc,
 		Params: []ParamSpec{
-			{"warn_c", "Warning at", "°C", 30, 150, warn},
-			{"crit_c", "Critical at", "°C", 30, 150, crit},
-			{"hysteresis_c", "Resolve below threshold minus", "°C", 0, 30, 5},
+			{"warn_c", tr.T("alert_param.warning_at"), "°C", 30, 150, warn},
+			{"crit_c", tr.T("alert_param.critical_at"), "°C", 30, 150, crit},
+			{"hysteresis_c", tr.T("alert_param.resolve_below"), "°C", 0, 30, 5},
 		},
 		Defaults: cond(true, time.Minute, 1, criticalRepeat),
 		Eval: func(in Input, p Params, st *State) Result {
@@ -154,7 +163,7 @@ func tempRule(key, title, field, sensor string, warn, crit float64) Definition {
 				"mcu_temp_c":    in.Snapshot.Vitals.MCUTempC,
 			}[field]
 			sev := levels(v, p["warn_c"], p["crit_c"], p["hysteresis_c"], st.current())
-			return Result{Severity: sev, Value: f(v), Message: fmt.Sprintf("%s temperature is %.1f °C", sensor, v)}
+			return Result{Severity: sev, Value: f(v), Message: tr.T(msgKey, "value", num(v, 1))}
 		},
 	}
 }
@@ -162,7 +171,7 @@ func tempRule(key, title, field, sensor string, warn, crit float64) Definition {
 // counterRule fires an event each time a lifetime counter increases. The
 // first reading only sets the baseline; a decrease (device replaced or
 // reset) silently re-baselines.
-func counterRule(key, title, desc, field string, sev Severity, get func(wallconnector.Lifetime) int64, msg string) Definition {
+func counterRule(key, title, desc, field string, sev Severity, get func(wallconnector.Lifetime) int64, msgKey string) Definition {
 	return Definition{
 		Key: key, Title: title, Description: desc, Kind: Event, EventSeverity: sev,
 		Defaults: event(true),
@@ -176,7 +185,7 @@ func counterRule(key, title, desc, field string, sev Severity, get func(wallconn
 			if !seen || v <= prev {
 				return Result{}
 			}
-			return Result{Hits: []Hit{{Message: fmt.Sprintf(msg, v-prev, v), Value: f(v)}}}
+			return Result{Hits: []Hit{{Message: tr.T(msgKey, "count", num(v-prev, 0), "total", num(v, 0)), Value: f(v)}}}
 		},
 	}
 }
@@ -222,9 +231,9 @@ func Lookup(key string) (Definition, bool) {
 
 var definitions = []Definition{
 	{
-		Key: "device_unreachable", Title: "Wall Connector unreachable", Kind: Condition,
-		Description: "A poll failed after all retries. Escalates to critical after several consecutive failed polls.",
-		Params:      []ParamSpec{{"critical_after", "Critical after consecutive failed polls", "polls", 1, 100, 3}},
+		Key: "device_unreachable", Title: tr.T("alert_rule.device_unreachable.title"), Kind: Condition,
+		Description: tr.T("alert_rule.device_unreachable.desc"),
+		Params:      []ParamSpec{{"critical_after", tr.T("alert_param.critical_after"), tr.T("alert_param.unit_polls"), 1, 100, 3}},
 		Defaults:    cond(true, 0, 1, criticalRepeat),
 		Eval: func(in Input, p Params, st *State) Result {
 			if in.Err == nil {
@@ -237,19 +246,21 @@ var definitions = []Definition{
 				sev = Critical
 			}
 			return Result{Severity: sev, Value: f(float64(st.Counter)),
-				Message: fmt.Sprintf("No response from %s (%d failed poll(s)). If its IP address changed, update it in Settings.",
-					in.Device.Address, st.Counter)}
+				Message: tr.T("alert_rule.device_unreachable.message", "address", in.Device.Address, "count", st.Counter)}
 		},
 	},
-	tempRule("handle_temp_high", "Handle temperature high", "handle_temp_c", "Handle", 55, 70),
-	tempRule("pcba_temp_high", "Circuit board temperature high", "pcba_temp_c", "Circuit board (PCBA)", 70, 85),
-	tempRule("mcu_temp_high", "Controller temperature high", "mcu_temp_c", "Controller (MCU)", 70, 85),
-	counterRule("thermal_foldback", "Thermal foldback", "The Wall Connector reduced charging current because it got too hot.",
+	tempRule("handle_temp_high", "handle_temp_c", tr.T("alert_rule.handle_temp_high.title"),
+		tr.T("alert_rule.handle_temp_high.desc"), "alert_rule.handle_temp_high.message", 55, 70),
+	tempRule("pcba_temp_high", "pcba_temp_c", tr.T("alert_rule.pcba_temp_high.title"),
+		tr.T("alert_rule.pcba_temp_high.desc"), "alert_rule.pcba_temp_high.message", 70, 85),
+	tempRule("mcu_temp_high", "mcu_temp_c", tr.T("alert_rule.mcu_temp_high.title"),
+		tr.T("alert_rule.mcu_temp_high.desc"), "alert_rule.mcu_temp_high.message", 70, 85),
+	counterRule("thermal_foldback", tr.T("alert_rule.thermal_foldback.title"), tr.T("alert_rule.thermal_foldback.desc"),
 		"thermal_foldbacks", Warning, func(l wallconnector.Lifetime) int64 { return l.ThermalFoldbacks },
-		"%.0f new thermal foldback(s) — charging current was reduced due to heat (lifetime total %.0f)"),
+		"alert_rule.thermal_foldback.message"),
 	{
-		Key: "device_alert_active", Title: "Wall Connector reports an alert", Kind: Condition,
-		Description: "The device's current_alerts list is not empty.",
+		Key: "device_alert_active", Title: tr.T("alert_rule.device_alert_active.title"), Kind: Condition,
+		Description: tr.T("alert_rule.device_alert_active.desc"),
 		Defaults:    cond(true, 0, 1, 0),
 		Eval: func(in Input, _ Params, _ *State) Result {
 			if !in.vital("current_alerts") {
@@ -260,15 +271,15 @@ var definitions = []Definition{
 				return Result{}
 			}
 			return Result{Severity: Warning, Value: f(float64(len(a))),
-				Message: "Active device alert(s): " + codes(a, wallconnector.AlertInfo)}
+				Message: tr.T("alert_rule.device_alert_active.message", "codes", codes(a, wallconnector.AlertInfo))}
 		},
 	},
-	counterRule("device_alert_count_up", "New device alert recorded", "The lifetime alert counter increased.",
+	counterRule("device_alert_count_up", tr.T("alert_rule.device_alert_count_up.title"), tr.T("alert_rule.device_alert_count_up.desc"),
 		"alert_count", Warning, func(l wallconnector.Lifetime) int64 { return l.AlertCount },
-		"%.0f new alert(s) recorded by the Wall Connector (lifetime total %.0f)"),
+		"alert_rule.device_alert_count_up.message"),
 	{
-		Key: "not_ready_reasons", Title: "Car plugged in but not ready", Kind: Condition,
-		Description: "The Wall Connector reports unusual not-ready reasons while a car is connected and not charging. (The reasons a UWC normally reports while unplugged, charging, or plugged in and idle are ignored.)",
+		Key: "not_ready_reasons", Title: tr.T("alert_rule.not_ready_reasons.title"), Kind: Condition,
+		Description: tr.T("alert_rule.not_ready_reasons.desc"),
 		Defaults:    cond(true, 2*time.Minute, 1, 0),
 		Eval: func(in Input, _ Params, _ *State) Result {
 			if !in.vital("vehicle_connected") || !in.vital("contactor_closed") || !in.vital("evse_not_ready_reasons") {
@@ -288,17 +299,17 @@ var definitions = []Definition{
 			}) {
 				return Result{}
 			}
-			return Result{Severity: Warning, Message: "Car connected but not ready: " +
-				codes(v.EVSENotReadyReasons, wallconnector.NotReadyReasonInfo)}
+			return Result{Severity: Warning, Message: tr.T("alert_rule.not_ready_reasons.message",
+				"codes", codes(v.EVSENotReadyReasons, wallconnector.NotReadyReasonInfo))}
 		},
 	},
 	{
-		Key: "grid_voltage_out_of_range", Title: "Grid voltage out of range", Kind: Condition,
-		Description: "Grid voltage deviates from the configured nominal voltage.",
+		Key: "grid_voltage_out_of_range", Title: tr.T("alert_rule.grid_voltage_out_of_range.title"), Kind: Condition,
+		Description: tr.T("alert_rule.grid_voltage_out_of_range.desc"),
 		Params: []ParamSpec{
-			{"warn_pct", "Warning at deviation", "%", 1, 50, 5},
-			{"crit_pct", "Critical at deviation", "%", 1, 50, 10},
-			{"hysteresis_pct", "Hysteresis", "%", 0, 10, 1},
+			{"warn_pct", tr.T("alert_param.warning_at_deviation"), "%", 1, 50, 5},
+			{"crit_pct", tr.T("alert_param.critical_at_deviation"), "%", 1, 50, 10},
+			{"hysteresis_pct", tr.T("alert_param.hysteresis"), "%", 0, 10, 1},
 		},
 		Defaults: cond(true, 0, 1, criticalRepeat),
 		Eval: func(in Input, p Params, st *State) Result {
@@ -308,20 +319,20 @@ var definitions = []Definition{
 			v, nom := in.Snapshot.Vitals.GridV, in.Device.NominalVoltageV
 			dev := math.Abs(v-nom) / nom * 100
 			sev := levels(dev, p["warn_pct"], p["crit_pct"], p["hysteresis_pct"], st.current())
-			dir := "above"
+			key := "alert_rule.grid_voltage_out_of_range.message_above"
 			if v < nom {
-				dir = "below"
+				key = "alert_rule.grid_voltage_out_of_range.message_below"
 			}
 			return Result{Severity: sev, Value: f(v),
-				Message: fmt.Sprintf("Grid voltage %.1f V is %.1f %% %s nominal %.0f V", v, dev, dir, nom)}
+				Message: tr.T(key, "value", num(v, 1), "deviation", num(dev, 1), "nominal", num(nom, 0))}
 		},
 	},
 	{
-		Key: "grid_freq_out_of_range", Title: "Grid frequency out of range", Kind: Condition,
-		Description: "Grid frequency deviates from nominal (50/60 Hz).",
+		Key: "grid_freq_out_of_range", Title: tr.T("alert_rule.grid_freq_out_of_range.title"), Kind: Condition,
+		Description: tr.T("alert_rule.grid_freq_out_of_range.desc"),
 		Params: []ParamSpec{
-			{"warn_hz", "Warning at deviation", "Hz", 0.05, 5, 0.5},
-			{"hysteresis_hz", "Hysteresis", "Hz", 0, 1, 0.1},
+			{"warn_hz", tr.T("alert_param.warning_at_deviation"), "Hz", 0.05, 5, 0.5},
+			{"hysteresis_hz", tr.T("alert_param.hysteresis"), "Hz", 0, 1, 0.1},
 		},
 		Defaults: cond(true, 0, 1, 0),
 		Eval: func(in Input, p Params, st *State) Result {
@@ -332,13 +343,13 @@ var definitions = []Definition{
 			dev := math.Abs(v - in.Device.NominalHz)
 			sev := levels(dev, p["warn_hz"], 0, p["hysteresis_hz"], st.current())
 			return Result{Severity: sev, Value: f(v),
-				Message: fmt.Sprintf("Grid frequency %.3f Hz (nominal %.0f Hz)", v, in.Device.NominalHz)}
+				Message: tr.T("alert_rule.grid_freq_out_of_range.message", "value", num(v, 3), "nominal", num(in.Device.NominalHz, 0))}
 		},
 	},
 	{
-		Key: "phase_current_imbalance", Title: "Phase current imbalance", Kind: Condition,
-		Description: "Three-phase installations only: phase currents differ while charging.",
-		Params:      []ParamSpec{{"imbalance_pct", "Imbalance above", "%", 5, 100, 20}},
+		Key: "phase_current_imbalance", Title: tr.T("alert_rule.phase_current_imbalance.title"), Kind: Condition,
+		Description: tr.T("alert_rule.phase_current_imbalance.desc"),
+		Params:      []ParamSpec{{"imbalance_pct", tr.T("alert_param.imbalance_above"), "%", 5, 100, 20}},
 		Defaults:    cond(false, 0, 2, 0),
 		Eval: func(in Input, p Params, _ *State) Result {
 			if !threePhase(in.Device) || !in.vital("currentA_a") || !in.vital("currentB_a") || !in.vital("currentC_a") {
@@ -355,13 +366,14 @@ var definitions = []Definition{
 				return Result{}
 			}
 			return Result{Severity: Info, Value: f(pct),
-				Message: fmt.Sprintf("Phase currents differ by %.0f %% (A %.1f / B %.1f / C %.1f A)", pct, v.CurrentAA, v.CurrentBA, v.CurrentCA)}
+				Message: tr.T("alert_rule.phase_current_imbalance.message", "pct", num(pct, 0),
+					"a", num(v.CurrentAA, 1), "b", num(v.CurrentBA, 1), "c", num(v.CurrentCA, 1))}
 		},
 	},
 	{
-		Key: "overcurrent", Title: "Overcurrent", Kind: Condition,
-		Description: "Charging current exceeds the configured maximum current plus a margin.",
-		Params:      []ParamSpec{{"margin_pct", "Margin above max current", "%", 0, 50, 5}},
+		Key: "overcurrent", Title: tr.T("alert_rule.overcurrent.title"), Kind: Condition,
+		Description: tr.T("alert_rule.overcurrent.desc"),
+		Params:      []ParamSpec{{"margin_pct", tr.T("alert_param.margin_above_max"), "%", 0, 50, 5}},
 		Defaults:    cond(true, 30*time.Second, 1, criticalRepeat),
 		Eval: func(in Input, p Params, _ *State) Result {
 			if in.Device.MaxCurrentA <= 0 || !in.vital("vehicle_current_a") {
@@ -382,13 +394,13 @@ var definitions = []Definition{
 				return Result{Value: f(cur)}
 			}
 			return Result{Severity: Critical, Value: f(cur),
-				Message: fmt.Sprintf("Current %.1f A exceeds the %.0f A maximum (limit %.1f A)", cur, in.Device.MaxCurrentA, limit)}
+				Message: tr.T("alert_rule.overcurrent.message", "current", num(cur, 1), "max", num(in.Device.MaxCurrentA, 0), "limit", num(limit, 1))}
 		},
 	},
 	{
-		Key: "current_near_limit", Title: "Charging at maximum current", Kind: Condition,
-		Description: "Informational: charging at or just above the configured maximum current.",
-		Params:      []ParamSpec{{"margin_pct", "Upper margin", "%", 0, 50, 5}},
+		Key: "current_near_limit", Title: tr.T("alert_rule.current_near_limit.title"), Kind: Condition,
+		Description: tr.T("alert_rule.current_near_limit.desc"),
+		Params:      []ParamSpec{{"margin_pct", tr.T("alert_param.upper_margin"), "%", 0, 50, 5}},
 		Defaults:    cond(false, 0, 2, 0),
 		Eval: func(in Input, p Params, _ *State) Result {
 			if in.Device.MaxCurrentA <= 0 || !in.vital("vehicle_current_a") {
@@ -398,13 +410,13 @@ var definitions = []Definition{
 			if cur < maxA || cur > maxA*(1+p["margin_pct"]/100) {
 				return Result{Value: f(cur)}
 			}
-			return Result{Severity: Info, Value: f(cur), Message: fmt.Sprintf("Charging at %.1f A (maximum %.0f A)", cur, maxA)}
+			return Result{Severity: Info, Value: f(cur), Message: tr.T("alert_rule.current_near_limit.message", "current", num(cur, 1), "max", num(maxA, 0))}
 		},
 	},
 	{
-		Key: "charging_stalled", Title: "Charging stalled", Kind: Condition,
-		Description: "Contactor closed and car connected, but almost no current flows.",
-		Params:      []ParamSpec{{"min_current_a", "Below", "A", 0.1, 10, 1}},
+		Key: "charging_stalled", Title: tr.T("alert_rule.charging_stalled.title"), Kind: Condition,
+		Description: tr.T("alert_rule.charging_stalled.desc"),
+		Params:      []ParamSpec{{"min_current_a", tr.T("alert_param.below"), "A", 0.1, 10, 1}},
 		Defaults:    cond(true, 0, 2, 0),
 		Eval: func(in Input, p Params, _ *State) Result {
 			if !in.vital("vehicle_current_a") || !in.vital("contactor_closed") || !in.vital("vehicle_connected") {
@@ -415,20 +427,18 @@ var definitions = []Definition{
 				return Result{}
 			}
 			return Result{Severity: Info, Value: f(v.VehicleCurrentA),
-				Message: fmt.Sprintf("Charging session active but current is only %.1f A", v.VehicleCurrentA)}
+				Message: tr.T("alert_rule.charging_stalled.message", "current", num(v.VehicleCurrentA, 1))}
 		},
 	},
 	{
-		Key: "relay_voltage_abnormal", Title: "Relay voltage abnormal", Kind: Condition,
-		Description: "Relay drive voltage (UWC: K1/K2, Gen 3: coil) outside the expected band, the two relays disagree, " +
-			"or a relay shows voltage while the contactor is open (possible stuck relay). Not calibrated for the UWC: " +
-			"a real charging capture showed K1 5.8 V and K2 0.0 V with the contactor closed, outside the default band.",
+		Key: "relay_voltage_abnormal", Title: tr.T("alert_rule.relay_voltage_abnormal.title"), Kind: Condition,
+		Description:      tr.T("alert_rule.relay_voltage_abnormal.desc"),
 		NeedsCalibration: true,
 		Params: []ParamSpec{
-			{"closed_min_v", "Closed: minimum", "V", 0, 60, 9},
-			{"closed_max_v", "Closed: maximum", "V", 0, 60, 15},
-			{"open_max_v", "Open: maximum", "V", 0, 60, 1},
-			{"k1_k2_diff_v", "K1/K2 difference above", "V", 0, 60, 2},
+			{"closed_min_v", tr.T("alert_param.closed_min"), "V", 0, 60, 9},
+			{"closed_max_v", tr.T("alert_param.closed_max"), "V", 0, 60, 15},
+			{"open_max_v", tr.T("alert_param.open_max"), "V", 0, 60, 1},
+			{"k1_k2_diff_v", tr.T("alert_param.k1_k2_diff"), "V", 0, 60, 2},
 		},
 		Defaults: cond(false, 0, 2, 0),
 		Eval: func(in Input, p Params, _ *State) Result {
@@ -451,21 +461,22 @@ var definitions = []Definition{
 			hi, lo := slices.Max(relays), slices.Min(relays)
 			switch {
 			case !v.ContactorClosed && hi > p["open_max_v"]:
-				return Result{Severity: Warning, Value: f(hi), Message: fmt.Sprintf("Relay shows %.1f V while the contactor is open (possible stuck relay)", hi)}
+				return Result{Severity: Warning, Value: f(hi), Message: tr.T("alert_rule.relay_voltage_abnormal.message_open", "voltage", num(hi, 1))}
 			case v.ContactorClosed && (lo < p["closed_min_v"] || hi > p["closed_max_v"]):
-				return Result{Severity: Warning, Value: f(lo), Message: fmt.Sprintf("Relay voltage %.1f–%.1f V outside %.1f–%.1f V", lo, hi, p["closed_min_v"], p["closed_max_v"])}
+				return Result{Severity: Warning, Value: f(lo), Message: tr.T("alert_rule.relay_voltage_abnormal.message_band", "low", num(lo, 1), "high", num(hi, 1),
+					"min", num(p["closed_min_v"], 1), "max", num(p["closed_max_v"], 1))}
 			case len(relays) > 1 && hi-lo > p["k1_k2_diff_v"]:
-				return Result{Severity: Warning, Value: f(hi - lo), Message: fmt.Sprintf("Relay K1/K2 voltages differ by %.1f V", hi-lo)}
+				return Result{Severity: Warning, Value: f(hi - lo), Message: tr.T("alert_rule.relay_voltage_abnormal.message_diff", "diff", num(hi-lo, 1))}
 			}
 			return Result{}
 		},
 	},
 	{
-		Key: "wifi_weak", Title: "Weak Wi-Fi signal", Kind: Condition,
-		Description: "Wi-Fi RSSI below the threshold on consecutive polls.",
+		Key: "wifi_weak", Title: tr.T("alert_rule.wifi_weak.title"), Kind: Condition,
+		Description: tr.T("alert_rule.wifi_weak.desc"),
 		Params: []ParamSpec{
-			{"rssi_dbm", "Below", "dBm", -100, -30, -75},
-			{"hysteresis_db", "Hysteresis", "dB", 0, 20, 3},
+			{"rssi_dbm", tr.T("alert_param.below"), "dBm", -100, -30, -75},
+			{"hysteresis_db", tr.T("alert_param.hysteresis"), "dB", 0, 20, 3},
 		},
 		Defaults: cond(true, 0, 2, 0),
 		Eval: func(in Input, p Params, st *State) Result {
@@ -478,12 +489,12 @@ var definitions = []Definition{
 			if sev > Info {
 				sev = Info
 			}
-			return Result{Severity: sev, Value: f(rssi), Message: fmt.Sprintf("Wi-Fi signal is weak (%.0f dBm)", rssi)}
+			return Result{Severity: sev, Value: f(rssi), Message: tr.T("alert_rule.wifi_weak.message", "rssi", num(rssi, 0))}
 		},
 	},
 	{
-		Key: "wifi_no_internet", Title: "No internet connection", Kind: Condition,
-		Description: "The Wall Connector reports no internet access (needed for firmware updates).",
+		Key: "wifi_no_internet", Title: tr.T("alert_rule.wifi_no_internet.title"), Kind: Condition,
+		Description: tr.T("alert_rule.wifi_no_internet.desc"),
 		Defaults:    cond(true, 0, 2, 0),
 		Eval: func(in Input, _ Params, _ *State) Result {
 			if !in.valid(wallconnector.EndpointWifiStatus, "internet") {
@@ -492,32 +503,32 @@ var definitions = []Definition{
 			if in.Snapshot.WifiStatus.Internet {
 				return Result{}
 			}
-			return Result{Severity: Info, Message: "The Wall Connector has no internet connection"}
+			return Result{Severity: Info, Message: tr.T("alert_rule.wifi_no_internet.message")}
 		},
 	},
-	deviceEventRule("unexpected_reboot", "Wall Connector rebooted", "The device uptime reset since the previous poll.",
+	deviceEventRule("unexpected_reboot", tr.T("alert_rule.unexpected_reboot.title"), tr.T("alert_rule.unexpected_reboot.desc"),
 		store.EventReboot, Info, func(e store.DeviceEvent) string {
-			return fmt.Sprintf("The Wall Connector restarted (uptime now %s s)", e.Details["uptime_s"])
+			return tr.T("alert_rule.unexpected_reboot.message", "uptime", e.Details["uptime_s"])
 		}),
-	deviceEventRule("firmware_changed", "Firmware updated", "The firmware version changed.",
+	deviceEventRule("firmware_changed", tr.T("alert_rule.firmware_changed.title"), tr.T("alert_rule.firmware_changed.desc"),
 		store.EventFirmwareChanged, Info, func(e store.DeviceEvent) string {
-			return fmt.Sprintf("Firmware changed from %s to %s", e.Details["from"], e.Details["to"])
+			return tr.T("alert_rule.firmware_changed.message", "from", e.Details["from"], "to", e.Details["to"])
 		}),
-	deviceEventRule("grid_profile_changed", "Grid profile changed", "An IEEE 1547 grid-interconnection checksum changed (trip/ride-through settings).",
+	deviceEventRule("grid_profile_changed", tr.T("alert_rule.grid_profile_changed.title"), tr.T("alert_rule.grid_profile_changed.desc"),
 		store.EventGridProfileChanged, Warning, func(e store.DeviceEvent) string {
-			return fmt.Sprintf("Grid profile (IEEE 1547) settings changed: VfTrips %s→%s, RideThru %s→%s, Combined %s→%s",
-				e.Details["vf_trips_from"], e.Details["vf_trips_to"], e.Details["ride_thru_from"], e.Details["ride_thru_to"],
-				e.Details["combined_from"], e.Details["combined_to"])
+			return tr.T("alert_rule.grid_profile_changed.message",
+				"vf_trips_from", e.Details["vf_trips_from"], "vf_trips_to", e.Details["vf_trips_to"],
+				"ride_thru_from", e.Details["ride_thru_from"], "ride_thru_to", e.Details["ride_thru_to"],
+				"combined_from", e.Details["combined_from"], "combined_to", e.Details["combined_to"])
 		}),
-	deviceEventRule("identity_mismatch", "Different Wall Connector at this address", "The serial number at the configured address changed.",
+	deviceEventRule("identity_mismatch", tr.T("alert_rule.identity_mismatch.title"), tr.T("alert_rule.identity_mismatch.desc"),
 		store.EventIdentityMismatch, Warning, func(e store.DeviceEvent) string {
-			return fmt.Sprintf("A different Wall Connector (serial %s, was %s) answered at this address — check the IP address in Settings",
-				e.Details["serial"], e.Details["previous_serial"])
+			return tr.T("alert_rule.identity_mismatch.message", "serial", e.Details["serial"], "previous", e.Details["previous_serial"])
 		}),
 	{
-		Key: "contactor_wear", Title: "Contactor wear milestone", Kind: Event, EventSeverity: Info,
-		Description: "The number of contactor cycles under load crossed a milestone.",
-		Params:      []ParamSpec{{"milestone", "Every", "cycles", 100, 1000000, 10000}},
+		Key: "contactor_wear", Title: tr.T("alert_rule.contactor_wear.title"), Kind: Event, EventSeverity: Info,
+		Description: tr.T("alert_rule.contactor_wear.desc"),
+		Params:      []ParamSpec{{"milestone", tr.T("alert_param.every"), tr.T("alert_param.unit_cycles"), 100, 1000000, 10000}},
 		Defaults:    event(true),
 		Eval: func(in Input, p Params, st *State) Result {
 			if !in.valid(wallconnector.EndpointLifetime, "contactor_cycles_loaded") {
@@ -531,7 +542,7 @@ var definitions = []Definition{
 				return Result{}
 			}
 			return Result{Hits: []Hit{{Value: f(v),
-				Message: fmt.Sprintf("Contactor has completed %.0f switching cycles under load", math.Floor(v/m)*m)}}}
+				Message: tr.T("alert_rule.contactor_wear.message", "cycles", num(math.Floor(v/m)*m, 0))}}}
 		},
 	},
 }
@@ -563,21 +574,22 @@ func (d Definition) Validate(c Config) error {
 			return fmt.Errorf("rule %s has no parameter %q", d.Key, name)
 		}
 		if s := d.Params[i]; v < s.Min || v > s.Max || math.IsNaN(v) {
-			return fmt.Errorf("%s must be between %g and %g %s", s.Label, s.Min, s.Max, s.Unit)
+			return tr.Err("alert_rule.err_range", "param", s.Label, "min", strconv.FormatFloat(s.Min, 'g', -1, 64),
+				"max", strconv.FormatFloat(s.Max, 'g', -1, 64), "unit", s.Unit)
 		}
 	}
 	if c.For < 0 || c.For > 24*time.Hour || c.Cooldown < 0 || c.Cooldown > 7*24*time.Hour ||
 		c.Repeat < 0 || c.Repeat > 7*24*time.Hour || (c.Repeat > 0 && c.Repeat < 15*time.Minute) {
-		return fmt.Errorf("rule %s: for ≤ 24 h, cooldown/repeat ≤ 7 days, repeat ≥ 15 min", d.Key)
+		return tr.Err("alert_rule.err_timing", "rule", d.Key)
 	}
 	if c.MinSamples < 1 || c.MinSamples > 100 {
-		return fmt.Errorf("rule %s: min samples must be 1-100", d.Key)
+		return tr.Err("alert_rule.err_min_samples", "rule", d.Key)
 	}
 	if w, ok := c.Params["warn_c"]; ok && w >= c.Params["crit_c"] {
-		return fmt.Errorf("rule %s: warning threshold must be below critical", d.Key)
+		return tr.Err("alert_rule.err_warn_above_crit", "rule", d.Key)
 	}
 	if w, ok := c.Params["warn_pct"]; ok && w >= c.Params["crit_pct"] {
-		return fmt.Errorf("rule %s: warning threshold must be below critical", d.Key)
+		return tr.Err("alert_rule.err_warn_above_crit", "rule", d.Key)
 	}
 	return nil
 }

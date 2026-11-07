@@ -78,7 +78,7 @@ function applyCard(card) {
         li.className = `sev-${a.severity}`;
         const badge = document.createElement('span');
         badge.className = 'badge';
-        badge.textContent = a.severity;
+        badge.textContent = a.severity_label;
         li.append(badge, ` ${a.title}`);
         return li;
       }));
