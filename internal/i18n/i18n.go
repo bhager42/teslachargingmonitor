@@ -214,12 +214,20 @@ func (c *Catalog) Count(key string, n int, args ...any) (string, error) {
 // pluralOne is the plural rule; English (and the default) uses "one" for 1.
 func (c *Catalog) pluralOne(n int) bool { return n == 1 }
 
+// ReportErrors receives, when set, every mistake that T and N hide (unknown
+// key, missing or unused argument). Tests set it so such mistakes fail; it
+// must be set before any concurrent use and not changed afterwards.
+var ReportErrors func(key string, err error)
+
 // T is Text for Go code: a missing key or argument yields the key itself so
-// a mistake shows up in the UI instead of an empty string. Tests check that
-// every key used exists.
+// a mistake shows up in the UI instead of an empty string (and reaches
+// ReportErrors).
 func (c *Catalog) T(key string, args ...any) string {
 	s, err := c.Text(key, args...)
 	if err != nil {
+		if ReportErrors != nil {
+			ReportErrors(key, err)
+		}
 		return key
 	}
 	return s
@@ -229,6 +237,9 @@ func (c *Catalog) T(key string, args ...any) string {
 func (c *Catalog) N(key string, n int, args ...any) string {
 	s, err := c.Count(key, n, args...)
 	if err != nil {
+		if ReportErrors != nil {
+			ReportErrors(key, err)
+		}
 		return key
 	}
 	return s

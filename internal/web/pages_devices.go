@@ -40,7 +40,7 @@ func (s *Server) deviceFromPath(w http.ResponseWriter, r *http.Request) (store.D
 			return d, true
 		}
 	}
-	s.renderError(w, r, http.StatusNotFound, "Not found", "That Wall Connector does not exist.")
+	s.renderError(w, r, http.StatusNotFound, tr.T("error.not_found_title"), tr.T("error.no_device"))
 	return store.Device{}, false
 }
 
@@ -52,7 +52,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request, sess auth.Session)
 		recent = append(recent, alertRow{ID: e.ID, Severity: e.Severity, Kind: e.Kind, When: fmtAgo(e.TS, s.now()),
 			Message: e.Message, Acked: e.AckedAt != nil})
 	}
-	s.render(w, r, http.StatusOK, "home", s.base(page{"Title": "Dashboard", "Cards": cards, "CardFields": CardFields,
+	s.render(w, r, http.StatusOK, "home", s.base(page{"Title": tr.T("home.title"), "Cards": cards, "CardFields": CardFields,
 		"Recent": recent}, sess, "home"))
 }
 
@@ -89,28 +89,28 @@ func (s *Server) deviceDetail(w http.ResponseWriter, r *http.Request, sess auth.
 	if pt, err := s.st.LatestPoint(ctx, d.ID); err == nil {
 		l := pt.Snapshot.Lifetime
 		lifetime = []kv{
-			{"Energy delivered", fmtNum(float64(l.EnergyWh)/1000, "kWh", 1)},
-			{"Charging time", fmtDuration(time.Duration(l.ChargingTimeS) * time.Second)},
-			{"Charge sessions", strconv.FormatInt(l.ChargeStarts, 10)},
-			{"Contactor cycles (under load)", fmt.Sprintf("%d (%d)", l.ContactorCycles, l.ContactorCyclesLoaded)},
-			{"Plug-ins", strconv.FormatInt(l.ConnectorCycles, 10)},
-			{"Thermal foldbacks", strconv.FormatInt(l.ThermalFoldbacks, 10)},
-			{"Alerts recorded by the device", strconv.FormatInt(l.AlertCount, 10)},
+			{tr.T("device.energy"), fmtNum(float64(l.EnergyWh)/1000, "kWh", 1)},
+			{tr.T("device.charging_time"), fmtDuration(time.Duration(l.ChargingTimeS) * time.Second)},
+			{tr.T("device.sessions"), strconv.FormatInt(l.ChargeStarts, 10)},
+			{tr.T("device.contactor_cycles"), fmt.Sprintf("%d (%d)", l.ContactorCycles, l.ContactorCyclesLoaded)},
+			{tr.T("device.plug_ins"), strconv.FormatInt(l.ConnectorCycles, 10)},
+			{tr.T("device.foldbacks"), strconv.FormatInt(l.ThermalFoldbacks, 10)},
+			{tr.T("device.alerts"), strconv.FormatInt(l.AlertCount, 10)},
 		}
 		v := pt.Snapshot.Vitals
 		p["Codes"] = []kv{
-			{"EVSE state", wallconnector.EVSEStateInfo(v.EVSEState).Label},
-			{"Config status", wallconnector.ConfigStatusInfo(v.ConfigStatus).Label},
-			{"Not-ready reasons", codeList(v.EVSENotReadyReasons, wallconnector.NotReadyReasonInfo)},
-			{"Device alerts", codeList(v.CurrentAlerts, wallconnector.AlertInfo)},
+			{tr.T("device.evse_state"), wallconnector.EVSEStateInfo(v.EVSEState).Label},
+			{tr.T("device.config_status"), wallconnector.ConfigStatusInfo(v.ConfigStatus).Label},
+			{tr.T("device.not_ready"), codeList(v.EVSENotReadyReasons, wallconnector.NotReadyReasonInfo)},
+			{tr.T("device.device_alerts"), codeList(v.CurrentAlerts, wallconnector.AlertInfo)},
 		}
 	}
 	p["Lifetime"] = lifetime
 	if info, err := s.st.DeviceInfo(ctx, d.ID); err == nil {
 		p["Identity"] = []kv{
-			{"Firmware", info.FirmwareVersion}, {"Part number", info.PartNumber},
-			{"Serial number", wallconnector.MaskSerial(info.SerialNumber)},
-			{"First seen", info.FirstSeen.Local().Format("2 Jan 2006")},
+			{tr.T("device.firmware"), info.FirmwareVersion}, {tr.T("device.part"), info.PartNumber},
+			{tr.T("device.serial"), wallconnector.MaskSerial(info.SerialNumber)},
+			{tr.T("device.first_seen"), info.FirstSeen.Local().Format("2 Jan 2006")},
 		}
 	}
 	raw, _, _ := s.st.LatestRaw(ctx, d.ID)
@@ -124,7 +124,7 @@ func (s *Server) deviceDetail(w http.ResponseWriter, r *http.Request, sess auth.
 	evs, _ := s.st.Events(ctx, d.ID, time.Time{}, 10)
 	var events []kv
 	for _, e := range evs {
-		events = append(events, kv{e.TS.Local().Format("2 Jan 15:04"), strings.ReplaceAll(e.Kind, "_", " ")})
+		events = append(events, kv{e.TS.Local().Format("2 Jan 15:04"), eventLabel(e.Kind)})
 	}
 	p["Events"] = events
 	var charts []page
@@ -143,9 +143,24 @@ func (s *Server) deviceDetail(w http.ResponseWriter, r *http.Request, sess auth.
 	s.render(w, r, http.StatusOK, "device", s.base(p, sess, "home"))
 }
 
+// eventLabel names a device event kind for the UI.
+func eventLabel(kind string) string {
+	switch kind {
+	case store.EventReboot:
+		return tr.T("event.reboot")
+	case store.EventFirmwareChanged:
+		return tr.T("event.firmware_changed")
+	case store.EventGridProfileChanged:
+		return tr.T("event.grid_profile_changed")
+	case store.EventIdentityMismatch:
+		return tr.T("event.identity_mismatch")
+	}
+	return strings.ReplaceAll(kind, "_", " ")
+}
+
 func codeList(codes []int, info func(int) wallconnector.CodeInfo) string {
 	if len(codes) == 0 {
-		return "none"
+		return tr.T("device.codes_none")
 	}
 	parts := make([]string, 0, len(codes))
 	for _, c := range codes {
@@ -158,14 +173,14 @@ func codeList(codes []int, info func(int) wallconnector.CodeInfo) string {
 func redactRaw(b []byte) string {
 	var m map[string]any
 	if json.Unmarshal(b, &m) != nil {
-		return "(not valid JSON)"
+		return tr.T("device.raw_invalid")
 	}
 	if s, ok := m["serial_number"].(string); ok {
 		m["serial_number"] = wallconnector.MaskSerial(s)
 	}
 	for _, k := range []string{"wifi_mac", "wifi_ssid"} {
 		if _, ok := m[k]; ok {
-			m[k] = "(hidden)"
+			m[k] = tr.T("device.raw_hidden")
 		}
 	}
 	out, _ := json.MarshalIndent(m, "", "  ")
@@ -271,7 +286,7 @@ func (s *Server) pollNow(w http.ResponseWriter, r *http.Request, _ auth.Session)
 
 func (s *Server) devicesPage(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	devices, _ := s.st.Devices(r.Context())
-	s.render(w, r, http.StatusOK, "devices", s.base(page{"Title": "Wall Connectors", "Devices": devices}, sess, "settings"))
+	s.render(w, r, http.StatusOK, "devices", s.base(page{"Title": tr.T("devices.title"), "Devices": devices}, sess, "settings"))
 }
 
 type deviceForm struct {
@@ -303,27 +318,27 @@ func (f deviceForm) toDevice(base store.Device) (store.Device, error) {
 		}
 		v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
 		if err != nil {
-			return 0, fmt.Errorf("%s must be a number", label)
+			return 0, errors.New(tr.T("device_form.err_number", "field", label))
 		}
 		return v, nil
 	}
 	var err error
-	if d.BreakerA, err = num(f.Breaker, "Breaker size"); err != nil {
+	if d.BreakerA, err = num(f.Breaker, tr.T("device_form.field_breaker")); err != nil {
 		return d, err
 	}
-	if d.MaxCurrentA, err = num(f.MaxCurrent, "Max current"); err != nil {
+	if d.MaxCurrentA, err = num(f.MaxCurrent, tr.T("device_form.field_max_current")); err != nil {
 		return d, err
 	}
-	if d.NominalVoltageV, err = num(f.Voltage, "Voltage"); err != nil {
+	if d.NominalVoltageV, err = num(f.Voltage, tr.T("device_form.field_voltage")); err != nil {
 		return d, err
 	}
-	if d.NominalHz, err = num(f.Hz, "Frequency"); err != nil {
+	if d.NominalHz, err = num(f.Hz, tr.T("device_form.field_frequency")); err != nil {
 		return d, err
 	}
 	iv, err1 := strconv.Atoi(strings.TrimSpace(f.Interval))
 	pv, err2 := strconv.Atoi(strings.TrimSpace(f.Plugged))
 	if err1 != nil || err2 != nil {
-		return d, errors.New("intervals must be whole minutes")
+		return d, errors.New(tr.T("device_form.err_intervals"))
 	}
 	d.PollInterval, d.PluggedInterval = time.Duration(iv)*time.Minute, time.Duration(pv)*time.Minute
 	d.FastWhenPlugged, d.Enabled, d.AllowNonLAN = f.FastWhenPlugged, f.Enabled, f.AllowNonLAN
@@ -343,16 +358,16 @@ func (s *Server) renderDeviceForm(w http.ResponseWriter, r *http.Request, sess a
 	if p == nil {
 		p = page{}
 	}
-	p["Form"], p["Title"] = f, "Wall Connector settings"
+	p["Form"], p["Title"] = f, tr.T("device_form.title_edit")
 	if f.ID == 0 {
-		p["Title"] = "Add Wall Connector"
+		p["Title"] = tr.T("common.add_wall_connector")
 	}
 	p["Voltages"] = []string{"120", "208", "220", "230", "240", "277", "400", "480"}
 	s.render(w, r, status, "device_form", s.base(p, sess, "settings"))
 }
 
 func (s *Server) newDeviceForm(w http.ResponseWriter, r *http.Request, sess auth.Session) {
-	f := formFromDevice(store.NewDevice("Wall Connector", ""))
+	f := formFromDevice(store.NewDevice(tr.T("device_form.default_name"), ""))
 	f.Breaker = ""
 	s.renderDeviceForm(w, r, sess, http.StatusOK, f, nil)
 }
@@ -380,15 +395,15 @@ func (s *Server) probe(ctx context.Context, d store.Device) probeResult {
 	res, err := c.Probe(ctx)
 	switch {
 	case errors.Is(err, wallconnector.ErrNotWallConnector):
-		return probeResult{Message: "Something answered at " + addr.String() + ", but it does not look like a Tesla Wall Connector."}
+		return probeResult{Message: tr.T("device_form.probe_not_wc", "address", addr.String())}
 	case errors.Is(err, wallconnector.ErrBlockedAddress):
-		return probeResult{Message: "That address is not on your local network. Tick “allow an address outside the local network” only if you are sure."}
+		return probeResult{Message: tr.T("device_form.probe_blocked")}
 	case err != nil:
-		return probeResult{Message: "No Wall Connector answered at " + addr.String() + ". Check the IP address (your router's DHCP list or the Tesla One app) and that it is on Wi-Fi."}
+		return probeResult{Message: tr.T("device_form.probe_none", "address", addr.String())}
 	}
 	st, _ := state(res.Vitals, nil)
 	return probeResult{OK: true, Firmware: res.Firmware.Short(), Part: res.Version.PartNumber, Serial: res.MaskedSerial,
-		State: st, Message: "Found a Wall Connector."}
+		State: st, Message: tr.T("device_form.probe_ok")}
 }
 
 func (s *Server) saveDevice(w http.ResponseWriter, r *http.Request, sess auth.Session) {
@@ -427,7 +442,7 @@ func (s *Server) saveDevice(w http.ResponseWriter, r *http.Request, sess auth.Se
 		d, err = s.st.UpdateDevice(ctx, d, now)
 	}
 	if err != nil {
-		s.renderDeviceForm(w, r, sess, http.StatusBadRequest, f, page{"Error": "Could not save: " + err.Error()})
+		s.renderDeviceForm(w, r, sess, http.StatusBadRequest, f, page{"Error": tr.T("device_form.err_save", "error", err.Error())})
 		return
 	}
 	s.auditUI(r, "device_saved", map[string]string{"device_id": strconv.FormatInt(d.ID, 10), "address": d.Address})
@@ -446,11 +461,11 @@ func (s *Server) deleteDevice(w http.ResponseWriter, r *http.Request, sess auth.
 	}
 	if r.PostFormValue("confirm") != d.Name {
 		s.renderDeviceForm(w, r, sess, http.StatusBadRequest, formFromDevice(d),
-			page{"Error": "To delete, type the device name exactly. This removes all of its history."})
+			page{"Error": tr.T("device_form.err_confirm")})
 		return
 	}
 	if err := s.st.DeleteDevice(r.Context(), d.ID); err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, "Error", "Could not delete the device.")
+		s.renderError(w, r, http.StatusInternalServerError, tr.T("error.title"), tr.T("device_form.err_delete"))
 		return
 	}
 	s.auditUI(r, "device_deleted", map[string]string{"device_id": strconv.FormatInt(d.ID, 10)})

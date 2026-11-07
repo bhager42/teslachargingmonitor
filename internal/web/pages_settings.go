@@ -33,16 +33,17 @@ type retentionField struct {
 var retentionPresets = []struct {
 	Days  int
 	Label string
-}{{30, "30 days"}, {90, "90 days"}, {180, "6 months"}, {365, "1 year"}, {730, "2 years"}, {1825, "5 years"}, {0, "Keep forever"}}
+}{{30, tr.T("settings.keep_30d")}, {90, tr.T("settings.keep_90d")}, {180, tr.T("settings.keep_6m")}, {365, tr.T("settings.keep_1y")},
+	{730, tr.T("settings.keep_2y")}, {1825, tr.T("settings.keep_5y")}, {0, tr.T("settings.keep_forever")}}
 
 func retentionFields(r store.Retention) []retentionField {
 	fields := []retentionField{
-		{"readings_days", "Readings", "Every poll's measurements (charts use hourly summaries beyond this).", r.ReadingsDays, false},
-		{"raw_payloads_days", "Raw device responses", "Exact JSON from the Wall Connector, for diagnostics.", r.RawPayloadsDays, false},
-		{"rollups_days", "Hourly summaries", "Small; used for long-range charts.", r.RollupsDays, false},
-		{"events_days", "Alert and device history", "", r.EventsDays, false},
-		{"poll_log_days", "Poll and email delivery log", "", r.PollLogDays, false},
-		{"audit_days", "Security log", "", r.AuditDays, false},
+		{"readings_days", tr.T("settings.keep_readings"), tr.T("settings.keep_readings_help"), r.ReadingsDays, false},
+		{"raw_payloads_days", tr.T("settings.keep_raw"), tr.T("settings.keep_raw_help"), r.RawPayloadsDays, false},
+		{"rollups_days", tr.T("settings.keep_rollups"), tr.T("settings.keep_rollups_help"), r.RollupsDays, false},
+		{"events_days", tr.T("settings.keep_events"), "", r.EventsDays, false},
+		{"poll_log_days", tr.T("settings.keep_poll_log"), "", r.PollLogDays, false},
+		{"audit_days", tr.T("settings.keep_audit"), "", r.AuditDays, false},
 	}
 	for i := range fields {
 		fields[i].Custom = true
@@ -63,7 +64,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, sess aut
 	ctx := r.Context()
 	ret, _ := s.st.Retention(ctx)
 	stats, _ := s.st.Stats(ctx)
-	p["Title"], p["Retention"], p["Presets"], p["Display"] = "Settings", retentionFields(ret), retentionPresets, s.display(ctx)
+	p["Title"], p["Retention"], p["Presets"], p["Display"] = tr.T("settings.title"), retentionFields(ret), retentionPresets, s.display(ctx)
 	p["DBSize"] = fmt.Sprintf("%.1f MB", float64(stats.SizeBytes)/1e6)
 	if hb := s.heartbeatView(); hb != nil {
 		p["Heartbeat"] = hb
@@ -88,7 +89,7 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request, sess auth.
 		}
 		n, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil {
-			s.renderSettings(w, r, sess, http.StatusBadRequest, page{"Error": "Retention values must be whole numbers of days."})
+			s.renderSettings(w, r, sess, http.StatusBadRequest, page{"Error": tr.T("settings.err_retention")})
 			return
 		}
 		*dst = n
@@ -102,8 +103,7 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request, sess auth.
 		shorter(next.RollupsDays, cur.RollupsDays) || shorter(next.EventsDays, cur.EventsDays) ||
 		shorter(next.PollLogDays, cur.PollLogDays) || shorter(next.AuditDays, cur.AuditDays)
 	if shrinking && r.PostFormValue("confirm_delete") != "1" {
-		s.renderSettings(w, r, sess, http.StatusBadRequest, page{"Error": "Shorter retention permanently deletes older data at the next nightly cleanup. " +
-			"Download a backup first if you may need it, then tick the confirmation box."})
+		s.renderSettings(w, r, sess, http.StatusBadRequest, page{"Error": tr.T("settings.err_confirm_delete")})
 		return
 	}
 	unit := r.PostFormValue("temp_unit")
@@ -112,11 +112,11 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request, sess auth.
 	}
 	now := s.now()
 	if err := s.st.SetRetention(ctx, next, now); err != nil {
-		s.renderSettings(w, r, sess, http.StatusInternalServerError, page{"Error": "Could not save settings."})
+		s.renderSettings(w, r, sess, http.StatusInternalServerError, page{"Error": tr.T("settings.err_save")})
 		return
 	}
 	if err := s.st.SetSetting(ctx, displayKey, Display{TempUnit: unit}, now); err != nil {
-		s.renderSettings(w, r, sess, http.StatusInternalServerError, page{"Error": "Could not save settings."})
+		s.renderSettings(w, r, sess, http.StatusInternalServerError, page{"Error": tr.T("settings.err_save")})
 		return
 	}
 	s.auditUI(r, "settings_saved", map[string]string{"readings_days": strconv.Itoa(next.ReadingsDays)})
@@ -127,19 +127,19 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request, sess auth.
 func (s *Server) backup(w http.ResponseWriter, r *http.Request, _ auth.Session) {
 	dir, err := os.MkdirTemp(filepath.Join(s.cfg.DataDir), ".backup-")
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, "Backup failed", "Could not create a temporary file.")
+		s.renderError(w, r, http.StatusInternalServerError, tr.T("settings.backup_failed"), tr.T("settings.backup_err_temp"))
 		return
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 	path := filepath.Join(dir, "tcmon.db")
 	if err := s.st.Backup(r.Context(), path); err != nil {
 		s.log.Error("backup", "err", err)
-		s.renderError(w, r, http.StatusInternalServerError, "Backup failed", "See the container log.")
+		s.renderError(w, r, http.StatusInternalServerError, tr.T("settings.backup_failed"), tr.T("error.see_log"))
 		return
 	}
 	f, err := os.Open(path) //nolint:gosec // path built above inside the data directory
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, "Backup failed", "See the container log.")
+		s.renderError(w, r, http.StatusInternalServerError, tr.T("settings.backup_failed"), tr.T("error.see_log"))
 		return
 	}
 	defer func() { _ = f.Close() }()
@@ -166,9 +166,9 @@ func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request, sess auth.S
 		dd := diagDevice{Name: d.Name}
 		log, _ := s.st.PollLog(ctx, d.ID, 15)
 		for _, e := range log {
-			res := "ok"
+			res := tr.T("diagnostics.poll_ok")
 			if !e.OK {
-				res = "failed (attempt " + strconv.Itoa(e.Attempt) + ")"
+				res = tr.T("diagnostics.poll_failed", "attempt", e.Attempt)
 			}
 			dd.Polls = append(dd.Polls, diagPoll{When: e.TS.Local().Format("2 Jan 15:04:05"), Result: res,
 				Took: e.Duration.Round(time.Millisecond).String(), Error: e.Error})
@@ -206,10 +206,10 @@ func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request, sess auth.S
 				continue
 			}
 			for _, u := range rep.Unknown {
-				dd.Problems = append(dd.Problems, ep.Path()+": new field “"+u+"” (not yet used by this app)")
+				dd.Problems = append(dd.Problems, tr.T("diagnostics.unknown_field", "endpoint", ep.Path(), "field", u))
 			}
 			for _, m := range rep.Missing {
-				dd.Problems = append(dd.Problems, ep.Path()+": expected field “"+m+"” is missing")
+				dd.Problems = append(dd.Problems, tr.T("diagnostics.missing_field", "endpoint", ep.Path(), "field", m))
 			}
 			for _, iv := range rep.Invalid {
 				dd.Problems = append(dd.Problems, ep.Path()+": "+iv.String())
@@ -228,7 +228,7 @@ func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request, sess auth.S
 	if s.hub != nil {
 		clients = s.hub.Clients()
 	}
-	s.render(w, r, http.StatusOK, "diagnostics", s.base(page{"Title": "Diagnostics", "Devices": out, "Rows": rows,
+	s.render(w, r, http.StatusOK, "diagnostics", s.base(page{"Title": tr.T("diagnostics.title"), "Devices": out, "Rows": rows,
 		"DBSize": fmt.Sprintf("%.1f MB", float64(stats.SizeBytes)/1e6), "Schema": ver, "GoVersion": info.GoVersion,
 		"LiveClients": clients, "Heartbeat": s.heartbeatView()}, sess, "diagnostics"))
 }
