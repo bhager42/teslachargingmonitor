@@ -142,7 +142,8 @@ The password is read from standard input (or `-password-file`), encrypted
 with the key in `./data/secret.key`, and a test email is sent. Back up
 `secret.key` together with the database.
 
-Browser tests (Playwright + axe; needs Node 22): `make e2e` (Chromium) or
+Browser tests (Playwright + axe, plus the Lighthouse budget in Chromium; needs
+Node 22): `make e2e` (Chromium) or
 `make e2e E2E_BROWSERS=chromium,firefox,webkit`.
 
 Fuzzing: `make fuzz FUZZTIME=60s`. Soak test: `make soak`.
