@@ -7,31 +7,31 @@ under the terms of the GNU Affero General Public License as published by the
 Free Software Foundation, either version 3 of the License, or (at your
 option) any later version. See the LICENSE file for details.
 */ -}}
-Weekly summary, {{.Range}}
+{{t "digest.heading_range" "range" .Range}}
 
-Charging: {{.Total}}
+{{t "digest.label_charging"}} {{.Total}}
 {{- if .NoDevices}}
 
-No Wall Connector is configured yet.
+{{t "digest.no_devices"}}
 {{- end}}
 {{- range .Devices}}
 
 == {{.Name}} ==
-  Charging: {{.Charging}}
+  {{t "digest.label_charging"}} {{.Charging}}
   {{.Previous}}
-  Polling: {{.Polls}}
+  {{t "digest.label_polling"}} {{.Polls}}
   {{.Temps}}
   {{- with .Grid}}
   {{.}}{{end}}
   {{- with .Events}}
-  Device events: {{range $i, $e := .}}{{if $i}}, {{end}}{{$e}}{{end}}{{end}}
+  {{t "digest.label_events"}} {{range $i, $e := .}}{{if $i}}, {{end}}{{$e}}{{end}}{{end}}
 {{- end}}
 
-Alerts
+{{t "digest.alerts_heading"}}
 {{- range .Alerts}}
-  [{{.Severity}}] {{.Title}} — {{.Device}}: {{.Count}}, last {{.Last}}
+  [{{.Severity}}] {{.Title}} — {{.Device}}: {{t "digest.alert_count" "count" .Count "last" .Last}}
 {{- else}}
-  No alerts this week.
+  {{t "digest.no_alerts"}}
 {{- end}}
 
 --

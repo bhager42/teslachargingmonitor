@@ -13,7 +13,6 @@ import (
 	"embed"
 	htmltemplate "html/template"
 	"slices"
-	"strconv"
 	"strings"
 	texttemplate "text/template"
 	"time"
@@ -34,10 +33,17 @@ type Message struct {
 var templateFS embed.FS
 
 var (
-	funcs   = map[string]any{"upper": strings.ToUpper}
+	funcs   = templateFuncs()
 	textTpl = texttemplate.Must(texttemplate.New("email.txt.tmpl").Funcs(funcs).ParseFS(templateFS, "templates/email.txt.tmpl"))
 	htmlTpl = htmltemplate.Must(htmltemplate.New("email.html.tmpl").Funcs(funcs).ParseFS(templateFS, "templates/email.html.tmpl"))
 )
+
+// templateFuncs are the catalog functions (t, th, tn, lang) plus upper.
+func templateFuncs() map[string]any {
+	f := map[string]any(tr.Funcs())
+	f["upper"] = strings.ToUpper
+	return f
+}
 
 // item is the only data templates can see (no secrets, no raw payloads).
 type item struct {
@@ -50,12 +56,21 @@ type view struct {
 	Footer  string
 }
 
-var kindLabels = map[string]string{
-	alerts.KindFiring:    "alert",
-	alerts.KindEscalated: "escalated",
-	alerts.KindRepeat:    "still active",
-	alerts.KindResolved:  "resolved",
-	alerts.KindEvent:     "event",
+// kindLabel names a notice kind in an email (wording differs from the web UI).
+func kindLabel(kind string) string {
+	switch kind {
+	case alerts.KindFiring:
+		return tr.T("email.kind_firing")
+	case alerts.KindEscalated:
+		return tr.T("email.kind_escalated")
+	case alerts.KindRepeat:
+		return tr.T("email.kind_repeat")
+	case alerts.KindResolved:
+		return tr.T("email.kind_resolved")
+	case alerts.KindEvent:
+		return tr.T("email.kind_event")
+	}
+	return ""
 }
 
 func style(n alerts.Notification) (color, icon string) {
@@ -88,7 +103,7 @@ func Build(batch []alerts.Notification, loc *time.Location) Message {
 		}
 		color, icon := style(n)
 		v.Items = append(v.Items, item{
-			Severity: n.Severity.String(), RuleTitle: n.RuleTitle, KindLabel: kindLabels[n.Kind],
+			Severity: n.Severity.Label(), RuleTitle: n.RuleTitle, KindLabel: kindLabel(n.Kind),
 			Message: n.Message, DeviceName: n.DeviceName, When: n.At.In(loc).Format("Mon 2 Jan 2006 15:04 MST"),
 			Color: color, SeverityIcon: icon,
 		})
@@ -96,16 +111,16 @@ func Build(batch []alerts.Notification, loc *time.Location) Message {
 	where := strings.Join(devices, ", ")
 	switch {
 	case len(batch) == 1 && batch[0].Kind == alerts.KindResolved:
-		m.Subject = "Resolved: " + batch[0].RuleTitle + " — " + where
+		m.Subject = tr.T("email.subject_resolved", "title", batch[0].RuleTitle, "devices", where)
 	case len(batch) == 1:
-		m.Subject = strings.ToUpper(batch[0].Severity.String()) + ": " + batch[0].RuleTitle + " — " + where
+		m.Subject = tr.T("email.subject_one", "severity", strings.ToUpper(batch[0].Severity.Label()),
+			"title", batch[0].RuleTitle, "devices", where)
 	default:
-		m.Subject = strconv.Itoa(len(batch)) + " notifications (highest: " + m.Severity.String() + ") — " + where
+		m.Subject = tr.N("email.subject_many", len(batch), "severity", m.Severity.Label(), "devices", where)
 	}
 	info := buildinfo.Get()
 	v.Subject = m.Subject
-	v.Footer = "Sent by Tesla Charger Monitoring " + info.Version + ". Manage alert rules and notifications in the web UI. " +
-		"Tesla Charger Monitoring is an independent project, not affiliated with Tesla, Inc. Source: " + info.SourceLink()
+	v.Footer = tr.T("email.footer", "version", info.Version, "source", info.SourceLink())
 	var tb, hb bytes.Buffer
 	_ = textTpl.Execute(&tb, v) // templates are embedded and tested; data is plain strings
 	_ = htmlTpl.Execute(&hb, v)

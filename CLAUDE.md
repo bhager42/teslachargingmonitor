@@ -45,7 +45,9 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
   Trusted Types); state-changing routes go through `authed` (session + CSRF);
   show only `auth.UserMessage` text to users. Templates live in `web/templates`.
 - User-facing text lives in `internal/i18n/locales/en.json` (ADR 0006): templates
-  use `{{t "key"}}`, `{{th "key_html"}}` (markup) and `{{tn "key" n}}` (plurals);
+  (web pages and emails) use `{{t "key"}}`, `{{th "key_html"}}` (markup) and
+  `{{tn "key" n}}` (plurals); Go code uses a package-level `tr` (`tr.T`, `tr.N`,
+  `tr.Err` for validation errors);
   `TestCatalogCoverage` fails on unknown or unused keys. Never change wording
   as part of moving it.
 - Browser JS lives in `web/static/js/app.mjs`: DOM APIs only (no innerHTML/eval —

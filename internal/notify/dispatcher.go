@@ -465,10 +465,10 @@ func Describe(err error) string {
 
 // Test sends a test message through a channel immediately (not queued).
 func (d *Dispatcher) Test(ctx context.Context, id int64) error {
-	msg := Build([]alerts.Notification{{RuleTitle: "Test notification", DeviceName: "Tesla Charger Monitoring",
+	msg := Build([]alerts.Notification{{RuleTitle: tr.T("email.test_title"), DeviceName: tr.T("app.name"),
 		Kind: alerts.KindEvent, Severity: alerts.Info, At: d.cfg.Now(),
-		Message: "This is a test from Tesla Charger Monitoring. If you can read this, email alerts work."}}, d.cfg.Location)
-	msg.Subject = "Test notification"
+		Message: tr.T("email.test_message")}}, d.cfg.Location)
+	msg.Subject = tr.T("email.test_title")
 	return d.SendNow(ctx, id, msg)
 }
 
