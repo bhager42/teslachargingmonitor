@@ -11,7 +11,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"time"
 
 	"github.com/bhager42/teslachargingmonitor/internal/energy"
@@ -43,7 +42,7 @@ func (s *Store) Rates(ctx context.Context) ([]energy.Rate, error) {
 }
 
 // ErrBadRate is returned for rates outside the allowed ranges.
-var ErrBadRate = errors.New("prices must be between 0 and 100 per kWh, the monthly fee between 0 and 100000, and off-peak times valid")
+var ErrBadRate = tr.Err("energy_check.err_rate")
 
 // AddRate stores a price that applies from r.EffectiveFrom onwards. A rate
 // with the same start replaces the old one.

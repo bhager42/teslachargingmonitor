@@ -15,7 +15,7 @@ Copyright (C) 2026 Brad Hager and contributors
     <dt>{{t "notifications.server"}}</dt><dd>{{.Email.Host}}:{{.Email.Port}} ({{.Email.Security}})</dd>
     <dt>{{t "notifications.from"}}</dt><dd>{{.Email.From}}</dd>
     <dt>{{t "notifications.to"}}</dt><dd>{{range $i, $t := .Email.To}}{{if $i}}, {{end}}{{$t}}{{end}}</dd>
-    <dt>{{t "notifications.sends"}}</dt><dd>{{t "notifications.min_severity" "severity" .MinSeverity}}{{if .QuietHours}}{{t "notifications.quiet_hours" "hours" .QuietHours}}{{end}}</dd>
+    <dt>{{t "notifications.sends"}}</dt><dd>{{t "notifications.min_severity" "severity" (severity .MinSeverity)}}{{if .QuietHours}}{{t "notifications.quiet_hours" "hours" .QuietHours}}{{end}}</dd>
     <dt>{{t "notifications.digest"}}</dt><dd>{{if .Digest}}{{t "notifications.digest_on" "time" $.DigestAt}}{{else}}{{t "notifications.digest_off"}}{{end}}</dd>
     <dt>{{t "notifications.password"}}</dt><dd>{{if .PasswordSet}}{{t "notifications.password_set"}}{{else}}{{t "notifications.password_unset"}}{{end}}</dd>
     <dt>{{t "notifications.last_success"}}</dt><dd>{{ago .LastSuccess}}</dd>
@@ -35,7 +35,7 @@ Copyright (C) 2026 Brad Hager and contributors
   {{- if .Log}}
   <div class="table-wrap"><table>
     <thead><tr><th scope="col">{{t "notifications.col_queued"}}</th><th scope="col">{{t "notifications.col_channel"}}</th><th scope="col">{{t "notifications.col_status"}}</th><th scope="col">{{t "notifications.col_subject"}}</th></tr></thead>
-    <tbody>{{range .Log}}<tr><td>{{.When}}</td><td>{{.Channel}}</td><td>{{.Status}}{{if .Error}}<br><span class="hint">{{.Error}}</span>{{end}}</td><td>{{.Subject}}</td></tr>{{end}}</tbody>
+    <tbody>{{range .Log}}<tr><td>{{.When}}</td><td>{{.Channel}}</td><td>{{delivery .Status}}{{if .Error}}<br><span class="hint">{{.Error}}</span>{{end}}</td><td>{{.Subject}}</td></tr>{{end}}</tbody>
   </table></div>
   {{- else}}<p>{{t "notifications.log_empty"}}</p>{{end}}
 </section>

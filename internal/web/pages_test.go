@@ -389,6 +389,10 @@ func TestAlertPages(t *testing.T) {
 	if _, body := f.get("/alerts"); !strings.Contains(body, "acknowledged") || !strings.Contains(body, "Overcurrent") {
 		t.Error("ack not shown")
 	}
+	if _, body := f.get("/alerts"); !strings.Contains(body, `<span class="badge">critical</span>`) ||
+		!strings.Contains(body, "<strong>Overcurrent</strong> (firing)<br>too much") {
+		t.Error("history does not show the severity, rule title and kind")
+	}
 }
 
 func TestNotificationPages(t *testing.T) {

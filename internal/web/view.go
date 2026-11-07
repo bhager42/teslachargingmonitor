@@ -93,8 +93,37 @@ type DeviceCard struct {
 
 // CardAlert is an active alert on a card.
 type CardAlert struct {
-	Title    string `json:"title"`
-	Severity string `json:"severity"`
+	Title         string `json:"title"`
+	Severity      string `json:"severity"`       // stored name, for the CSS class
+	SeverityLabel string `json:"severity_label"` // display name
+}
+
+// severityLabel is the display name of a severity given as an
+// alerts.Severity or its stored name; unknown names are returned as is.
+func severityLabel(v any) string {
+	switch s := v.(type) {
+	case alerts.Severity:
+		return s.Label()
+	case string:
+		if sev, err := alerts.ParseSeverity(s); err == nil {
+			return sev.Label()
+		}
+		return s
+	}
+	return fmt.Sprint(v)
+}
+
+// deliveryLabel is the display name of a stored delivery status.
+func deliveryLabel(status string) string {
+	switch status {
+	case store.DeliveryPending:
+		return tr.T("delivery.pending")
+	case store.DeliverySent:
+		return tr.T("delivery.sent")
+	case store.DeliveryFailed:
+		return tr.T("delivery.failed")
+	}
+	return status
 }
 
 // CardFields lists the field keys a card shows, in order, with labels.
@@ -133,7 +162,7 @@ func (s *Server) buildCard(d store.Device, pt *store.HistoryPoint, lastPoll *sto
 		active = s.alerts.Active(d.ID)
 	}
 	for _, a := range active {
-		c.Alerts = append(c.Alerts, CardAlert{Title: a.Title, Severity: a.Severity.String()})
+		c.Alerts = append(c.Alerts, CardAlert{Title: a.Title, Severity: a.Severity.String(), SeverityLabel: a.Severity.Label()})
 	}
 	if pt != nil {
 		snap := pt.Snapshot

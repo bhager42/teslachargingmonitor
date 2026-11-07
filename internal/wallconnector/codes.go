@@ -8,7 +8,9 @@
 
 package wallconnector
 
-import "fmt"
+import "github.com/bhager42/teslachargingmonitor/internal/i18n"
+
+var tr = i18n.English()
 
 // CodeInfo describes a numeric status code reported by the device.
 // Known is false when the meaning has not been observed/confirmed; the UI
@@ -26,12 +28,12 @@ func (c CodeInfo) String() string { return c.Label }
 // fixture and a note instead (see docs/DEVELOPMENT_PLAN.md §2).
 var (
 	evseStates = map[int]string{
-		1:  "Idle (no vehicle)",       // UWC fw 26.26.10, unplugged
-		4:  "Connected, not charging", // UWC fw 26.34.0, car plugged in, contactor open, 0 A
-		11: "Charging",                // UWC fw 26.26.10, contactor closed, 47.4 A flowing
+		1:  tr.T("code.evse_state_1"),  // UWC fw 26.26.10, unplugged
+		4:  tr.T("code.evse_state_4"),  // UWC fw 26.34.0, car plugged in, contactor open, 0 A
+		11: tr.T("code.evse_state_11"), // UWC fw 26.26.10, contactor closed, 47.4 A flowing
 	}
 	configStatuses = map[int]string{
-		5: "Configured", // UWC fw 26.26.10, normal commissioned unit
+		5: tr.T("code.config_status_5"), // UWC fw 26.26.10, normal commissioned unit
 	}
 	notReadyReasons = map[int]string{
 		// UWC fw 26.26.10 reports [2,4,8] while unplugged and [1] while
@@ -56,7 +58,7 @@ func lookup(table map[int]string, code int) CodeInfo {
 	if l, ok := table[code]; ok {
 		return CodeInfo{Code: code, Label: l, Known: true}
 	}
-	return CodeInfo{Code: code, Label: fmt.Sprintf("Unknown (code %d)", code)}
+	return CodeInfo{Code: code, Label: tr.T("code.unknown", "code", code)}
 }
 
 // EVSEStateInfo describes a vitals.evse_state value.

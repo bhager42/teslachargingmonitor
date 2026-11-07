@@ -113,10 +113,10 @@ type emailSecret struct {
 
 func (s *EmailSettings) validate() error {
 	if n := len([]rune(s.Name)); n < 1 || n > 64 || !noCRLF(s.Name) {
-		return errors.New("channel name must be 1-64 characters")
+		return tr.Err("notify.err_name")
 	}
 	if s.MinSeverity < alerts.Info || s.MinSeverity > alerts.Critical {
-		return errors.New("minimum severity must be info, warning or critical")
+		return tr.Err("notify.err_severity")
 	}
 	if s.QuietHours != "" {
 		if _, err := alerts.ParseQuietHours(s.QuietHours); err != nil {
@@ -140,7 +140,7 @@ func (d *Dispatcher) CreateEmailChannel(ctx context.Context, s EmailSettings) (C
 		return ChannelInfo{}, err
 	}
 	if s.Email.Username != "" && !s.Password.IsSet() {
-		return ChannelInfo{}, errors.New("a password (Gmail: app password) is required when a username is set")
+		return ChannelInfo{}, tr.Err("notify.err_password_required")
 	}
 	cfgJSON, err := json.Marshal(s.Email)
 	if err != nil {

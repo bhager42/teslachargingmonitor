@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 	"unicode/utf8"
 
@@ -74,7 +75,7 @@ func NewDevice(name, address string) Device {
 // BreakerA is set and MaxCurrentA is not, MaxCurrentA defaults to 80 % of it.
 func (d *Device) Normalize() error {
 	if n := utf8.RuneCountInString(d.Name); n < 1 || n > 64 {
-		return errors.New("name must be 1-64 characters")
+		return tr.Err("device_check.err_name")
 	}
 	addr, err := wallconnector.ParseAddress(d.Address, wallconnector.AddressOptions{AllowNonLAN: d.AllowNonLAN})
 	if err != nil {
@@ -82,23 +83,23 @@ func (d *Device) Normalize() error {
 	}
 	d.Address = addr.BaseURL()
 	for _, iv := range []struct {
-		name string
-		v    time.Duration
-	}{{"poll interval", d.PollInterval}, {"plugged-in interval", d.PluggedInterval}} {
+		key string
+		v   time.Duration
+	}{{"device_check.err_poll_interval", d.PollInterval}, {"device_check.err_plugged_interval", d.PluggedInterval}} {
 		if iv.v < MinInterval || iv.v > MaxInterval || iv.v%time.Second != 0 {
-			return fmt.Errorf("%s must be between %v and %v in whole seconds", iv.name, MinInterval, MaxInterval)
+			return tr.Err(iv.key, "min", MinInterval, "max", MaxInterval)
 		}
 	}
 	switch d.NominalVoltageV {
 	case 120, 208, 220, 230, 240, 277, 400, 480:
 	default:
-		return fmt.Errorf("nominal voltage %g V is not supported", d.NominalVoltageV)
+		return tr.Err("device_check.err_voltage", "voltage", strconv.FormatFloat(d.NominalVoltageV, 'g', -1, 64))
 	}
 	if d.NominalHz != 50 && d.NominalHz != 60 {
-		return errors.New("nominal frequency must be 50 or 60 Hz")
+		return tr.Err("device_check.err_frequency")
 	}
 	if d.BreakerA < 0 || d.BreakerA > 200 || d.MaxCurrentA < 0 || d.MaxCurrentA > MaxCurrentLimitA {
-		return errors.New("breaker must be 0-200 A and max current 0-100 A")
+		return tr.Err("device_check.err_current_range")
 	}
 	if d.BreakerA > 0 && d.MaxCurrentA == 0 {
 		// Capped so the default stays within the limit above (found by
@@ -106,7 +107,8 @@ func (d *Device) Normalize() error {
 		d.MaxCurrentA = min(d.BreakerA*ContinuousLoadFactor, MaxCurrentLimitA)
 	}
 	if d.BreakerA > 0 && d.MaxCurrentA > d.BreakerA*ContinuousLoadFactor {
-		return fmt.Errorf("max current %g A exceeds 80 %% of the %g A breaker", d.MaxCurrentA, d.BreakerA)
+		return tr.Err("device_check.err_current_breaker", "max", strconv.FormatFloat(d.MaxCurrentA, 'g', -1, 64),
+			"breaker", strconv.FormatFloat(d.BreakerA, 'g', -1, 64))
 	}
 	return nil
 }

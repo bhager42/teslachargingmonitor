@@ -9,7 +9,6 @@
 package wallconnector
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -21,7 +20,12 @@ import (
 )
 
 // ErrBadAddress is returned for device addresses that cannot be used.
-var ErrBadAddress = errors.New("invalid Wall Connector address")
+var ErrBadAddress = tr.Err("address.err_invalid")
+
+// badAddress wraps ErrBadAddress with the reason, a catalog message.
+func badAddress(key string, args ...any) error {
+	return fmt.Errorf("%w: %w", ErrBadAddress, tr.Err(key, args...))
+}
 
 const maxAddressLen = 260
 
@@ -47,7 +51,7 @@ type AddressOptions struct {
 func ParseAddress(input string, opts AddressOptions) (Address, error) {
 	s := strings.TrimSpace(input)
 	if s == "" || len(s) > maxAddressLen {
-		return Address{}, fmt.Errorf("%w: enter an IP address or hostname", ErrBadAddress)
+		return Address{}, badAddress("address.err_empty")
 	}
 	// A bare IPv6 literal ("fd00::17") is not parseable as a URL host.
 	if ip, err := netip.ParseAddr(s); err == nil {
@@ -62,23 +66,23 @@ func ParseAddress(input string, opts AddressOptions) (Address, error) {
 	}
 	switch {
 	case u.Scheme != "http" && u.Scheme != "https":
-		return Address{}, fmt.Errorf("%w: only http:// or https:// are supported", ErrBadAddress)
+		return Address{}, badAddress("address.err_scheme")
 	case u.User != nil:
-		return Address{}, fmt.Errorf("%w: credentials are not allowed", ErrBadAddress)
+		return Address{}, badAddress("address.err_credentials")
 	case (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "":
-		return Address{}, fmt.Errorf("%w: enter only the address, without a path", ErrBadAddress)
+		return Address{}, badAddress("address.err_path")
 	}
 	a := Address{Scheme: u.Scheme}
 	if p := u.Port(); p != "" {
 		n, err := strconv.Atoi(p)
 		if err != nil || n < 1 || n > 65535 {
-			return Address{}, fmt.Errorf("%w: port must be 1-65535", ErrBadAddress)
+			return Address{}, badAddress("address.err_port")
 		}
 		a.Port = n
 	}
 	host := u.Hostname()
 	if strings.Contains(host, "%") {
-		return Address{}, fmt.Errorf("%w: IPv6 zone identifiers are not supported", ErrBadAddress)
+		return Address{}, badAddress("address.err_zone")
 	}
 	host = strings.TrimSuffix(host, ".")
 	if ip, err := netip.ParseAddr(host); err == nil {
@@ -87,10 +91,10 @@ func ParseAddress(input string, opts AddressOptions) (Address, error) {
 	if looksNumeric(host) {
 		// e.g. "2130706433", "0x7f.1", "127.1": some resolvers treat these as
 		// IPv4 addresses, which would bypass the LAN check above.
-		return Address{}, fmt.Errorf("%w: %q is not a valid IP address", ErrBadAddress, host)
+		return Address{}, badAddress("address.err_ip", "host", strconv.Quote(host))
 	}
 	if !validHostname(host) {
-		return Address{}, fmt.Errorf("%w: %q is not a valid hostname", ErrBadAddress, host)
+		return Address{}, badAddress("address.err_hostname", "host", strconv.Quote(host))
 	}
 	a.Host = strings.ToLower(host)
 	return a, nil
@@ -98,11 +102,11 @@ func ParseAddress(input string, opts AddressOptions) (Address, error) {
 
 func finishIP(a Address, ip netip.Addr, opts AddressOptions) (Address, error) {
 	if ip.Zone() != "" {
-		return Address{}, fmt.Errorf("%w: IPv6 zone identifiers are not supported", ErrBadAddress)
+		return Address{}, badAddress("address.err_zone")
 	}
 	ip = ip.Unmap()
 	if !opts.AllowNonLAN && !netguard.IsLAN(ip) {
-		return Address{}, fmt.Errorf("%w: %s is not a local network address", ErrBadAddress, ip)
+		return Address{}, badAddress("address.err_not_lan", "ip", ip)
 	}
 	a.Host = ip.String()
 	return a, nil

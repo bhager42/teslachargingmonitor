@@ -13,7 +13,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 )
 
@@ -76,12 +75,13 @@ const MaxRetentionDays = 36500
 
 // Validate checks every value is KeepForever or 1..MaxRetentionDays.
 func (r Retention) Validate() error {
-	for name, d := range map[string]int{
-		"readings": r.ReadingsDays, "raw payloads": r.RawPayloadsDays, "rollups": r.RollupsDays,
-		"events": r.EventsDays, "poll log": r.PollLogDays, "audit log": r.AuditDays,
+	for key, d := range map[string]int{
+		"retention_check.readings": r.ReadingsDays, "retention_check.raw_payloads": r.RawPayloadsDays,
+		"retention_check.rollups": r.RollupsDays, "retention_check.events": r.EventsDays,
+		"retention_check.poll_log": r.PollLogDays, "retention_check.audit_log": r.AuditDays,
 	} {
 		if d < 0 || d > MaxRetentionDays {
-			return fmt.Errorf("%s retention must be 0 (keep forever) or 1-%d days", name, MaxRetentionDays)
+			return tr.Err("retention_check.err", "name", tr.T(key), "max", MaxRetentionDays)
 		}
 	}
 	return nil

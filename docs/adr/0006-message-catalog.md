@@ -36,7 +36,20 @@ plus a small amount of wiring, not a hunt through templates and Go code.
 - **Go code** uses the package-level catalog `tr` in `internal/web`
   (`tr.T("key", "name", value)`), so formatting a message is one call.
   Tests set `i18n.ReportErrors`, so an unknown key or a wrong argument in
-  Go code fails the test run instead of quietly showing the key.
+  Go code fails the test run instead of quietly showing the key; in any
+  other test binary such a mistake panics.
+- **Other packages** that produce text the UI shows keep their own
+  package-level `tr` the same way: alert rule titles, descriptions,
+  parameter labels and messages (`alerts`), charger code and chart labels
+  (`wallconnector`, `store`), delivery hints (`notify`). Validation errors
+  are `tr.Err(...)`, an `*i18n.Error` that keeps its key and arguments, so
+  a caller can show it in another language later; its `Error()` is the
+  English text, which logs and the CLI also use. Severity, alert kind and
+  delivery status keep their stored names (database, CSS classes) and are
+  shown through `Severity.Label`, `alerts.KindLabel` and the template
+  functions `severity`, `alertkind` and `delivery`.
+- **Alert messages are stored** when an alert fires (history, emails), so
+  they stay in the language that was active at the time.
 - **Browser script:** `app.mjs` holds no text. Each page carries the few
   messages it needs (`jsMessageKeys`) in a
   `<script type="application/json" id="tcmon-messages">` data block, which
@@ -48,10 +61,12 @@ plus a small amount of wiring, not a hunt through templates and Go code.
   the same for `app.mjs`. Loading rejects duplicate keys, stray
   braces and disallowed markup.
 - **Not in the catalog:** log lines, CLI output and error details meant
-  for the operator; health and API endpoints; CSV column headers (a file
-  format other tools read); device data (names, firmware, codes); units,
-  number and date formats (they stay as they are until a language needs
-  them).
+  for the operator (internal `store:`/`wallconnector:` errors, mail server
+  replies, Go URL parse errors); health and API endpoints; CSV column
+  headers (a file format other tools read); device data (names, firmware,
+  codes); unit symbols, number and date formats (they stay as they are
+  until a language needs them). Unit words such as "polls" are in the
+  catalog.
 - **Language selection:** English is the only catalog, and templates are
   parsed with its functions. Adding a language means adding
   `locales/<lang>.json`, parsing the templates once per catalog, and
