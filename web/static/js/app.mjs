@@ -7,6 +7,15 @@
 
 const SVG = 'http://www.w3.org/2000/svg';
 
+// ---- Text from the server's message catalog (internal/i18n), delivered as
+// a JSON data block in the page so no text lives in this file. ----
+const MESSAGES = (() => {
+  try { return JSON.parse(document.getElementById('tcmon-messages')?.textContent || '{}'); } catch { return {}; }
+})();
+function msg(key, args = {}) {
+  return (MESSAGES[key] ?? key).replace(/\{([a-z][a-z0-9_]*)\}/g, (m, name) => (name in args ? String(args[name]) : m));
+}
+
 // ---- Theme: Auto / Dark / Light, remembered in a cookie so the server
 // renders the right theme on the first paint (no flash). ----
 function initTheme() {
@@ -33,12 +42,12 @@ function initTheme() {
 
 // ---- Relative times ("5 min ago") kept fresh. ----
 function ago(iso) {
-  if (!iso) return 'never';
+  if (!iso) return msg('time.never');
   const s = (Date.now() - Date.parse(iso)) / 1000;
-  if (s < 60) return 'just now';
-  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
-  if (s < 172800) return `${Math.floor(s / 3600)} h ago`;
-  return `${Math.floor(s / 86400)} days ago`;
+  if (s < 60) return msg('time.just_now');
+  if (s < 3600) return msg('time.min_ago', { n: Math.floor(s / 60) });
+  if (s < 172800) return msg('time.h_ago', { n: Math.floor(s / 3600) });
+  return msg('time.days_ago', { n: Math.floor(s / 86400) });
 }
 
 function refreshTimes() {
@@ -85,8 +94,8 @@ function announceAlerts(items) {
     p.className = `sev-${a.Severity}`;
     const link = document.createElement('a');
     link.href = '/alerts';
-    link.textContent = 'View alerts';
-    p.append(`${a.Kind === 'resolved' ? 'Resolved' : 'New alert'}: ${a.Title} — ${a.Device}. `, link);
+    link.textContent = msg('live.view_alerts');
+    p.append(`${msg(a.Kind === 'resolved' ? 'live.resolved' : 'live.new_alert', { title: a.Title, device: a.Device })} `, link);
     region.prepend(p);
   }
   while (region.childElementCount > 3) region.lastElementChild.remove();
@@ -111,7 +120,7 @@ class TcmonChart extends HTMLElement {
       if (!res.ok) throw new Error(String(res.status));
       this.draw(await res.json(), label, range);
     } catch {
-      this.message('Could not load the chart.');
+      this.message(msg('chart.load_failed'));
     }
   }
 
@@ -124,7 +133,7 @@ class TcmonChart extends HTMLElement {
 
   draw(data, label, range) {
     const pts = data.points;
-    if (!pts.length) { this.message(`No data in the last ${range}.`); return; }
+    if (!pts.length) { this.message(msg('chart.no_data', { range })); return; }
     const W = 600, H = 160, L = 44, B = 18;
     const t0 = Date.parse(pts[0].t), t1 = Date.parse(pts.at(-1).t) || t0 + 1;
     let lo = Math.min(...pts.map((p) => p.min)), hi = Math.max(...pts.map((p) => p.max));
@@ -138,7 +147,7 @@ class TcmonChart extends HTMLElement {
     };
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', preserveAspectRatio: 'none' });
     const latest = pts.at(-1).avg;
-    const summary = `${label}, last ${range}: minimum ${fmt(lo)}, maximum ${fmt(hi)}, latest ${fmt(latest)} ${data.unit}`;
+    const summary = msg('chart.summary', { label, range, min: fmt(lo), max: fmt(hi), latest: fmt(latest), unit: data.unit });
     svg.setAttribute('aria-label', summary);
     const band = pts.map((p) => `${x(p.t)},${y(p.max)}`).concat(pts.toReversed().map((p) => `${x(p.t)},${y(p.min)}`));
     svg.append(

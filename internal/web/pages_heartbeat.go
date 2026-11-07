@@ -57,7 +57,7 @@ func (s *Server) saveHeartbeat(w http.ResponseWriter, r *http.Request, sess auth
 	switch action {
 	case "remove":
 		if err := s.beat.Clear(ctx); err != nil {
-			s.renderSettings(w, r, sess, http.StatusInternalServerError, page{"Error": "Could not remove the ping URL."})
+			s.renderSettings(w, r, sess, http.StatusInternalServerError, page{"Error": tr.T("settings.beat_err_remove")})
 			return
 		}
 		s.auditUI(r, "heartbeat_removed", nil)
@@ -65,22 +65,22 @@ func (s *Server) saveHeartbeat(w http.ResponseWriter, r *http.Request, sess auth
 		return
 	case "save", "test":
 	default:
-		fail("Unknown action.")
+		fail(tr.T("error.unknown_action"))
 		return
 	}
 	if raw != "" {
 		if err := s.beat.Set(ctx, raw); err != nil {
 			if errors.Is(err, heartbeat.ErrBadURL) {
-				fail("The ping URL is not valid: " + strings.TrimPrefix(err.Error(), heartbeat.ErrBadURL.Error()+": ") + ".")
+				fail(tr.T("settings.beat_err_invalid", "reason", strings.TrimPrefix(err.Error(), heartbeat.ErrBadURL.Error()+": ")))
 			} else {
 				s.log.Error("saving ping URL", "err", err)
-				fail("Could not save the ping URL.")
+				fail(tr.T("settings.beat_err_save"))
 			}
 			return
 		}
 		s.auditUI(r, "heartbeat_saved", map[string]string{"test": strconv.FormatBool(action == "test")})
 	} else if action == "save" || !s.beat.Status().Configured {
-		fail("Enter the ping URL from your monitoring service.")
+		fail(tr.T("settings.beat_err_empty"))
 		return
 	}
 	if action == "save" {
@@ -88,11 +88,11 @@ func (s *Server) saveHeartbeat(w http.ResponseWriter, r *http.Request, sess auth
 		return
 	}
 	if err := s.beat.Ping(ctx); err != nil {
-		prefix := "The test ping failed: "
+		key := "settings.beat_err_test"
 		if raw != "" {
-			prefix = "Saved, but the test ping failed: "
+			key = "settings.beat_err_saved_test"
 		}
-		fail(prefix + err.Error() + ".")
+		fail(tr.T(key, "error", err.Error()))
 		return
 	}
 	http.Redirect(w, r, "/settings?ok=beat-tested#heartbeat", http.StatusSeeOther)

@@ -1235,8 +1235,10 @@ Delivered as small PRs, in this order:
 6. i18n scaffolding: user-facing strings moved to a message catalogue
    (English only), without changing any text.
    *In progress:* `internal/i18n` (ADR 0006) with the English catalog;
-   all web templates converted (part 1 of 3). Still to do: text built in Go
-   for the web UI and alert rules (part 2), emails and the weekly summary
+   all web templates converted (part 1 of 3); text built in Go in
+   `internal/web` and in `app.mjs` converted (part 2a). Still to do: alert
+   rule text, severity and status names, and validation errors from other
+   packages that the UI shows (part 2b); emails and the weekly summary
    (part 3).
 7. Lighthouse ≥ 95 audit in CI (carried over from Phase 6).
 8. CHANGELOG, §15 resolved or explicitly deferred, then v1.0.0.

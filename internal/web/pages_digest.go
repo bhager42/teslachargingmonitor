@@ -30,10 +30,10 @@ func (s *Server) digestPreview(w http.ResponseWriter, r *http.Request, sess auth
 	msg, err := s.lastDigest(r)
 	if err != nil {
 		s.log.Error("building digest preview", "err", err)
-		s.renderError(w, r, http.StatusInternalServerError, "Preview failed", "See the container log.")
+		s.renderError(w, r, http.StatusInternalServerError, tr.T("digest.preview_failed"), tr.T("error.see_log"))
 		return
 	}
-	s.render(w, r, http.StatusOK, "digest", s.base(page{"Title": "Weekly summary preview", "Subject": msg.Subject,
+	s.render(w, r, http.StatusOK, "digest", s.base(page{"Title": tr.T("digest.title"), "Subject": msg.Subject,
 		"Text": msg.Text, "SendHour": digest.SendHour}, sess, "notifications"))
 }
 
@@ -49,7 +49,7 @@ func (s *Server) sendDigest(w http.ResponseWriter, r *http.Request, sess auth.Se
 	}
 	if err != nil {
 		s.renderChannel(w, r, sess, http.StatusBadRequest, channelToForm(c),
-			page{"Error": "Sending the weekly summary failed: " + notify.Describe(err)})
+			page{"Error": tr.T("digest.send_failed", "error", notify.Describe(err))})
 		return
 	}
 	s.auditUI(r, "digest_sent", map[string]string{"channel_id": strconv.FormatInt(c.ID, 10)})
