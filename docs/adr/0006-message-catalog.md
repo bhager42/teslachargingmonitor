@@ -50,6 +50,11 @@ plus a small amount of wiring, not a hunt through templates and Go code.
   functions `severity`, `alertkind` and `delivery`.
 - **Alert messages are stored** when an alert fires (history, emails), so
   they stay in the language that was active at the time.
+- **Emails** (alerts, the test email, the weekly summary) are built the
+  same way: their templates in `internal/*/templates` use `t`, `tn` and
+  `lang`, and the Go code that assembles subjects and lines uses `tr.T`
+  and `tr.N`. Emails have their own keys (`email.*`, `digest.*`) where the
+  wording differs from the web UI (e.g. "still active" for a repeat).
 - **Browser script:** `app.mjs` holds no text. Each page carries the few
   messages it needs (`jsMessageKeys`) in a
   `<script type="application/json" id="tcmon-messages">` data block, which
@@ -66,7 +71,8 @@ plus a small amount of wiring, not a hunt through templates and Go code.
   headers (a file format other tools read); device data (names, firmware,
   codes); unit symbols, number and date formats (they stay as they are
   until a language needs them). Unit words such as "polls" are in the
-  catalog.
+  catalog. The product name in stored channel defaults (subject prefix
+  `[Tesla Charger Monitoring]`, From name) stays a constant.
 - **Language selection:** English is the only catalog, and templates are
   parsed with its functions. Adding a language means adding
   `locales/<lang>.json`, parsing the templates once per catalog, and

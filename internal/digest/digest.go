@@ -30,6 +30,7 @@ import (
 	"github.com/bhager42/teslachargingmonitor/internal/alerts"
 	"github.com/bhager42/teslachargingmonitor/internal/buildinfo"
 	"github.com/bhager42/teslachargingmonitor/internal/energy"
+	"github.com/bhager42/teslachargingmonitor/internal/i18n"
 	"github.com/bhager42/teslachargingmonitor/internal/notify"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
 )
@@ -37,9 +38,14 @@ import (
 //go:embed templates/*.tmpl
 var templateFS embed.FS
 
+// tr is the catalog for the digest's text.
+var tr = i18n.English()
+
 var (
-	textTpl = texttemplate.Must(texttemplate.New("digest.txt.tmpl").ParseFS(templateFS, "templates/digest.txt.tmpl"))
-	htmlTpl = htmltemplate.Must(htmltemplate.New("digest.html.tmpl").ParseFS(templateFS, "templates/digest.html.tmpl"))
+	textTpl = texttemplate.Must(texttemplate.New("digest.txt.tmpl").Funcs(tr.Funcs()).
+		ParseFS(templateFS, "templates/digest.txt.tmpl"))
+	htmlTpl = htmltemplate.Must(htmltemplate.New("digest.html.tmpl").Funcs(tr.Funcs()).
+		ParseFS(templateFS, "templates/digest.html.tmpl"))
 )
 
 // Settings keys shared with the web UI (internal/web: costKey, displayKey).
@@ -91,18 +97,24 @@ func temp(c *float64, unit string) string {
 	return fmt.Sprintf("%.1f °C", *c)
 }
 
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return "1 " + one
+// eventCount describes n device events of one kind, e.g. "2 restarts".
+func eventCount(kind string, n int) string {
+	switch kind {
+	case store.EventReboot:
+		return tr.N("digest.event_reboot", n)
+	case store.EventFirmwareChanged:
+		return tr.N("digest.event_firmware_changed", n)
+	case store.EventGridProfileChanged:
+		return tr.N("digest.event_grid_profile_changed", n)
+	case store.EventIdentityMismatch:
+		return tr.N("digest.event_identity_mismatch", n)
 	}
-	return strconv.Itoa(n) + " " + many
+	return tr.N("digest.event_other", n, "kind", strings.ReplaceAll(kind, "_", " "))
 }
 
-var eventLabels = map[string]string{
-	store.EventReboot:             "restart",
-	store.EventFirmwareChanged:    "firmware change",
-	store.EventGridProfileChanged: "grid profile change",
-	store.EventIdentityMismatch:   "identity mismatch",
+// charging is "<energy>, <cost> · <n> charging sessions".
+func charging(kWh, cost float64, cur string, sessions int) string {
+	return tr.T("digest.charging", "energy", kwh(kWh), "cost", money(cost, cur), "sessions", tr.N("digest.sessions", sessions))
 }
 
 // energyIn sums priced intervals whose midpoint falls in [from, to).
@@ -178,18 +190,20 @@ func Build(ctx context.Context, st *store.Store, from, to time.Time, loc *time.L
 			return notify.Message{}, err
 		}
 		dv := deviceView{Name: d.Name,
-			Charging: kwh(k) + ", " + money(c, cur.Currency) + " · " + plural(sessions, "charging session", "charging sessions"),
-			Previous: "Previous week: " + kwh(pk) + ", " + money(pc, cur.Currency),
-			Polls:    plural(h.PollsOK, "successful poll", "successful polls") + ", " + plural(h.PollFailures, "failed attempt", "failed attempts"),
+			Charging: charging(k, c, cur.Currency, sessions),
+			Previous: tr.T("digest.previous", "energy", kwh(pk), "cost", money(pc, cur.Currency)),
+			Polls: tr.T("digest.polls", "ok", tr.N("digest.polls_ok", h.PollsOK),
+				"failed", tr.N("digest.polls_failed", h.PollFailures)),
 		}
 		if h.Readings > 0 {
-			dv.Temps = "Highest temperatures: handle " + temp(h.MaxHandleC, disp.TempUnit) + ", PCBA " +
-				temp(h.MaxPCBAC, disp.TempUnit) + ", MCU " + temp(h.MaxMCUC, disp.TempUnit)
+			dv.Temps = tr.T("digest.temps", "handle", temp(h.MaxHandleC, disp.TempUnit),
+				"pcba", temp(h.MaxPCBAC, disp.TempUnit), "mcu", temp(h.MaxMCUC, disp.TempUnit))
 			if h.MinGridV != nil && h.MaxGridV != nil {
-				dv.Grid = fmt.Sprintf("Grid voltage %.0f–%.0f V", *h.MinGridV, *h.MaxGridV)
+				dv.Grid = tr.T("digest.grid", "min", strconv.FormatFloat(*h.MinGridV, 'f', 0, 64),
+					"max", strconv.FormatFloat(*h.MaxGridV, 'f', 0, 64))
 			}
 		} else {
-			dv.Temps = "No readings this week."
+			dv.Temps = tr.T("digest.no_readings")
 		}
 		kinds := make([]string, 0, len(h.Events))
 		for k := range h.Events {
@@ -197,23 +211,20 @@ func Build(ctx context.Context, st *store.Store, from, to time.Time, loc *time.L
 		}
 		slices.Sort(kinds)
 		for _, k := range kinds {
-			label := cmp.Or(eventLabels[k], strings.ReplaceAll(k, "_", " "))
-			dv.Events = append(dv.Events, plural(h.Events[k], label, label+"s"))
+			dv.Events = append(dv.Events, eventCount(k, h.Events[k]))
 		}
 		v.Devices = append(v.Devices, dv)
 	}
-	v.Total = kwh(totKWh) + ", " + money(totCost, cur.Currency) + " · " + plural(totSessions, "charging session", "charging sessions")
+	v.Total = charging(totKWh, totCost, cur.Currency, totSessions)
 
 	alertCount, err := addAlerts(ctx, st, &v, names, from, to, loc)
 	if err != nil {
 		return notify.Message{}, err
 	}
-	v.Subject = "Weekly summary " + v.Range + ": " + kwh(totKWh) + ", " + money(totCost, cur.Currency) + ", " +
-		plural(alertCount, "alert", "alerts")
+	v.Subject = tr.T("digest.subject", "range", v.Range, "energy", kwh(totKWh), "cost", money(totCost, cur.Currency),
+		"alerts", tr.N("digest.alerts", alertCount))
 	info := buildinfo.Get()
-	v.Footer = "Weekly summary from Tesla Charger Monitoring " + info.Version + ". Turn it off per email channel under " +
-		"Notifications in the web UI. Costs are energy only (monthly fees not included). Tesla Charger Monitoring is an " +
-		"independent project, not affiliated with Tesla, Inc. Source: " + info.SourceLink()
+	v.Footer = tr.T("digest.footer", "version", info.Version, "source", info.SourceLink())
 
 	var tb, hb bytes.Buffer
 	if err := textTpl.Execute(&tb, v); err != nil {
@@ -292,8 +303,8 @@ func addAlerts(ctx context.Context, st *store.Store, v *view, names map[int64]st
 		if icon == "" {
 			icon = "ℹ️"
 		}
-		v.Alerts = append(v.Alerts, alertView{Icon: icon, Severity: g.sev.String(), Title: title,
-			Device: cmp.Or(names[k.device], "removed device"), Count: plural(g.count, "time", "times"),
+		v.Alerts = append(v.Alerts, alertView{Icon: icon, Severity: g.sev.Label(), Title: title,
+			Device: cmp.Or(names[k.device], tr.T("digest.removed_device")), Count: tr.N("digest.times", g.count),
 			Last: g.last.In(loc).Format("Mon 2 Jan 15:04")})
 	}
 	return total, nil

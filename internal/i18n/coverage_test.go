@@ -23,7 +23,8 @@ var templateCall = regexp.MustCompile(`[{(]-?\s*(t|th|tn)\s+"([^"]+)"`)
 // Go calls: tr.T("key", ...), tr.N("key", ...), tr.Err("key", ...).
 var goCall = regexp.MustCompile(`\btr\.(T|N|Err)\("([^"]+)"`)
 
-// TestCatalogCoverage checks that every key the templates use exists with
+// TestCatalogCoverage checks that every key the templates (web pages and
+// emails) use exists with
 // the right kind (markup, plain, plural), and that every catalog key is
 // used somewhere (templates or Go code), so the catalog stays the single,
 // complete source of user-facing text.
@@ -37,6 +38,11 @@ func TestCatalogCoverage(t *testing.T) {
 	if err != nil || len(tpls) == 0 {
 		t.Fatalf("no templates found: %v", err)
 	}
+	emails, err := filepath.Glob(filepath.Join(root, "internal", "*", "templates", "*.tmpl")) // email templates
+	if err != nil || len(emails) == 0 {
+		t.Fatalf("no email templates found: %v", err)
+	}
+	tpls = append(tpls, emails...)
 	for _, p := range tpls {
 		b, err := os.ReadFile(p) //nolint:gosec // test reads the repository's own templates
 		if err != nil {

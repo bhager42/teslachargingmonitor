@@ -8,7 +8,7 @@ Free Software Foundation, either version 3 of the License, or (at your
 option) any later version. See the LICENSE file for details.
 */ -}}
 <!doctype html>
-<html lang="en">
+<html lang="{{lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width">
@@ -18,32 +18,32 @@ option) any later version. See the LICENSE file for details.
 </head>
 <body style="margin:0;padding:16px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.45">
 <div style="max-width:640px">
-<h1 style="font-size:20px;margin:0 0 4px">Weekly summary</h1>
+<h1 style="font-size:20px;margin:0 0 4px">{{t "digest.heading"}}</h1>
 <p style="margin:0 0 16px;opacity:.75">{{.Range}}</p>
-<p style="margin:0 0 16px"><strong>Charging:</strong> {{.Total}}</p>
-{{- if .NoDevices}}<p>No Wall Connector is configured yet.</p>{{end}}
+<p style="margin:0 0 16px"><strong>{{t "digest.label_charging"}}</strong> {{.Total}}</p>
+{{- if .NoDevices}}<p>{{t "digest.no_devices"}}</p>{{end}}
 {{- range .Devices}}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;border-left:4px solid #1565c0;border-collapse:separate">
 <tr><td style="padding:8px 12px">
 <h2 style="font-size:16px;margin:0 0 4px">{{.Name}}</h2>
-<p style="margin:0 0 4px"><strong>Charging:</strong> {{.Charging}}</p>
+<p style="margin:0 0 4px"><strong>{{t "digest.label_charging"}}</strong> {{.Charging}}</p>
 <p style="margin:0 0 4px;font-size:13px;opacity:.75">{{.Previous}}</p>
-<p style="margin:0 0 4px"><strong>Polling:</strong> {{.Polls}}</p>
+<p style="margin:0 0 4px"><strong>{{t "digest.label_polling"}}</strong> {{.Polls}}</p>
 <p style="margin:0 0 4px">{{.Temps}}</p>
 {{- with .Grid}}<p style="margin:0 0 4px">{{.}}</p>{{end}}
-{{- with .Events}}<p style="margin:0">Device events: {{range $i, $e := .}}{{if $i}}, {{end}}{{$e}}{{end}}</p>{{end}}
+{{- with .Events}}<p style="margin:0">{{t "digest.label_events"}} {{range $i, $e := .}}{{if $i}}, {{end}}{{$e}}{{end}}</p>{{end}}
 </td></tr>
 </table>
 {{- end}}
-<h2 style="font-size:16px;margin:16px 0 8px">Alerts</h2>
+<h2 style="font-size:16px;margin:16px 0 8px">{{t "digest.alerts_heading"}}</h2>
 {{- if .Alerts}}
 <ul style="margin:0;padding-left:20px">
 {{- range .Alerts}}
-<li style="margin:0 0 4px">{{.Icon}} <strong>{{.Title}}</strong> ({{.Severity}}) — {{.Device}}: {{.Count}}, last {{.Last}}</li>
+<li style="margin:0 0 4px">{{.Icon}} <strong>{{.Title}}</strong> ({{.Severity}}) — {{.Device}}: {{t "digest.alert_count" "count" .Count "last" .Last}}</li>
 {{- end}}
 </ul>
 {{- else}}
-<p style="margin:0">No alerts this week.</p>
+<p style="margin:0">{{t "digest.no_alerts"}}</p>
 {{- end}}
 <p style="margin:16px 0 0;font-size:12px;opacity:.7">{{.Footer}}</p>
 </div>
