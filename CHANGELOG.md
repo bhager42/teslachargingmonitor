@@ -13,6 +13,12 @@ signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
   first year with charging data to the current one (monthly fees included
   for each month with usage).
 
+### Changed
+- Charging costs are now complete for all time: pruning old readings keeps
+  the energy counter readings that costs need (it removes only the inside
+  of idle stretches), so "All time" and the year chart no longer lose
+  data older than the readings retention (2 years by default).
+
 ## [1.0.0] - 2026-11-08
 
 First stable release. From 1.0.0 on, the configuration (environment
