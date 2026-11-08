@@ -1249,6 +1249,9 @@ Delivered as small PRs, in this order:
    depend on timing and a single failed audit (e.g. unreadable text) still
    scores 96. Every page scores 100 in all three today.
 8. CHANGELOG, §15 resolved or explicitly deferred, then v1.0.0.
+   *Done 2026-11-08:* `CHANGELOG.md` covers v0.7.0–v1.0.0; §15.1 lists
+   every question as answered or deferred (D22–D25). v1.0.0 is tagged by
+   the release workflow after this merges.
 
 **Accept:** v1.0.0 tagged, release notes, signed images, CHANGELOG, all
 open questions in §15 resolved or deferred explicitly.
@@ -1303,63 +1306,41 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 | D19 | **Weekly digest email, optional** (off by default). | 2026-11-05 | Phase 8: one email a week (charging energy and cost, alerts, device health) to the email channels; no daily option. |
 | D20 | **Dead-man's-switch ping, optional** (off until a URL is entered). | 2026-11-05 | Phase 8: HTTPS GET/POST to a user-entered URL (healthchecks.io, Uptime Kuma push) after each successful poll; the service's grace period must exceed the poll interval (60 min by default). |
 | D21 | Prometheus `/metrics` **deferred** (not in v1.0). | 2026-11-05 | Phase 8 drops it; §4 row kept as a later option. InfluxDB, Home Assistant and MQTT stay in Later / stretch. |
+| D22 | **Default alert thresholds kept** for v1.0 (§15.1 item 7). | 2026-11-07 | All thresholds stay editable in the UI. `relay_voltage_abnormal` ships disabled until calibrated from more charging captures (issue #1, after 1.0). |
+| D23 | **Session lifetime kept**: 12 h idle, 7 days maximum (item 14). | 2026-11-07 | No change to `internal/auth`. |
+| D24 | **Pricing as built is enough** (item 10a): flat $0.155/kWh default, optional off-peak price and monthly fee, energy-only cost by default, US dollars. | 2026-11-07 | No change; taxes or tiered rates would be a later feature. |
+| D25 | Items 1, 5, 6, 15, 16 and 23 **deferred past 1.0**. | 2026-11-07 | Power-sharing view, a second alert channel, InfluxDB/Home Assistant/MQTT and the TrueNAS community catalog stay in Later / stretch; the install guides already cover the network and dataset choices. |
 
-### 15.1 Still open
+### 15.1 Status of the original questions
 
-Anything below that is not answered uses the documented default; Claude Code
-records the assumption in the PR that relies on it.
+Every question is answered or explicitly deferred (Phase 8, step 8). Owner
+decisions are in §15.0; "default stands" means the documented default was
+kept without a change being requested.
 
-**Hardware & network**
-1. How many UWCs (just one?) and is it in a **power-sharing** group? *(Model
-   answered: UWC — D1.)*
-2. *(Answered — D2: entered in the Web GUI.)* Please still reserve the UWC's IP
-   in your router's DHCP so it doesn't change.
-3. **Deferred (D16):** `/api/1/vitals` while a car is actively charging (and
-   ideally plugged-in-but-not-charging) — send it when the car is back. For reference, the full list: run
-   `curl http://<ip>/api/1/vitals`, `/lifetime`, `/wifi_status`, `/version`
-   (ideally once idle and once while charging) and share them — redact serial,
-   MAC and SSID if you like. *(The restart that produced 16 s uptime was
-   intentional — D10.)*
-4. *(Answered — D17: 60 A breaker, 48 A max, 240 V / 60 Hz.)*
-5. Is TrueNAS on the same VLAN/subnet as the chargers, or will traffic cross a
-   firewall?
-
-**Alerting**
-6. *(Answered — D7/D11: email via Gmail.)* Which second channel, if any,
-   would you want next (ntfy, Pushover, Home Assistant, …)?
-7. Confirm or adjust the default thresholds in §6 (especially temperatures and
-   voltage band). Any rules to add/remove?
-8. *(Answered — D19: weekly digest, optional.)* Quiet hours exist (per channel, Phase 4).
-9. *(Answered — D6/D10: 60 min default, 5 min while plugged in.)*
-10. *(Answered — D20: optional dead-man's-switch ping URL.)*
-10a. *(D18: $0.155/kWh.)* Is that a single flat price, or do you have a
-    time-of-use plan (cheaper overnight)? Should taxes or fixed monthly
-    charges be included in the cost, or energy only? Currency is assumed
-    to be US dollars ($).
-
-**Access & security**
-11. *(Answered — D12: LAN only.)*
-12. *(Answered — D12/D16: self-signed HTTPS, one-time browser warning.)*
-13. *(Default applied in Phase 5: all three supported — setup token,
-    `TCMON_PASSWORD_FILE`, `TCMON_PASSWORD_HASH`; plaintext `TCMON_PASSWORD`
-    is refused.)* Tell us if you want a different default.
-14. Session lifetime preferences (default 12 h idle / 7 d absolute)?
-
-**Data**
-15. *(Answered — D15: adjustable in GUI, 2-year default.)* Which dataset/pool
-    path on TrueNAS? (Default in docs: `/mnt/<pool>/apps/tcmon/data`.)
-16. *(Answered — D21: Prometheus `/metrics` deferred.)* InfluxDB or Home
-    Assistant/MQTT integration wanted later?
-17. Units: °C or °F; time zone.
-
-**Project / legal**
-18. *(Answered — D8: Tesla Charger Monitoring, short id `tcmon`.)*
-19. *(Answered — D13/D14: AGPL-3.0-or-later, © Brad Hager.)*
-20. *(Answered — D8: public.)*
-21. Contributions: DCO sign-off OK, or do you want a CLA (only needed if you may
-    ever relicense)?
-22. *(Answered — D9: Go.)*
-23. Should we target submission to the official TrueNAS community app catalog?
+| # | Question | Status |
+|---|---|---|
+| 1 | How many UWCs; power-sharing group? | One UWC (D1). Power-sharing **deferred past 1.0** (D25). |
+| 2 | Where the address is configured | Web GUI (D2). Reserving the UWC's IP in the router's DHCP is recommended in INSTALL_TRUENAS.md. |
+| 3 | Charging and plugged-in `/vitals` captures | Done: charging (26.26.10, v0.7.2) and plugged-in idle (26.34.0, v0.8.0). Calibrating the relay rule from them stays open in issue #1 (D22). |
+| 4 | Breaker, voltage, frequency | 60 A / 48 A, 240 V / 60 Hz (D17). |
+| 5 | Same VLAN as TrueNAS, or across a firewall? | **Deferred past 1.0** (D25); the client only needs HTTP to the Wall Connector on the LAN. |
+| 6 | A second alert channel | **Deferred past 1.0** (D25); email only (D7, D11). |
+| 7 | Default thresholds | Kept (D22). |
+| 8 | Digest, quiet hours | Weekly digest, optional (D19); quiet hours per channel. |
+| 9 | Polling interval | 60 min, 5 min while plugged in (D6, D10). |
+| 10 | Dead-man's switch | Optional ping URL (D20). |
+| 10a | Time-of-use, taxes, fees, currency | As built (D24). |
+| 11 | Remote access | LAN only (D12). |
+| 12 | Certificate | Self-signed HTTPS (D12, D16). |
+| 13 | Password bootstrap | Default stands: setup token, `TCMON_PASSWORD_FILE`, `TCMON_PASSWORD_HASH`; plaintext `TCMON_PASSWORD` refused. |
+| 14 | Session lifetime | 12 h idle / 7 d (D23). |
+| 15 | TrueNAS dataset path | **Deferred past 1.0** (D25); default is a TrueNAS-managed volume, own dataset optional (INSTALL_TRUENAS.md). |
+| 16 | InfluxDB, Home Assistant/MQTT | **Deferred past 1.0** (D21, D25). |
+| 17 | °C or °F; time zone | Both units selectable in Settings; time zone from `TZ`. |
+| 18–20 | Name, licence, visibility | D8, D13, D14. |
+| 21 | DCO or CLA | DCO sign-off, no CLA (CONTRIBUTING.md). |
+| 22 | Language | Go (D9). |
+| 23 | TrueNAS community catalog | **Deferred past 1.0** (D25); listed in Later / stretch. |
 
 ---
 
