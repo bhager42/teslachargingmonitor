@@ -72,7 +72,7 @@ func TestCostsMatchCounters(t *testing.T) {
 			t.Errorf("/costs missing %q", want)
 		}
 	}
-	for _, p := range []string{"/costs?period=week", "/costs?period=month", "/settings/energy"} {
+	for _, p := range []string{"/costs?period=week", "/costs?period=month", "/costs?period=year", "/settings/energy"} {
 		if status, b := f.get(p); status != 200 || inlineScript.MatchString(b) || strings.Contains(b, "style=") {
 			t.Errorf("%s = %d", p, status)
 		}
@@ -160,6 +160,43 @@ func TestPriceFormatting(t *testing.T) {
 	for in, want := range map[float64]string{0.155: "$0.155", 0.2: "$0.20", 1: "$1.00", 0.1234: "$0.1234"} {
 		if got := price(in, "$"); got != want {
 			t.Errorf("price(%v) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The Year tab shows every year from the first one with charging data to
+// the current one.
+func TestCostsByYear(t *testing.T) {
+	f := newFull(t)
+	d := f.addDevice()
+	now := f.clk.now().In(time.Local)
+	if status, body := f.get("/costs?period=year"); status != 200 || strings.Count(body, `<rect class="bar"`) != 1 ||
+		!strings.Contains(body, "<td>"+strconv.Itoa(now.Year())+"</td>") {
+		t.Fatalf("no data: %d, %d bars", status, strings.Count(body, `<rect class="bar"`))
+	}
+	prev := now.Year() - 1
+	whA := f.chargeSession(d, time.Date(prev, 1, 10, 12, 0, 0, 0, time.Local), 60)
+	start := now.Add(-3 * time.Hour).Truncate(time.Minute)
+	whB := f.chargeSession(d, start, 30)
+	prevWh, thisWh := whA, whB
+	if start.Year() == prev { // the test runs in the first hours of a year
+		prevWh, thisWh = whA+whB, 0
+	}
+	_, body := f.get("/costs?period=year")
+	if n := strings.Count(body, `<rect class="bar"`); n != 2 {
+		t.Errorf("bars = %d, want 2 (%d and %d)", n, prev, now.Year())
+	}
+	cost := func(wh float64) string {
+		return "$" + strconv.FormatFloat(math.Round(wh/1000*0.155*100)/100, 'f', 2, 64)
+	}
+	for _, want := range []string{
+		"Cost per year", "Charging cost per year, all time",
+		"<td>" + strconv.Itoa(prev) + "</td><td>" + strconv.FormatFloat(prevWh/1000, 'f', 1, 64) + "</td><td>" + cost(prevWh) + "</td>",
+		"<td>" + strconv.Itoa(now.Year()) + "</td><td>" + strconv.FormatFloat(thisWh/1000, 'f', 1, 64) + "</td><td>" + cost(thisWh) + "</td>",
+		`href="?period=year" aria-current="page"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/costs?period=year missing %q", want)
 		}
 	}
 }

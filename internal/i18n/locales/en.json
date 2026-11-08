@@ -378,6 +378,7 @@
   "costs.period_day": "day",
   "costs.period_week": "week",
   "costs.period_month": "month",
+  "costs.period_year": "year",
   "costs.last_30_days": "Last 30 days",
   "costs.last_12_weeks": "Last 12 weeks",
   "costs.last_12_months": "Last 12 months",
