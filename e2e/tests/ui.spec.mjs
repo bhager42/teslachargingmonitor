@@ -8,7 +8,7 @@ const PASSWORD = 'purple otter kayak sunrise';
 const SIM = 'http://127.0.0.1:18099';
 const PAGES = ['/', '/devices/1', '/alerts', '/alerts/rules/handle_temp_high', '/notifications', '/notifications/new',
   '/settings', '/settings/devices', '/settings/devices/new', '/settings/devices/1', '/settings/security',
-  '/diagnostics', '/about', '/costs', '/costs?period=month', '/settings/energy'];
+  '/diagnostics', '/about', '/costs', '/costs?period=month', '/costs?period=year', '/settings/energy'];
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 // Collects CSP / Trusted Types violations and script errors.

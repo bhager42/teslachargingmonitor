@@ -8,7 +8,7 @@
 
 // Package energy turns the Wall Connector's lifetime energy counter into
 // costs: per-poll energy deltas priced with the owner's rate history
-// (optionally time-of-use), bucketed by day, week and month in local time,
+// (optionally time-of-use), bucketed by day, week, month and year in local time,
 // and grouped into charging sessions. It is pure (no I/O).
 package energy
 
@@ -169,6 +169,7 @@ const (
 	Day Period = iota
 	Week
 	Month
+	Year
 )
 
 // Start returns the local start of the period containing t (weeks start
@@ -182,6 +183,8 @@ func (p Plan) Start(per Period, t time.Time) time.Time {
 		return time.Date(y, m, d-wd, 0, 0, 0, 0, p.Loc)
 	case Month:
 		return time.Date(y, m, 1, 0, 0, 0, 0, p.Loc)
+	case Year:
+		return time.Date(y, 1, 1, 0, 0, 0, 0, p.Loc)
 	default:
 		return time.Date(y, m, d, 0, 0, 0, 0, p.Loc)
 	}
@@ -195,6 +198,8 @@ func (p Plan) Next(per Period, start time.Time) time.Time {
 		return time.Date(y, m, d+7, 0, 0, 0, 0, p.Loc)
 	case Month:
 		return time.Date(y, m+1, 1, 0, 0, 0, 0, p.Loc)
+	case Year:
+		return time.Date(y+1, 1, 1, 0, 0, 0, 0, p.Loc)
 	default:
 		return time.Date(y, m, d+1, 0, 0, 0, 0, p.Loc)
 	}
@@ -203,8 +208,8 @@ func (p Plan) Next(per Period, start time.Time) time.Time {
 // Buckets totals intervals into n consecutive periods ending with the one
 // containing now (empty periods included). An interval counts in the
 // period containing its midpoint, so values are accurate to the polling
-// interval. Monthly fees are added to month buckets that have
-// usage.
+// interval. Monthly fees are added to month and year buckets for each
+// month that has usage (day and week buckets are energy only).
 func (p Plan) Buckets(iv []Interval, per Period, n int, now time.Time) []Bucket {
 	starts := make([]time.Time, n)
 	s := p.Start(per, now)
@@ -216,13 +221,17 @@ func (p Plan) Buckets(iv []Interval, per Period, n int, now time.Time) []Bucket 
 			s = time.Date(y, m, d-7, 0, 0, 0, 0, p.Loc)
 		case Month:
 			s = time.Date(y, m-1, 1, 0, 0, 0, 0, p.Loc)
+		case Year:
+			s = time.Date(y-1, 1, 1, 0, 0, 0, 0, p.Loc)
 		default:
 			s = time.Date(y, m, d-1, 0, 0, 0, 0, p.Loc)
 		}
 	}
 	out := make([]Bucket, n)
+	feeMonths := make([]map[time.Time]bool, n) // months with usage, per bucket
 	for i := range out {
 		out[i].Start = starts[i]
+		feeMonths[i] = map[time.Time]bool{}
 	}
 	for _, x := range iv {
 		mid := x.Mid()
@@ -233,11 +242,12 @@ func (p Plan) Buckets(iv []Interval, per Period, n int, now time.Time) []Bucket 
 		}
 		out[i].KWh += x.Wh / 1000
 		out[i].Cost += x.Cost
+		feeMonths[i][p.Start(Month, mid)] = true
 	}
-	if per == Month {
+	if per == Month || per == Year {
 		for i := range out {
-			if out[i].KWh > 0 {
-				out[i].Cost += p.RateAt(out[i].Start).MonthlyFee
+			for m := range feeMonths[i] {
+				out[i].Cost += p.RateAt(m).MonthlyFee
 			}
 		}
 	}

@@ -109,6 +109,8 @@ type costRow struct{ Period, KWh, Cost string }
 
 type sessionRow struct{ Start, End, Duration, KWh, Cost, Peak string }
 
+// periods are the chart's tabs. N is the number of bars; 0 means every
+// year from the first one with charging data.
 var periods = []struct {
 	Key, Name, Label string
 	Per              energy.Period
@@ -117,6 +119,17 @@ var periods = []struct {
 	{"day", tr.T("costs.period_day"), tr.T("costs.last_30_days"), energy.Day, 30},
 	{"week", tr.T("costs.period_week"), tr.T("costs.last_12_weeks"), energy.Week, 12},
 	{"month", tr.T("costs.period_month"), tr.T("costs.last_12_months"), energy.Month, 12},
+	{"year", tr.T("costs.period_year"), tr.T("costs.all_time"), energy.Year, 0},
+}
+
+// yearsOfData is the number of years from the first one with charging
+// data to the current one (1 when there is none).
+func yearsOfData(iv []energy.Interval, p energy.Plan, now time.Time) int {
+	first := now.In(p.Loc).Year()
+	for _, x := range iv {
+		first = min(first, x.Mid().In(p.Loc).Year())
+	}
+	return now.In(p.Loc).Year() - first + 1
 }
 
 func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Session) {
@@ -132,11 +145,15 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 			sel = x
 		}
 	}
+	all := s.intervals(ctx, p, time.Unix(0, 0), end)
+	n := sel.N
+	if n == 0 {
+		n = yearsOfData(all, p, now)
+	}
 	chartFrom := p.Start(sel.Per, now)
-	for range sel.N - 1 {
+	for range n - 1 {
 		chartFrom = p.Start(sel.Per, chartFrom.Add(-time.Hour))
 	}
-	all := s.intervals(ctx, p, time.Unix(0, 0), end)
 
 	monthStart := p.Start(energy.Month, now)
 	lastMonth := p.Start(energy.Month, monthStart.Add(-time.Hour))
@@ -151,8 +168,8 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 		totals = append(totals, kv{t.label, money(b.Cost, cur) + " · " + fmtNum(b.KWh, "kWh", 1)})
 	}
 
-	buckets := p.Buckets(all, sel.Per, sel.N, now)
-	labelFmt := map[energy.Period]string{energy.Day: "2 Jan", energy.Week: "2 Jan", energy.Month: "Jan 2006"}[sel.Per]
+	buckets := p.Buckets(all, sel.Per, n, now)
+	labelFmt := map[energy.Period]string{energy.Day: "2 Jan", energy.Week: "2 Jan", energy.Month: "Jan 2006", energy.Year: "2006"}[sel.Per]
 	var bars []bar
 	var rows []costRow
 	maxCost := 0.0
@@ -161,6 +178,7 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 	}
 	const W, H, top, bottom = 1000.0, 260.0, 8.0, 26.0
 	slot := W / float64(len(buckets))
+	barW := min(slot*0.7, 120) // a few years should not fill the chart with slabs
 	every := max(1, len(buckets)/6)
 	for i, b := range buckets {
 		h := 0.0
@@ -169,11 +187,12 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 		}
 		label := b.Start.In(p.Loc).Format(labelFmt)
 		title := fmt.Sprintf("%s: %s, %.1f kWh", label, money(b.Cost, cur), b.KWh)
-		br := bar{X: float64(i)*slot + slot*0.15, Y: H - bottom - h, W: slot * 0.7, H: h, Label: label, Title: title,
+		br := bar{X: float64(i)*slot + (slot-barW)/2, Y: H - bottom - h, W: barW, H: h, Label: label, Title: title,
 			ShowLabel: i%every == 0 || i == len(buckets)-1, LabelX: float64(i)*slot + slot/2, Anchor: "middle"}
-		if i == 0 {
+		// Narrow slots: keep the first and last labels inside the chart.
+		if slot < 100 && i == 0 {
 			br.LabelX, br.Anchor = float64(i)*slot, "start"
-		} else if i == len(buckets)-1 {
+		} else if slot < 100 && i == len(buckets)-1 {
 			br.LabelX, br.Anchor = W, "end"
 		}
 		bars = append(bars, br)

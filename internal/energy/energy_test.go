@@ -156,6 +156,44 @@ func TestBucketsDaysWeeksMonthsAndDST(t *testing.T) {
 	}
 }
 
+func TestBucketsYears(t *testing.T) {
+	p := NewPlan([]Rate{{Price: 0.155, MonthlyFee: 10}}, chicago)
+	var s []Sample
+	wh := 0.0
+	// 1 kWh per hour from 31 Dec 2025 00:00 to 1 Jan 2026 12:00 …
+	for ts := at(2025, 12, 31, 0, 0); !ts.After(at(2026, 1, 1, 12, 0)); ts = ts.Add(time.Hour) {
+		s = append(s, Sample{ts, wh})
+		wh += 1000
+	}
+	// … then one more kWh in March (the gap in between has no usage).
+	wh -= 1000 // the loop stepped past the last sample
+	s = append(s, Sample{at(2026, 3, 10, 0, 0), wh}, Sample{at(2026, 3, 10, 1, 0), wh + 1000})
+	iv := Intervals(s, p)
+	now := at(2026, 3, 15, 12, 0)
+	years := p.Buckets(iv, Year, 3, now)
+	if !years[0].Start.Equal(at(2024, 1, 1, 0, 0)) || !years[2].Start.Equal(at(2026, 1, 1, 0, 0)) {
+		t.Fatalf("year starts = %v … %v", years[0].Start, years[2].Start)
+	}
+	if years[0].KWh != 0 || years[0].Cost != 0 {
+		t.Errorf("empty year = %+v (no fee without usage)", years[0])
+	}
+	// 23:00–00:00 on 31 Dec counts in 2025 (its midpoint); one fee for December.
+	if !near(years[1].KWh, 24) || !near(years[1].Cost, 24*0.155+10) {
+		t.Errorf("2025 = %+v", years[1])
+	}
+	// January and March have usage: two monthly fees.
+	if !near(years[2].KWh, 13) || !near(years[2].Cost, 13*0.155+20) {
+		t.Errorf("2026 = %+v", years[2])
+	}
+	tot := p.Total(iv, at(2026, 1, 1, 0, 0), now)
+	if !near(tot.Cost, years[2].Cost) {
+		t.Errorf("year bucket %v != total %v", years[2].Cost, tot.Cost)
+	}
+	if !p.Start(Year, now).Equal(at(2026, 1, 1, 0, 0)) || !p.Next(Year, at(2026, 1, 1, 0, 0)).Equal(at(2027, 1, 1, 0, 0)) {
+		t.Error("year start/next")
+	}
+}
+
 func TestSessions(t *testing.T) {
 	p := NewPlan(nil, chicago)
 	w := func(v float64) *float64 { return &v }
