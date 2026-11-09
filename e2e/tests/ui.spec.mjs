@@ -21,6 +21,18 @@ function watch(page) {
   return problems;
 }
 
+// pollNow asks tcmon to poll device 1 at once (as the "Poll now" button does).
+async function pollNow(page) {
+  const csrf = await page.locator('input[name="csrf_token"]').first().inputValue();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await page.request.post('/devices/1/poll', {
+      form: { csrf_token: csrf, back: 'home' }, headers: { 'Sec-Fetch-Site': 'same-origin', Origin: BASE_URL }, maxRedirects: 0,
+    });
+    if (!(res.headers().location ?? '').includes('poll-limited')) return;
+    await page.waitForTimeout(11_000); // poll-now is rate limited to once per 10 s
+  }
+}
+
 async function settle(page, path) {
   if (path.startsWith('/devices/')) {
     await expect(page.locator('tcmon-chart').first().locator('svg, p.hint')).toBeVisible();
@@ -82,15 +94,27 @@ test('dashboard updates live over SSE after a poll, without reloading', async ({
   const target = (await state.textContent()) === 'Idle' ? ['charging', 'Charging'] : ['idle', 'Idle'];
   await page.evaluate(() => { window.__marker = 'same page'; });
   await page.request.post(`${SIM}/_sim/scenario`, { form: { name: target[0] } });
-  const csrf = await page.locator('input[name="csrf_token"]').first().inputValue();
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await page.request.post('/devices/1/poll', {
-      form: { csrf_token: csrf, back: 'home' }, headers: { 'Sec-Fetch-Site': 'same-origin', Origin: BASE_URL }, maxRedirects: 0,
-    });
-    if (!(res.headers().location ?? '').includes('poll-limited')) break;
-    await page.waitForTimeout(11_000); // poll-now is rate limited to once per 10 s
-  }
+  await pollNow(page);
   await expect(state).toHaveText(target[1], { timeout: 20_000 });
+  expect(await page.evaluate(() => window.__marker)).toBe('same page');
+  expect(problems).toEqual([]);
+});
+
+test('device charts redraw live after a poll, without reloading', async ({ page }) => {
+  const problems = watch(page);
+  await page.goto('/devices/1');
+  const charts = page.locator('tcmon-chart');
+  await expect(charts.locator('svg')).toHaveCount(await charts.count());
+  await page.evaluate(() => {
+    window.__marker = 'same page';
+    for (const svg of document.querySelectorAll('tcmon-chart svg')) svg.dataset.old = '1';
+  });
+  let fetched = 0;
+  page.on('response', (r) => { if (r.url().includes('/series?') && r.ok()) fetched++; });
+  await pollNow(page);
+  await expect(charts.locator('svg[data-old]')).toHaveCount(0, { timeout: 20_000 });
+  await expect(charts.locator('svg')).toHaveCount(await charts.count());
+  expect(fetched).toBeGreaterThanOrEqual(await charts.count());
   expect(await page.evaluate(() => window.__marker)).toBe('same page');
   expect(problems).toEqual([]);
 });

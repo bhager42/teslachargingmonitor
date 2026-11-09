@@ -104,7 +104,14 @@ function announceAlerts(items) {
 function initLive() {
   if (!document.querySelector('[data-live]') || !('EventSource' in window)) return;
   const es = new EventSource('/events');
-  es.addEventListener('device', (e) => applyCard(JSON.parse(e.data)));
+  es.addEventListener('device', (e) => {
+    const card = JSON.parse(e.data);
+    applyCard(card);
+    // A poll adds a reading: redraw this device's charts with it.
+    for (const chart of document.querySelectorAll('tcmon-chart')) {
+      if (chart.dataset.device === String(card.id)) chart.load();
+    }
+  });
   es.addEventListener('alerts', (e) => announceAlerts(JSON.parse(e.data)));
 }
 
@@ -112,15 +119,24 @@ function initLive() {
 const fmt = (v) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1));
 
 class TcmonChart extends HTMLElement {
-  async connectedCallback() {
+  connectedCallback() { this.load(); }
+
+  // load fetches the series and draws it. Called again on live updates: a
+  // newer load cancels an older one, and a failed refresh keeps the chart
+  // already drawn instead of replacing it with an error.
+  async load() {
     const { device, metric, range, label } = this.dataset;
     const url = `/api/devices/${encodeURIComponent(device)}/series?metric=${encodeURIComponent(metric)}&range=${encodeURIComponent(range)}`;
+    this.pending?.abort();
+    const ctl = new AbortController();
+    this.pending = ctl;
     try {
-      const res = await fetch(url, { credentials: 'same-origin', signal: AbortSignal.timeout(15000) });
+      const res = await fetch(url, { credentials: 'same-origin', signal: AbortSignal.any([ctl.signal, AbortSignal.timeout(15000)]) });
       if (!res.ok) throw new Error(String(res.status));
-      this.draw(await res.json(), label, range);
+      const data = await res.json();
+      if (this.pending === ctl) this.draw(data, label, range);
     } catch {
-      this.message(msg('chart.load_failed'));
+      if (this.pending === ctl && !this.querySelector('svg')) this.message(msg('chart.load_failed'));
     }
   }
 
