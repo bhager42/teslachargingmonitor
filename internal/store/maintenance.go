@@ -70,7 +70,8 @@ type PruneResult map[string]int64
 
 // Prune deletes data older than the retention policy, in small batches so
 // pollers are never blocked for long. Raw vitals are never deleted before
-// they have been rolled up.
+// they have been rolled up. Lifetime readings past the cutoff are thinned,
+// not deleted: see pruneLifetime.
 func (s *Store) Prune(ctx context.Context, now time.Time, r Retention) (PruneResult, error) {
 	if err := r.Validate(); err != nil {
 		return nil, err
@@ -126,6 +127,9 @@ func (s *Store) deleteOlder(ctx context.Context, table, col string, cutoff int64
 		q = `DELETE FROM rollups_1h WHERE (device_id, bucket_ts, metric) IN
 			(SELECT device_id, bucket_ts, metric FROM rollups_1h WHERE bucket_ts < ? LIMIT ?)`
 	}
+	if table == "readings_lifetime" {
+		q = pruneLifetime
+	}
 	var total int64
 	for {
 		r, err := s.db.ExecContext(ctx, q, cutoff, pruneBatch)
@@ -142,6 +146,24 @@ func (s *Store) deleteOlder(ctx context.Context, table, col string, cutoff int64
 		}
 	}
 }
+
+// pruneLifetime thins lifetime readings older than the cutoff instead of
+// deleting them, so charging costs stay complete forever: it deletes a row
+// only when it has no energy reading, or when its energy counter equals
+// that of the readings just before and after it (the inside of an idle
+// stretch). Costs only use intervals in which the counter changed, and
+// those keep both ends, so every cost total is unchanged. Each idle stretch
+// keeps its first and last reading; time spent charging keeps every poll.
+const pruneLifetime = `DELETE FROM readings_lifetime WHERE id IN (
+	SELECT id FROM readings_lifetime WHERE ts < ?1 AND energy_wh IS NULL
+	UNION ALL
+	SELECT id FROM (
+		SELECT id, ts, energy_wh,
+			LAG(energy_wh) OVER w AS prev, LEAD(energy_wh) OVER w AS next
+		FROM readings_lifetime WHERE energy_wh IS NOT NULL
+		WINDOW w AS (PARTITION BY device_id ORDER BY ts, id))
+	WHERE ts < ?1 AND prev = energy_wh AND next = energy_wh
+	LIMIT ?2)`
 
 // MaintenanceResult summarizes one maintenance run.
 type MaintenanceResult struct {

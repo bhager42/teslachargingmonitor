@@ -474,7 +474,7 @@
   "settings.keep_5y": "5 years",
   "settings.keep_forever": "Keep forever",
   "settings.keep_readings": "Readings",
-  "settings.keep_readings_help": "Every poll's measurements (charts use hourly summaries beyond this).",
+  "settings.keep_readings_help": "Every poll's measurements (charts use hourly summaries beyond this). Energy counter readings that charging costs need are always kept.",
   "settings.keep_raw": "Raw device responses",
   "settings.keep_raw_help": "Exact JSON from the Wall Connector, for diagnostics.",
   "settings.keep_rollups": "Hourly summaries",

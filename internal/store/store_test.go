@@ -289,8 +289,13 @@ func TestRollupAndPrune(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantGone := int64(10 * 24) // hours older than 30 days
-	if res["readings_vitals"] != wantGone || res["readings_lifetime"] != wantGone || res["poll_log"] != wantGone {
+	if res["readings_vitals"] != wantGone || res["poll_log"] != wantGone {
 		t.Errorf("prune result = %v, want %d per readings table", res, wantGone)
+	}
+	// Lifetime readings are thinned (TestPruneKeepsCosts): the idle stretch
+	// keeps its first reading.
+	if res["readings_lifetime"] != wantGone-1 {
+		t.Errorf("lifetime readings pruned = %d, want %d", res["readings_lifetime"], wantGone-1)
 	}
 	if res["raw_payloads"] != int64(33*24) {
 		t.Errorf("raw payloads pruned = %d", res["raw_payloads"])

@@ -255,6 +255,12 @@ data older than …") and suggests downloading a backup first; pruning runs
 nightly and on demand. At the default hourly cadence one device produces
 ~8,800 rows/year per table, so 2 years of raw readings is small and no
 rollups are needed for that data.
+Lifetime readings past the readings retention are **thinned, not deleted**,
+so charging costs stay complete forever: a reading is removed only when it
+has no energy value or its energy counter equals both neighbours (the inside
+of an idle stretch). Costs only use intervals where the counter changed, so
+every total is unchanged (`TestPruneKeepsCosts`); what remains is roughly
+two readings per idle stretch plus every poll while charging.
 
 **Measured storage (Phase 2 soak, 3,000 polls):** ≈ 1.9 KB per poll
 including raw payloads, i.e. **≈ 16 MiB/year** at hourly polling and
