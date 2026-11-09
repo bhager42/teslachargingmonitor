@@ -4,7 +4,7 @@ Self-hosted monitoring and email alerting for the **Tesla Universal Wall
 Connector**, packaged as a small, hardened container for **TrueNAS SCALE
 25.10+** or any Docker host.
 
-> **Status: v1.0.0.** Polling, alerts, Gmail email, the HTTPS web UI (live
+> **Status: v1.1.0.** Polling, alerts, Gmail email, the HTTPS web UI (live
 > dashboard, charts, alert rules, settings, diagnostics), charging costs,
 > the optional weekly summary and dead-man's-switch ping all work, and
 > everything is configured in the browser, including the Wall Connector's
