@@ -99,10 +99,11 @@ func (s *Server) ackAlert(w http.ResponseWriter, r *http.Request, _ auth.Session
 		err = s.st.AckAlertEvent(r.Context(), id, s.now())
 	}
 	if err != nil {
-		http.Redirect(w, r, "/alerts", http.StatusSeeOther)
+		http.Redirect(w, r, "/alerts#history-title", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/alerts?ok=acked", http.StatusSeeOther)
+	// Back to the acknowledged row, not the top of the page.
+	http.Redirect(w, r, "/alerts?ok=acked#alert-"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 }
 
 func (s *Server) snooze(w http.ResponseWriter, r *http.Request, sess auth.Session) {
