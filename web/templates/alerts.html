@@ -50,7 +50,7 @@ Copyright (C) 2026 Brad Hager and contributors
     <thead><tr><th scope="col">{{t "alerts.col_when"}}</th><th scope="col">{{t "alerts.col_severity"}}</th><th scope="col">{{t "alerts.col_alert"}}</th><th scope="col">{{t "alerts.col_sent"}}</th><th scope="col"><span class="sr-only">{{t "alerts.acknowledge"}}</span></th></tr></thead>
     <tbody>
     {{- range .History}}
-    <tr class="sev-{{.Severity}}"><td>{{.When}}</td><td><span class="badge">{{severity .Severity}}</span></td>
+    <tr id="alert-{{.ID}}" class="sev-{{.Severity}}"><td>{{.When}}</td><td><span class="badge">{{severity .Severity}}</span></td>
       <td><strong>{{.Title}}</strong> ({{alertkind .Kind}})<br>{{.Message}}</td><td>{{if .Notified}}{{t "common.yes"}}{{else}}{{t "alerts.held_back"}}{{end}}</td>
       <td>{{if .Acked}}{{t "alerts.acknowledged"}}{{else}}<form method="post" action="/alerts/events/{{.ID}}/ack" class="inline"><input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button type="submit" class="link">{{t "alerts.acknowledge"}}</button></form>{{end}}</td></tr>
     {{- end}}

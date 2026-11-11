@@ -6,6 +6,12 @@ and the project uses [Semantic Versioning](https://semver.org/). Container
 images for every release are at `ghcr.io/bhager42/teslachargingmonitor`,
 signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
+## [Unreleased]
+
+### Fixed
+- Acknowledging an alert in the Alerts history returns to that alert
+  instead of the top of the page.
+
 ## [1.1.1] - 2026-11-10
 
 ### Changed
@@ -123,6 +129,7 @@ First published release.
   shell, signed with cosign, with SBOM and provenance. Install guides for
   TrueNAS SCALE 25.10+ and Docker/Podman.
 
+[Unreleased]: https://github.com/bhager42/teslachargingmonitor/compare/v1.1.1...HEAD
 [1.1.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/bhager42/teslachargingmonitor/compare/v0.8.0...v1.0.0

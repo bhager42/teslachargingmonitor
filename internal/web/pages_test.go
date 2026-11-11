@@ -383,11 +383,13 @@ func TestAlertPages(t *testing.T) {
 	}
 	ev := []store.AlertEvent{{RuleKey: "overcurrent", DeviceID: d.ID, TS: f.clk.now(), Kind: "firing", Severity: "critical", Message: "too much", Notified: true}}
 	_ = f.st.SaveAlertResult(ctx, nil, ev, f.clk.now())
-	if r := f.post("/alerts/events/"+itoa(ev[0].ID)+"/ack", url.Values{}); !strings.Contains(r.Header.Get("Location"), "acked") {
-		t.Errorf("ack = %s", r.Header.Get("Location"))
+	row := "alert-" + itoa(ev[0].ID)
+	if r := f.post("/alerts/events/"+itoa(ev[0].ID)+"/ack", url.Values{}); r.Header.Get("Location") != "/alerts?ok=acked#"+row {
+		t.Errorf("ack = %s, want a redirect back to the row", r.Header.Get("Location"))
 	}
-	if _, body := f.get("/alerts"); !strings.Contains(body, "acknowledged") || !strings.Contains(body, "Overcurrent") {
-		t.Error("ack not shown")
+	if _, body := f.get("/alerts"); !strings.Contains(body, "acknowledged") || !strings.Contains(body, "Overcurrent") ||
+		!strings.Contains(body, `<tr id="`+row+`"`) {
+		t.Error("ack not shown, or the row has no anchor")
 	}
 	if _, body := f.get("/alerts"); !strings.Contains(body, `<span class="badge">critical</span>`) ||
 		!strings.Contains(body, "<strong>Overcurrent</strong> (firing)<br>too much") {
