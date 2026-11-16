@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bhager42/teslachargingmonitor/internal/gateway"
 	"github.com/bhager42/teslachargingmonitor/internal/i18n"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
 	"github.com/bhager42/teslachargingmonitor/internal/wallconnector"
@@ -29,6 +30,15 @@ type Kind int
 const (
 	Condition Kind = iota
 	Event
+)
+
+// Subject is what a rule watches.
+type Subject int
+
+// Subjects.
+const (
+	SubjectDevice  Subject = iota // a Wall Connector
+	SubjectGateway                // a Tesla Backup Gateway (Phase 9)
 )
 
 // ParamSpec describes one numeric rule parameter (used for validation and
@@ -45,7 +55,9 @@ type ParamSpec struct {
 // Params are a rule's numeric parameters by name.
 type Params map[string]float64
 
-// Input is everything a rule may look at for one poll.
+// Input is everything a rule may look at for one poll: a Wall Connector
+// poll (Device, Snapshot, Events) or a Gateway poll (Gateway, GatewaySnap,
+// GatewayEvents), never both.
 type Input struct {
 	Device   store.Device
 	At       time.Time
@@ -55,6 +67,13 @@ type Input struct {
 	// FirmwareSince is when the current firmware version was first seen
 	// (zero when unknown).
 	FirmwareSince time.Time
+
+	Gateway       store.Gateway
+	GatewaySnap   *gateway.Snapshot // nil when the poll failed
+	GatewayEvents []store.GatewayEvent
+	// Loc is the local time zone for daylight windows and days (nil:
+	// time.Local, the server's zone, as on the Costs page).
+	Loc *time.Location
 }
 
 // valid reports whether field of endpoint ep decoded cleanly.
@@ -89,6 +108,7 @@ type Definition struct {
 	Title       string
 	Description string
 	Kind        Kind
+	Subject     Subject
 	// EventSeverity is the severity of every hit of an event rule.
 	EventSeverity Severity
 	Params        []ParamSpec
@@ -616,6 +636,9 @@ func (d Definition) Validate(c Config) error {
 	}
 	if w, ok := c.Params["warn_pct"]; ok && w >= c.Params["crit_pct"] {
 		return tr.Err("alert_rule.err_warn_above_crit", "rule", d.Key)
+	}
+	if from, ok := c.Params["start_h"]; ok && from >= c.Params["end_h"] {
+		return tr.Err("alert_rule.err_window", "rule", d.Key)
 	}
 	return nil
 }

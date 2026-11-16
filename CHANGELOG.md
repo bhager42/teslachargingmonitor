@@ -24,6 +24,14 @@ signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
   daily and sessions CSV exports have new `attributed_kwh`, `solar_kwh`,
   `powerwall_kwh`, `grid_kwh` and `solar_savings` columns, empty without
   Gateway data.
+- Alerts for the Backup Gateway: Gateway unreachable, login failed,
+  certificate changed, grid outage (with a notice when the grid is back),
+  Powerwall battery low (the Tesla app's percentage; a warning during an
+  outage), no solar in daylight (a fixed 10:00–15:00 window), a low solar
+  day (off by default), Powerwall capacity dropped, and Gateway firmware
+  updates and restarts. They appear under Alerts once a Gateway is set up,
+  can be previewed against its stored readings, and are emailed like the
+  Wall Connector's.
 - Development: `scripts/capture-gateway.sh` captures a Tesla Backup
   Gateway 2's local API into redacted test fixtures, the first step of
   Phase 9 (Powerwall and solar support). It is not part of the container

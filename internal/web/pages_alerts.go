@@ -69,6 +69,20 @@ func (s *Server) alertsPage(w http.ResponseWriter, r *http.Request, sess auth.Se
 			snoozes = append(snoozes, snoozeRow{ID: sn.ID, Device: d.Name, Until: sn.Until.Local().Format("Mon 2 Jan 15:04")})
 		}
 	}
+	// Backup Gateways (Phase 9): their alerts, and their rules only once
+	// one is configured.
+	gws, _ := s.st.Gateways(ctx)
+	for _, g := range gws {
+		if s.alerts != nil {
+			for _, a := range s.alerts.ActiveGateway(g.ID) {
+				active = append(active, activeRow{Device: g.Name, Title: a.Title, Severity: a.Severity.String(), Since: fmtAgo(a.Since, now)})
+			}
+		}
+		list, _ := s.st.ActiveGatewaySnoozes(ctx, g.ID, now)
+		for _, sn := range list {
+			snoozes = append(snoozes, snoozeRow{ID: sn.ID, Device: g.Name, Until: sn.Until.Local().Format("Mon 2 Jan 15:04")})
+		}
+	}
 	var history []alertRow
 	evs, _ := s.st.AlertEvents(ctx, store.AlertEventFilter{Limit: 50})
 	for _, e := range evs {
@@ -84,6 +98,9 @@ func (s *Server) alertsPage(w http.ResponseWriter, r *http.Request, sess auth.Se
 		cfgs, _ := s.alerts.Configs(ctx, 0)
 		unit := s.display(ctx).TempUnit
 		for _, def := range alerts.Definitions() {
+			if def.Subject == alerts.SubjectGateway && len(gws) == 0 {
+				continue
+			}
 			c := cfgs[def.Key]
 			rules = append(rules, ruleRow{Key: def.Key, Title: def.Title, Description: def.Description,
 				Summary: paramSummary(def, c, unit), Enabled: c.Enabled, NeedsCalibration: def.NeedsCalibration})
@@ -270,8 +287,23 @@ type previewRow struct{ When, Kind, Severity, Message string }
 func (s *Server) previewRule(w http.ResponseWriter, r *http.Request, sess auth.Session, def alerts.Definition, c alerts.Config) {
 	ctx := r.Context()
 	now := s.now()
-	devices, _ := s.st.Devices(ctx)
 	var rows []previewRow
+	if def.Subject == alerts.SubjectGateway {
+		gws, _ := s.st.Gateways(ctx)
+		for _, g := range gws {
+			evs, err := s.alerts.PreviewGateway(ctx, g, def.Key, c, now.Add(-24*time.Hour), now.Add(time.Minute))
+			if err != nil {
+				continue
+			}
+			for _, e := range evs {
+				rows = append(rows, previewRow{When: g.Name + " · " + e.At.Local().Format("2 Jan 15:04"), Kind: e.Kind,
+					Severity: e.Severity.String(), Message: e.Message})
+			}
+		}
+		s.renderRule(w, r, sess, http.StatusOK, def, c, page{"Preview": rows, "Previewed": true})
+		return
+	}
+	devices, _ := s.st.Devices(ctx)
 	for _, d := range devices {
 		evs, err := s.alerts.Preview(ctx, d, def.Key, c, now.Add(-24*time.Hour), now.Add(time.Minute))
 		if err != nil {

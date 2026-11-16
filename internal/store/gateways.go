@@ -655,3 +655,81 @@ func (s *Store) HasGateway(ctx context.Context) (bool, error) {
 	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM gateways WHERE enabled = 1").Scan(&n)
 	return n > 0, err
 }
+
+// GatewayHistoryEntry is one stored Gateway poll rebuilt for a rule preview.
+type GatewayHistoryEntry struct {
+	Snapshot *gateway.Snapshot
+	Events   []GatewayEvent
+}
+
+// GatewayHistory rebuilds the stored Gateway polls in [from, to), oldest
+// first, as partial snapshots: power, counters, battery level, energy
+// remaining, full-pack energy and grid status, with the battery count from
+// gateway_info. Values that were not stored (flagged by the decoder) are
+// reported as missing, so rules skip them as they did live. Events are
+// attached to the poll at which they were recorded.
+func (s *Store) GatewayHistory(ctx context.Context, gatewayID int64, from, to time.Time) ([]GatewayHistoryEntry, error) {
+	blocks := 0
+	if info, err := s.GatewayInfo(ctx, gatewayID); err == nil {
+		blocks = info.BatteryCount
+	}
+	evs, err := s.GatewayEvents(ctx, gatewayID, from, 10000)
+	if err != nil {
+		return nil, err
+	}
+	byTS := map[int64][]GatewayEvent{}
+	for _, ev := range evs {
+		byTS[ms(ev.TS)] = append([]GatewayEvent{ev}, byTS[ms(ev.TS)]...)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT ts, solar_w, load_w, site_w, battery_w, solar_exported_wh,
+		load_imported_wh, site_imported_wh, site_exported_wh, battery_imported_wh, battery_exported_wh, soe_pct,
+		remaining_wh, full_pack_wh, grid_status FROM readings_site WHERE gateway_id = ? AND ts >= ? AND ts < ?
+		ORDER BY ts, id`, gatewayID, ms(from), ms(to))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []GatewayHistoryEntry
+	for rows.Next() {
+		var ts int64
+		var v [13]sql.NullFloat64
+		var grid string
+		if err := rows.Scan(&ts, &v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8], &v[9], &v[10],
+			&v[11], &v[12], &grid); err != nil {
+			return nil, err
+		}
+		snap := &gateway.Snapshot{FetchedAt: fromMS(ts), Reports: map[gateway.Endpoint]gateway.Report{}}
+		set := func(ep gateway.Endpoint, field string, n sql.NullFloat64, dst *float64) {
+			if n.Valid {
+				*dst = n.Float64
+				return
+			}
+			r := snap.Reports[ep]
+			r.Endpoint = ep
+			r.Missing = append(r.Missing, field)
+			snap.Reports[ep] = r
+		}
+		a := &snap.Aggregates
+		set(gateway.EndpointAggregates, "solar.instant_power", v[0], &a.Solar.InstantPower)
+		set(gateway.EndpointAggregates, "load.instant_power", v[1], &a.Load.InstantPower)
+		set(gateway.EndpointAggregates, "site.instant_power", v[2], &a.Site.InstantPower)
+		set(gateway.EndpointAggregates, "battery.instant_power", v[3], &a.Battery.InstantPower)
+		set(gateway.EndpointAggregates, "solar.energy_exported", v[4], &a.Solar.EnergyExported)
+		set(gateway.EndpointAggregates, "load.energy_imported", v[5], &a.Load.EnergyImported)
+		set(gateway.EndpointAggregates, "site.energy_imported", v[6], &a.Site.EnergyImported)
+		set(gateway.EndpointAggregates, "site.energy_exported", v[7], &a.Site.EnergyExported)
+		set(gateway.EndpointAggregates, "battery.energy_imported", v[8], &a.Battery.EnergyImported)
+		set(gateway.EndpointAggregates, "battery.energy_exported", v[9], &a.Battery.EnergyExported)
+		set(gateway.EndpointSOE, "percentage", v[10], &snap.SOE.Percentage)
+		set(gateway.EndpointSystemStatus, "nominal_energy_remaining", v[11], &snap.SystemStatus.NominalEnergyRemaining)
+		set(gateway.EndpointSystemStatus, "nominal_full_pack_energy", v[12], &snap.SystemStatus.NominalFullPackEnergy)
+		snap.SystemStatus.BatteryBlocks = make([]gateway.BatteryBlock, blocks)
+		if grid == "" {
+			snap.Reports[gateway.EndpointGridStatus] = gateway.Report{Endpoint: gateway.EndpointGridStatus,
+				Missing: []string{"grid_status"}}
+		}
+		snap.GridStatus.GridStatus = grid
+		out = append(out, GatewayHistoryEntry{Snapshot: snap, Events: byTS[ts]})
+	}
+	return out, rows.Err()
+}

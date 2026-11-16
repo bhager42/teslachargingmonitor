@@ -1278,8 +1278,8 @@ open questions in §15 resolved or deferred explicitly.
 ### Phase 9 — Tesla Solar and Powerwall (owner request D27)
 
 > **Status (2026-11-16): steps 9.0 (discovery), 9.1 (client and
-> simulator), 9.2 (storage and poller) and 9.3 (attribution and costs)
-> done.** The local customer login works on the owner's
+> simulator), 9.2 (storage and poller), 9.3 (attribution and costs) and
+> 9.4 (alerts) done.** The local customer login works on the owner's
 > Gateway, and the first capture (day, no car connected) is committed; see
 > the verification table below. Night, charging and outage captures are
 > still to come. Anything not in the
@@ -1479,7 +1479,11 @@ through new optional `Input` fields, and Wall Connector rules ignore them.
    *Acceptance:* table tests cover export, battery charging from solar,
    night charging (all grid or battery) and counter resets; a simulated
    sunny-day session's split adds up to its kWh.
-4. **Alerts.** The rules above, with table tests and `Preview` support.
+4. **Alerts** (*done*: `internal/alerts/gateway_rules.go`; migration
+   `0010` gives alert state, history and snoozes a `gateway_id` next to
+   `device_id`; `gateway_not_connected` was dropped because the field is
+   unreliable; battery levels use the Tesla app's scale; the rule list
+   shows Gateway rules once a Gateway is configured). The rules above, with table tests and `Preview` support.
    *Acceptance:* each simulator scenario raises exactly the expected
    alerts.
 5. **Web UI.** Settings → Solar Gateway (address, password, Test
