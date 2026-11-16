@@ -195,7 +195,7 @@ func TestDigestGoesOnlyToOptedInChannels(t *testing.T) {
 		t.Fatal("Digest flag not stored")
 	}
 	msg := Message{Subject: "Weekly summary", Text: "weekly text\n", HTML: "<p>weekly html</p>", Severity: alerts.Info}
-	n, err := e.d.EnqueueDigest(ctx, msg)
+	n, err := e.d.EnqueueDigest(ctx, msg, false)
 	if err != nil || n != 1 {
 		t.Fatalf("EnqueueDigest = %d, %v", n, err)
 	}
@@ -215,8 +215,39 @@ func TestDigestGoesOnlyToOptedInChannels(t *testing.T) {
 		MinSeverity: alerts.Info, Email: cfgFor(e.smtp, SecurityStartTLS)}); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := e.d.EnqueueDigest(ctx, msg); err != nil || n != 0 {
+	if n, err := e.d.EnqueueDigest(ctx, msg, false); err != nil || n != 0 {
 		t.Errorf("after opting out: %d, %v", n, err)
+	}
+}
+
+func TestMonthlyDigestGoesOnlyToOptedInChannels(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t, smtpmock.Options{})
+	e.addChannel(t, func(s *EmailSettings) { s.Name, s.Digest = "Weekly", true })
+	monthly := e.addChannel(t, func(s *EmailSettings) {
+		s.Name, s.MonthlyDigest, s.Email.To = "Monthly", true, []string{"monthly@example.com"}
+	})
+	if ci, _ := e.d.Channel(ctx, monthly.ID); !ci.MonthlyDigest || ci.Digest {
+		t.Fatalf("flags stored as weekly=%v monthly=%v", ci.Digest, ci.MonthlyDigest)
+	}
+	msg := Message{Subject: "Monthly summary", Text: "monthly text\n", HTML: "<p>monthly</p>", Severity: alerts.Info}
+	if n, err := e.d.EnqueueDigest(ctx, msg, true); err != nil || n != 1 {
+		t.Fatalf("EnqueueDigest(monthly) = %d, %v", n, err)
+	}
+	if err := e.d.DeliverDue(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ms := e.smtp.Messages(); len(ms) != 1 || ms[0].To[0] != "monthly@example.com" {
+		t.Fatalf("messages = %+v", ms)
+	}
+	// Both summaries on one channel, kept on update.
+	ci, err := e.d.UpdateEmailChannel(ctx, monthly.ID, EmailSettings{Name: "Monthly", Enabled: true, Digest: true,
+		MonthlyDigest: true, MinSeverity: alerts.Info, Email: cfgFor(e.smtp, SecurityStartTLS)})
+	if err != nil || !ci.Digest || !ci.MonthlyDigest {
+		t.Fatalf("update = %+v, %v", ci, err)
+	}
+	if n, _ := e.d.EnqueueDigest(ctx, msg, false); n != 2 {
+		t.Errorf("weekly recipients = %d, want 2", n)
 	}
 }
 

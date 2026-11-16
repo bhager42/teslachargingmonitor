@@ -25,7 +25,7 @@ type channelForm struct {
 	ID                                                       int64
 	Name, Username, To, Host, Port, Security, From, FromName string
 	MinSeverity, QuietHours                                  string
-	Enabled, PasswordSet, Digest                             bool
+	Enabled, PasswordSet, Digest, MonthlyDigest              bool
 }
 
 type deliveryRow struct{ When, Channel, Status, Subject, Error string }
@@ -55,7 +55,7 @@ func channelToForm(c notify.ChannelInfo) channelForm {
 	return channelForm{ID: c.ID, Name: c.Name, Username: c.Email.Username, To: strings.Join(c.Email.To, ", "),
 		Host: c.Email.Host, Port: strconv.Itoa(c.Email.Port), Security: c.Email.Security, From: c.Email.From,
 		FromName: c.Email.FromName, MinSeverity: c.MinSeverity.String(), QuietHours: c.QuietHours, Enabled: c.Enabled,
-		PasswordSet: c.PasswordSet, Digest: c.Digest}
+		PasswordSet: c.PasswordSet, Digest: c.Digest, MonthlyDigest: c.MonthlyDigest}
 }
 
 func (s *Server) renderChannel(w http.ResponseWriter, r *http.Request, sess auth.Session, status int, f channelForm, p page) {
@@ -103,7 +103,7 @@ func (s *Server) saveChannel(w http.ResponseWriter, r *http.Request, sess auth.S
 		Security: r.PostFormValue("security"), From: strings.TrimSpace(r.PostFormValue("from")),
 		FromName: r.PostFormValue("from_name"), MinSeverity: r.PostFormValue("min_severity"),
 		QuietHours: strings.TrimSpace(r.PostFormValue("quiet_hours")), Enabled: r.PostFormValue("enabled") == "1",
-		Digest: r.PostFormValue("digest") == "1"}
+		Digest: r.PostFormValue("digest") == "1", MonthlyDigest: r.PostFormValue("monthly_digest") == "1"}
 	var existing *notify.ChannelInfo
 	if r.PathValue("id") != "" {
 		c, ok := s.channelFromPath(w, r)
@@ -135,7 +135,8 @@ func (s *Server) saveChannel(w http.ResponseWriter, r *http.Request, sess auth.S
 	}
 	// The password field is write-only; Gmail shows app passwords with spaces.
 	pw := secrets.Secret(strings.Join(strings.Fields(r.PostFormValue("password")), ""))
-	settings := notify.EmailSettings{Name: strings.TrimSpace(f.Name), Enabled: f.Enabled, Digest: f.Digest, MinSeverity: sev,
+	settings := notify.EmailSettings{Name: strings.TrimSpace(f.Name), Enabled: f.Enabled, Digest: f.Digest,
+		MonthlyDigest: f.MonthlyDigest, MinSeverity: sev,
 		QuietHours: f.QuietHours, Password: pw, Email: notify.EmailConfig{Host: f.Host, Port: port, Security: f.Security,
 			Username: f.Username, From: from, FromName: f.FromName, To: to, SubjectPrefix: notify.DefaultSubjectPrefix}}
 	var ci notify.ChannelInfo

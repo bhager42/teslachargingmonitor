@@ -6,7 +6,11 @@ Copyright (C) 2026 Brad Hager and contributors
 <h1>{{.Title}}</h1>
 <p class="hint"><a href="/notifications">{{t "common.back_notifications"}}</a></p>
 <section class="card" aria-labelledby="digest-subject">
-  <p>{{t "digest.intro" "hour" (printf "%02d" .SendHour)}}</p>
+  {{- if .Monthly}}
+  <p>{{t "digest.monthly_intro" "hour" (printf "%02d" .SendHour)}} <a href="/notifications/digest">{{t "digest.show_weekly"}}</a></p>
+  {{- else}}
+  <p>{{t "digest.intro" "hour" (printf "%02d" .SendHour)}} <a href="/notifications/digest?period=monthly">{{t "digest.show_monthly"}}</a></p>
+  {{- end}}
   <h2 id="digest-subject">{{.Subject}}</h2>
   <pre class="digest">{{.Text}}</pre>
 </section>

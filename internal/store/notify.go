@@ -27,6 +27,7 @@ type NotifyChannel struct {
 	MinSeverity         string
 	QuietHours          string // "HH:MM-HH:MM" or ""
 	Digest              bool   // receives the weekly digest (D19)
+	MonthlyDigest       bool   // receives the monthly digest
 	Config              []byte
 	SecretEnc           []byte
 	CreatedAt           time.Time
@@ -38,7 +39,7 @@ type NotifyChannel struct {
 }
 
 const channelCols = `id, type, name, enabled, min_severity, quiet_hours, config_json, secret_enc, created_at,
-	updated_at, last_success_at, last_error, last_error_at, consecutive_failures, digest`
+	updated_at, last_success_at, last_error, last_error_at, consecutive_failures, digest, monthly_digest`
 
 func optTime(n sql.NullInt64) *time.Time {
 	if !n.Valid {
@@ -54,7 +55,7 @@ func scanChannel(sc interface{ Scan(...any) error }) (NotifyChannel, error) {
 	var created, updated int64
 	var lastOK, lastErrAt sql.NullInt64
 	err := sc.Scan(&c.ID, &c.Type, &c.Name, &c.Enabled, &c.MinSeverity, &c.QuietHours, &cfg, &c.SecretEnc,
-		&created, &updated, &lastOK, &c.LastError, &lastErrAt, &c.ConsecutiveFailures, &c.Digest)
+		&created, &updated, &lastOK, &c.LastError, &lastErrAt, &c.ConsecutiveFailures, &c.Digest, &c.MonthlyDigest)
 	c.Config = []byte(cfg)
 	c.CreatedAt, c.UpdatedAt = fromMS(created), fromMS(updated)
 	c.LastSuccess, c.LastErrorAt = optTime(lastOK), optTime(lastErrAt)
@@ -64,9 +65,9 @@ func scanChannel(sc interface{ Scan(...any) error }) (NotifyChannel, error) {
 // CreateNotifyChannel inserts a channel (validated by the caller).
 func (s *Store) CreateNotifyChannel(ctx context.Context, c NotifyChannel, now time.Time) (NotifyChannel, error) {
 	res, err := s.db.ExecContext(ctx, `INSERT INTO notify_channels (type, name, enabled, min_severity, quiet_hours,
-		config_json, secret_enc, created_at, updated_at, digest) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		config_json, secret_enc, created_at, updated_at, digest, monthly_digest) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.Type, c.Name, b2i(c.Enabled), c.MinSeverity, c.QuietHours, string(c.Config), c.SecretEnc, ms(now), ms(now),
-		b2i(c.Digest))
+		b2i(c.Digest), b2i(c.MonthlyDigest))
 	if err != nil {
 		return NotifyChannel{}, fmt.Errorf("store: creating channel: %w", err)
 	}
@@ -80,8 +81,9 @@ func (s *Store) CreateNotifyChannel(ctx context.Context, c NotifyChannel, now ti
 // UpdateNotifyChannel saves a channel's settings (matched by ID).
 func (s *Store) UpdateNotifyChannel(ctx context.Context, c NotifyChannel, now time.Time) error {
 	res, err := s.db.ExecContext(ctx, `UPDATE notify_channels SET name = ?, enabled = ?, min_severity = ?,
-		quiet_hours = ?, config_json = ?, secret_enc = ?, updated_at = ?, digest = ? WHERE id = ?`,
-		c.Name, b2i(c.Enabled), c.MinSeverity, c.QuietHours, string(c.Config), c.SecretEnc, ms(now), b2i(c.Digest), c.ID)
+		quiet_hours = ?, config_json = ?, secret_enc = ?, updated_at = ?, digest = ?, monthly_digest = ? WHERE id = ?`,
+		c.Name, b2i(c.Enabled), c.MinSeverity, c.QuietHours, string(c.Config), c.SecretEnc, ms(now), b2i(c.Digest),
+		b2i(c.MonthlyDigest), c.ID)
 	if err != nil {
 		return fmt.Errorf("store: updating channel: %w", err)
 	}

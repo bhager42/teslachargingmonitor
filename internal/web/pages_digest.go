@@ -18,40 +18,55 @@ import (
 	"github.com/bhager42/teslachargingmonitor/internal/notify"
 )
 
-// lastDigest builds the digest for the most recent complete week.
-func (s *Server) lastDigest(r *http.Request) (notify.Message, error) {
-	from, to := digest.Week(s.now(), time.Local)
-	return digest.Build(r.Context(), s.st, from, to, time.Local)
+// lastDigest builds the digest for the most recent complete week or month.
+func (s *Server) lastDigest(r *http.Request, per digest.Period) (notify.Message, error) {
+	from, to := per.Range(s.now(), time.Local)
+	return digest.Build(r.Context(), s.st, per, from, to, time.Local)
 }
 
-// digestPreview shows the plain-text version of last week's digest (the
-// HTML email uses inline styles, which the page's CSP forbids).
+// digestPreview shows the plain-text version of the last weekly digest, or
+// of the monthly one with ?period=monthly (the HTML email uses inline
+// styles, which the page's CSP forbids).
 func (s *Server) digestPreview(w http.ResponseWriter, r *http.Request, sess auth.Session) {
-	msg, err := s.lastDigest(r)
+	per := digest.ParsePeriod(r.URL.Query().Get("period"))
+	msg, err := s.lastDigest(r, per)
 	if err != nil {
-		s.log.Error("building digest preview", "err", err)
+		s.log.Error("building digest preview", "period", per.String(), "err", err)
 		s.renderError(w, r, http.StatusInternalServerError, tr.T("digest.preview_failed"), tr.T("error.see_log"))
 		return
 	}
-	s.render(w, r, http.StatusOK, "digest", s.base(page{"Title": tr.T("digest.title"), "Subject": msg.Subject,
-		"Text": msg.Text, "SendHour": digest.SendHour}, sess, "notifications"))
+	title := tr.T("digest.title")
+	if per == digest.Monthly {
+		title = tr.T("digest.monthly_title")
+	}
+	s.render(w, r, http.StatusOK, "digest", s.base(page{"Title": title, "Subject": msg.Subject,
+		"Text": msg.Text, "SendHour": digest.SendHour, "Monthly": per == digest.Monthly}, sess, "notifications"))
 }
 
-// sendDigest sends last week's digest through one channel now.
+// sendDigest sends the last weekly digest (or the monthly one when the
+// form has period=monthly) through one channel now.
 func (s *Server) sendDigest(w http.ResponseWriter, r *http.Request, sess auth.Session) {
 	c, ok := s.channelFromPath(w, r)
 	if !ok {
 		return
 	}
-	msg, err := s.lastDigest(r)
+	per := digest.ParsePeriod(r.PostFormValue("period"))
+	msg, err := s.lastDigest(r, per)
 	if err == nil {
 		err = s.notify.SendNow(r.Context(), c.ID, msg)
 	}
 	if err != nil {
-		s.renderChannel(w, r, sess, http.StatusBadRequest, channelToForm(c),
-			page{"Error": tr.T("digest.send_failed", "error", notify.Describe(err))})
+		failed := tr.T("digest.send_failed", "error", notify.Describe(err))
+		if per == digest.Monthly {
+			failed = tr.T("digest.monthly_send_failed", "error", notify.Describe(err))
+		}
+		s.renderChannel(w, r, sess, http.StatusBadRequest, channelToForm(c), page{"Error": failed})
 		return
 	}
-	s.auditUI(r, "digest_sent", map[string]string{"channel_id": strconv.FormatInt(c.ID, 10)})
-	http.Redirect(w, r, "/notifications?ok=digest-sent", http.StatusSeeOther)
+	s.auditUI(r, "digest_sent", map[string]string{"channel_id": strconv.FormatInt(c.ID, 10), "period": per.String()})
+	flash := "digest-sent"
+	if per == digest.Monthly {
+		flash = "monthly-sent"
+	}
+	http.Redirect(w, r, "/notifications?ok="+flash, http.StatusSeeOther)
 }

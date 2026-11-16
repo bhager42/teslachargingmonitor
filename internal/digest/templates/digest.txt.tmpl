@@ -7,7 +7,7 @@ under the terms of the GNU Affero General Public License as published by the
 Free Software Foundation, either version 3 of the License, or (at your
 option) any later version. See the LICENSE file for details.
 */ -}}
-{{t "digest.heading_range" "range" .Range}}
+{{.HeadingRange}}
 
 {{t "digest.label_charging"}} {{.Total}}
 {{- if .NoDevices}}
@@ -31,7 +31,7 @@ option) any later version. See the LICENSE file for details.
 {{- range .Alerts}}
   [{{.Severity}}] {{.Title}} — {{.Device}}: {{t "digest.alert_count" "count" .Count "last" .Last}}
 {{- else}}
-  {{t "digest.no_alerts"}}
+  {{.NoAlerts}}
 {{- end}}
 
 --

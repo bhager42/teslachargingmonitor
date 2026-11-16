@@ -588,6 +588,57 @@ func TestDigestPages(t *testing.T) {
 	}
 }
 
+func TestMonthlyDigestPages(t *testing.T) {
+	f := newFull(t)
+	d := f.addDevice()
+	f.saveSnapshot(d, "charging", f.clk.now().AddDate(0, -1, 0))
+	status, body := f.get("/notifications/digest?period=monthly")
+	if status != 200 || !strings.Contains(body, "Monthly summary preview") || !strings.Contains(body, "Monthly summary ") ||
+		!strings.Contains(body, "== Garage ==") || !strings.Contains(body, "1st of each month at 08:00") {
+		t.Fatalf("monthly preview = %d %s", status, body)
+	}
+	if _, body := f.get("/notifications/digest"); !strings.Contains(body, `href="/notifications/digest?period=monthly"`) {
+		t.Error("weekly preview does not link to the monthly one")
+	}
+
+	port := strings.TrimPrefix(f.smtp.Addr, "127.0.0.1:")
+	form := url.Values{"name": {"Gmail"}, "username": {"owner@gmail.com"}, "password": {"abcdefghijklmnop"},
+		"to": {"me@example.com"}, "host": {"localhost"}, "port": {port}, "security": {"starttls"},
+		"min_severity": {"info"}, "enabled": {"1"}, "monthly_digest": {"1"}, "action": {"save"}}
+	if r := f.post("/notifications/new", form); r.StatusCode != 303 {
+		t.Fatalf("save = %d %s", r.StatusCode, bodyOf(t, r))
+	}
+	chs, _ := f.srv.notify.Channels(context.Background())
+	if len(chs) != 1 || !chs[0].MonthlyDigest || chs[0].Digest {
+		t.Fatalf("channel = %+v", chs)
+	}
+	id := itoa(chs[0].ID)
+	_, body = f.get("/notifications")
+	if !strings.Contains(body, "1st of each month at 08:00") || !strings.Contains(body, `name="period" value="monthly"`) ||
+		strings.Contains(body, "Send weekly summary now") {
+		t.Error("notifications page does not show the monthly summary alone")
+	}
+	if _, body := f.get("/notifications/" + id); !strings.Contains(body, `name="monthly_digest" value="1" checked`) {
+		t.Error("edit form does not show the monthly opt-in")
+	}
+	r := f.post("/notifications/"+id+"/digest", url.Values{"period": {"monthly"}})
+	if r.StatusCode != 303 || !strings.Contains(r.Header.Get("Location"), "ok=monthly-sent") {
+		t.Fatalf("send monthly digest = %d %s", r.StatusCode, bodyOf(t, r))
+	}
+	if ms := f.smtp.Messages(); len(ms) != 1 || !strings.Contains(string(ms[0].Data), "Monthly summary") {
+		t.Fatalf("messages = %d", len(ms))
+	}
+	if _, body := f.get("/notifications?ok=monthly-sent"); !strings.Contains(body, "Monthly summary sent.") {
+		t.Error("no flash after sending the monthly summary")
+	}
+	form.Del("monthly_digest")
+	form.Set("password", "")
+	_ = f.post("/notifications/"+id, form)
+	if c, _ := f.srv.notify.Channel(context.Background(), chs[0].ID); c.MonthlyDigest {
+		t.Error("monthly digest still on after unticking")
+	}
+}
+
 func TestThemeCookie(t *testing.T) {
 	f := newFull(t)
 	r := f.do("GET", "/", nil, cookie(f.c), cookie(&http.Cookie{Name: "tcmon_theme", Value: "light"})) //nolint:gosec // request-side test cookie

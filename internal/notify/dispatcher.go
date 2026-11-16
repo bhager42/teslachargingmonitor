@@ -84,7 +84,9 @@ type EmailSettings struct {
 	MinSeverity alerts.Severity
 	QuietHours  string // "HH:MM-HH:MM" or ""
 	Digest      bool   // also receives the weekly digest
-	Email       EmailConfig
+	// MonthlyDigest: also receives the monthly digest.
+	MonthlyDigest bool
+	Email         EmailConfig
 	// Password is the SMTP (Gmail app) password. On update, an empty
 	// value keeps the stored one.
 	Password secrets.Secret
@@ -99,6 +101,7 @@ type ChannelInfo struct {
 	MinSeverity         alerts.Severity
 	QuietHours          string
 	Digest              bool
+	MonthlyDigest       bool
 	Email               EmailConfig
 	PasswordSet         bool
 	LastSuccess         *time.Time
@@ -151,7 +154,7 @@ func (d *Dispatcher) CreateEmailChannel(ctx context.Context, s EmailSettings) (C
 		return ChannelInfo{}, err
 	}
 	ch, err := d.st.CreateNotifyChannel(ctx, store.NotifyChannel{Type: TypeEmail, Name: s.Name, Enabled: s.Enabled,
-		MinSeverity: s.MinSeverity.String(), QuietHours: s.QuietHours, Digest: s.Digest, Config: cfgJSON,
+		MinSeverity: s.MinSeverity.String(), QuietHours: s.QuietHours, Digest: s.Digest, MonthlyDigest: s.MonthlyDigest, Config: cfgJSON,
 		SecretEnc: sealed}, d.cfg.Now())
 	if err != nil {
 		return ChannelInfo{}, err
@@ -177,7 +180,7 @@ func (d *Dispatcher) UpdateEmailChannel(ctx context.Context, id int64, s EmailSe
 		return ChannelInfo{}, err
 	}
 	ch.Name, ch.Enabled, ch.MinSeverity, ch.QuietHours = s.Name, s.Enabled, s.MinSeverity.String(), s.QuietHours
-	ch.Digest = s.Digest
+	ch.Digest, ch.MonthlyDigest = s.Digest, s.MonthlyDigest
 	if err := d.st.UpdateNotifyChannel(ctx, ch, d.cfg.Now()); err != nil {
 		return ChannelInfo{}, err
 	}
@@ -221,7 +224,7 @@ func (d *Dispatcher) info(ch store.NotifyChannel) (ChannelInfo, error) {
 		return ChannelInfo{}, err
 	}
 	ci := ChannelInfo{ID: ch.ID, Type: ch.Type, Name: ch.Name, Enabled: ch.Enabled, MinSeverity: sev,
-		QuietHours: ch.QuietHours, Digest: ch.Digest, LastSuccess: ch.LastSuccess, LastError: ch.LastError, LastErrorAt: ch.LastErrorAt,
+		QuietHours: ch.QuietHours, Digest: ch.Digest, MonthlyDigest: ch.MonthlyDigest, LastSuccess: ch.LastSuccess, LastError: ch.LastError, LastErrorAt: ch.LastErrorAt,
 		ConsecutiveFailures: ch.ConsecutiveFailures}
 	if err := json.Unmarshal(ch.Config, &ci.Email); err != nil {
 		return ChannelInfo{}, fmt.Errorf("notify: channel %d config: %w", ch.ID, err)
@@ -325,10 +328,11 @@ func (d *Dispatcher) Enqueue(ctx context.Context, batch []alerts.Notification) e
 }
 
 // EnqueueDigest queues a rendered digest for every enabled channel that
-// opted into it, and returns how many were queued. The digest is
+// opted into it (the monthly or the weekly one), and returns how many were
+// queued. The digest is
 // informational and sent at a fixed time, so severity filters and quiet
 // hours do not apply.
-func (d *Dispatcher) EnqueueDigest(ctx context.Context, msg Message) (int, error) {
+func (d *Dispatcher) EnqueueDigest(ctx context.Context, msg Message, monthly bool) (int, error) {
 	chs, err := d.st.NotifyChannels(ctx)
 	if err != nil {
 		return 0, err
@@ -340,7 +344,7 @@ func (d *Dispatcher) EnqueueDigest(ctx context.Context, msg Message) (int, error
 	now := d.cfg.Now()
 	var ds []store.Delivery
 	for _, ch := range chs {
-		if ch.Enabled && ch.Digest {
+		if ch.Enabled && (monthly && ch.MonthlyDigest || !monthly && ch.Digest) {
 			ds = append(ds, store.Delivery{ChannelID: ch.ID, CreatedAt: now, NextAttempt: now, Subject: msg.Subject,
 				MessageJSON: js})
 		}

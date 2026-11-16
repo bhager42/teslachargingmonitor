@@ -6,10 +6,11 @@
 // Free Software Foundation, either version 3 of the License, or (at your
 // option) any later version. See the LICENSE file for details.
 
-// Package digest builds and schedules the optional weekly summary email
-// (owner decision D19): charging energy and cost, alerts, and device health
-// for the previous Monday-to-Sunday week, sent on Monday morning to the
-// email channels that opted in.
+// Package digest builds and schedules the optional summary emails (owner
+// decision D19): charging energy and cost, alerts, and device health for
+// the previous Monday-to-Sunday week (sent on Monday morning) or the
+// previous calendar month (sent on the 1st), to the email channels that
+// opted in.
 package digest
 
 import (
@@ -54,6 +55,55 @@ const (
 	displayKey = "display"
 )
 
+// Period selects the weekly or the monthly summary.
+type Period int
+
+// Periods.
+const (
+	Weekly Period = iota
+	Monthly
+)
+
+// ParsePeriod maps "monthly" to Monthly and anything else to Weekly.
+func ParsePeriod(s string) Period {
+	if s == "monthly" {
+		return Monthly
+	}
+	return Weekly
+}
+
+// String is the period's name in URLs and logs.
+func (p Period) String() string {
+	if p == Monthly {
+		return "monthly"
+	}
+	return "weekly"
+}
+
+// Range returns the period's most recent complete [from, to) before now.
+func (p Period) Range(now time.Time, loc *time.Location) (from, to time.Time) {
+	if p == Monthly {
+		return Month(now, loc)
+	}
+	return Week(now, loc)
+}
+
+// previous returns the start of the period before the one starting at from.
+func (p Period) previous(from time.Time) time.Time {
+	if p == Monthly {
+		return from.AddDate(0, -1, 0) // from is the 1st, so this never overflows
+	}
+	return from.AddDate(0, 0, -7)
+}
+
+// Month returns the local calendar month before the one containing now.
+func Month(now time.Time, loc *time.Location) (from, to time.Time) {
+	p := energy.NewPlan(nil, loc)
+	to = p.Start(energy.Month, now)
+	y, m, _ := to.Date()
+	return time.Date(y, m-1, 1, 0, 0, 0, 0, loc), to
+}
+
 // Week returns the Monday-to-Monday local week before the one containing now.
 func Week(now time.Time, loc *time.Location) (from, to time.Time) {
 	p := energy.NewPlan(nil, loc)
@@ -65,6 +115,8 @@ func Week(now time.Time, loc *time.Location) (from, to time.Time) {
 // view is the only data the templates see: preformatted strings.
 type view struct {
 	Subject, Range, Footer string
+	Heading, HeadingRange  string
+	NoAlerts               string
 	Total                  string
 	Devices                []deviceView
 	Alerts                 []alertView
@@ -117,9 +169,14 @@ func charging(kWh, cost float64, cur string, sessions int) string {
 	return tr.T("digest.charging", "energy", kwh(kWh), "cost", money(cost, cur), "sessions", tr.N("digest.sessions", sessions))
 }
 
-// energyIn sums priced intervals whose midpoint falls in [from, to).
-// Monthly fees are left out: they belong to months, not weeks.
-func energyIn(iv []energy.Interval, from, to time.Time) (kWh, cost float64) {
+// energyIn sums priced intervals whose midpoint falls in [from, to). The
+// weekly summary leaves monthly fees out (they belong to months, not
+// weeks); the monthly one adds them like the Costs page does.
+func energyIn(per Period, plan energy.Plan, iv []energy.Interval, from, to time.Time) (kWh, cost float64) {
+	if per == Monthly {
+		b := plan.Total(iv, from, to)
+		return b.KWh, b.Cost
+	}
 	for _, x := range iv {
 		if m := x.Mid(); !m.Before(from) && m.Before(to) {
 			kWh += x.Wh / 1000
@@ -129,8 +186,8 @@ func energyIn(iv []energy.Interval, from, to time.Time) (kWh, cost float64) {
 	return kWh, cost
 }
 
-// Build gathers the week [from, to) from the store and renders the digest.
-func Build(ctx context.Context, st *store.Store, from, to time.Time, loc *time.Location) (notify.Message, error) {
+// Build gathers the period [from, to) from the store and renders the digest.
+func Build(ctx context.Context, st *store.Store, per Period, from, to time.Time, loc *time.Location) (notify.Message, error) {
 	if loc == nil {
 		loc = time.Local
 	}
@@ -158,12 +215,20 @@ func Build(ctx context.Context, st *store.Store, from, to time.Time, loc *time.L
 	if err != nil {
 		return notify.Message{}, err
 	}
-	prevFrom := from.AddDate(0, 0, -7)
+	prevFrom := per.previous(from)
 
 	v := view{NoDevices: len(devices) == 0}
-	v.Range = from.In(loc).Format("Mon 2 Jan") + " – " + to.Add(-time.Second).In(loc).Format("Mon 2 Jan 2006")
+	if per == Monthly {
+		v.Range = from.In(loc).Format("January 2006")
+		v.Heading, v.NoAlerts = tr.T("digest.monthly_heading"), tr.T("digest.monthly_no_alerts")
+		v.HeadingRange = tr.T("digest.monthly_heading_range", "range", v.Range)
+	} else {
+		v.Range = from.In(loc).Format("Mon 2 Jan") + " – " + to.Add(-time.Second).In(loc).Format("Mon 2 Jan 2006")
+		v.Heading, v.NoAlerts = tr.T("digest.heading"), tr.T("digest.no_alerts")
+		v.HeadingRange = tr.T("digest.heading_range", "range", v.Range)
+	}
 	names := map[int64]string{}
-	var totKWh, totCost float64
+	var all []energy.Interval
 	totSessions := 0
 	for _, d := range devices {
 		names[d.ID] = d.Name
@@ -172,8 +237,9 @@ func Build(ctx context.Context, st *store.Store, from, to time.Time, loc *time.L
 			return notify.Message{}, err
 		}
 		iv := energy.Intervals(samples, plan)
-		k, c := energyIn(iv, from, to)
-		pk, pc := energyIn(iv, prevFrom, from)
+		all = append(all, iv...)
+		k, c := energyIn(per, plan, iv, from, to)
+		pk, pc := energyIn(per, plan, iv, prevFrom, from)
 		ps, err := st.PlugSamples(ctx, d.ID, from, to)
 		if err != nil {
 			return notify.Message{}, err
@@ -184,14 +250,18 @@ func Build(ctx context.Context, st *store.Store, from, to time.Time, loc *time.L
 				sessions++
 			}
 		}
-		totKWh, totCost, totSessions = totKWh+k, totCost+c, totSessions+sessions
+		totSessions += sessions
 		h, err := st.Health(ctx, d.ID, from, to)
 		if err != nil {
 			return notify.Message{}, err
 		}
+		previous := tr.T("digest.previous", "energy", kwh(pk), "cost", money(pc, cur.Currency))
+		if per == Monthly {
+			previous = tr.T("digest.monthly_previous", "energy", kwh(pk), "cost", money(pc, cur.Currency))
+		}
 		dv := deviceView{Name: d.Name,
 			Charging: charging(k, c, cur.Currency, sessions),
-			Previous: tr.T("digest.previous", "energy", kwh(pk), "cost", money(pc, cur.Currency)),
+			Previous: previous,
 			Polls: tr.T("digest.polls", "ok", tr.N("digest.polls_ok", h.PollsOK),
 				"failed", tr.N("digest.polls_failed", h.PollFailures)),
 		}
@@ -215,16 +285,24 @@ func Build(ctx context.Context, st *store.Store, from, to time.Time, loc *time.L
 		}
 		v.Devices = append(v.Devices, dv)
 	}
+	// Totalled over all devices' intervals so a monthly fee counts once.
+	totKWh, totCost := energyIn(per, plan, all, from, to)
 	v.Total = charging(totKWh, totCost, cur.Currency, totSessions)
 
 	alertCount, err := addAlerts(ctx, st, &v, names, from, to, loc)
 	if err != nil {
 		return notify.Message{}, err
 	}
-	v.Subject = tr.T("digest.subject", "range", v.Range, "energy", kwh(totKWh), "cost", money(totCost, cur.Currency),
-		"alerts", tr.N("digest.alerts", alertCount))
 	info := buildinfo.Get()
-	v.Footer = tr.T("digest.footer", "version", info.Version, "source", info.SourceLink())
+	if per == Monthly {
+		v.Subject = tr.T("digest.monthly_subject", "range", v.Range, "energy", kwh(totKWh),
+			"cost", money(totCost, cur.Currency), "alerts", tr.N("digest.alerts", alertCount))
+		v.Footer = tr.T("digest.monthly_footer", "version", info.Version, "source", info.SourceLink())
+	} else {
+		v.Subject = tr.T("digest.subject", "range", v.Range, "energy", kwh(totKWh), "cost", money(totCost, cur.Currency),
+			"alerts", tr.N("digest.alerts", alertCount))
+		v.Footer = tr.T("digest.footer", "version", info.Version, "source", info.SourceLink())
+	}
 
 	var tb, hb bytes.Buffer
 	if err := textTpl.Execute(&tb, v); err != nil {

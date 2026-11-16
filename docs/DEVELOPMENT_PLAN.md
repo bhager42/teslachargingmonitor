@@ -386,7 +386,8 @@ shows when it *would* have fired.
 ### Health of the app itself
 - `self_notification_failure`: a channel failed N times → show banner in UI and
   try other channels.
-- Weekly optional **digest** (energy used, sessions, cost, max temps, alerts) — D19.
+- Weekly optional **digest** (energy used, sessions, cost, max temps, alerts) — D19;
+  monthly optional digest with the same content, including monthly fees — D26.
 - Optional **dead-man's switch**: ping an external URL (e.g. healthchecks.io /
   Uptime Kuma push) after every successful poll cycle so the owner learns if
   `tcmon` itself stops — D20.
@@ -1239,6 +1240,12 @@ Delivered as small PRs, in this order:
    filters and quiet hours do not apply. Notifications → Preview weekly
    summary shows the text version; "Send weekly summary now" sends it.
    Weekly costs are energy only (monthly fees belong to months).
+   *Monthly summary (D26, 2026-11-15):* the same email for the previous
+   calendar month, queued on the 1st at 08:00 with its own catch-up
+   record; opt-in per channel separately from the weekly one (migration
+   0008). Its costs include the rate plan's monthly fee, totalled over all
+   devices like the Costs page, so the total matches "Last month" there.
+   Preview and "Send monthly summary now" use `?period=monthly`.
 6. i18n scaffolding: user-facing strings moved to a message catalogue
    (English only), without changing any text.
    *Done:* `internal/i18n` (ADR 0006) with the English catalog; web
@@ -1317,6 +1324,7 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 | D23 | **Session lifetime kept**: 12 h idle, 7 days maximum (item 14). | 2026-11-07 | No change to `internal/auth`. |
 | D24 | **Pricing as built is enough** (item 10a): flat $0.155/kWh default, optional off-peak price and monthly fee, energy-only cost by default, US dollars. | 2026-11-07 | No change; taxes or tiered rates would be a later feature. |
 | D25 | Items 1, 5, 6, 15, 16 and 23 **deferred past 1.0**. | 2026-11-07 | Power-sharing view, a second alert channel, InfluxDB/Home Assistant/MQTT and the TrueNAS community catalog stay in Later / stretch; the install guides already cover the network and dataset choices. |
+| D26 | **Monthly summary email, optional** (off by default), alongside the weekly one. | 2026-11-15 | Same content as the weekly digest for the previous calendar month, sent on the 1st; costs include monthly fees. |
 
 ### 15.1 Status of the original questions
 
