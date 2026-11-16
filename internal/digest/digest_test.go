@@ -139,7 +139,7 @@ func TestBuild(t *testing.T) {
 	loc := newYork(t)
 	st := openStore(t)
 	_, from, to := seed(t, st, loc)
-	msg, err := Build(context.Background(), st, from, to, loc)
+	msg, err := Build(context.Background(), st, Weekly, from, to, loc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestBuild(t *testing.T) {
 	if err := st.SetSetting(context.Background(), displayKey, map[string]string{"temp_unit": "F"}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if msg, _ := Build(context.Background(), st, from, to, loc); !strings.Contains(msg.Text, "handle 117.5 °F") {
+	if msg, _ := Build(context.Background(), st, Weekly, from, to, loc); !strings.Contains(msg.Text, "handle 117.5 °F") {
 		t.Errorf("°F not applied:\n%s", msg.Text)
 	}
 }
@@ -184,7 +184,7 @@ func TestBuildEmpty(t *testing.T) {
 	loc := newYork(t)
 	st := openStore(t)
 	from, to := Week(time.Date(2026, 11, 9, 8, 0, 0, 0, loc), loc)
-	msg, err := Build(context.Background(), st, from, to, loc)
+	msg, err := Build(context.Background(), st, Weekly, from, to, loc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,15 +196,17 @@ func TestBuildEmpty(t *testing.T) {
 }
 
 type fakeQueue struct {
-	mu   sync.Mutex
-	msgs []notify.Message
-	n    int
+	mu      sync.Mutex
+	msgs    []notify.Message
+	monthly []bool
+	n       int
 }
 
-func (q *fakeQueue) EnqueueDigest(_ context.Context, m notify.Message) (int, error) {
+func (q *fakeQueue) EnqueueDigest(_ context.Context, m notify.Message, monthly bool) (int, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.msgs = append(q.msgs, m)
+	q.monthly = append(q.monthly, monthly)
 	return q.n, nil
 }
 
@@ -220,7 +222,7 @@ func TestScheduler(t *testing.T) {
 	tick := func(at time.Time, want int) {
 		t.Helper()
 		now = at
-		n, err := s.Tick(context.Background())
+		n, err := s.Tick(context.Background(), Weekly)
 		if err != nil || n != want {
 			t.Fatalf("Tick at %v = %d, %v; want %d", at, n, err, want)
 		}
@@ -273,5 +275,111 @@ func TestEventCount(t *testing.T) {
 		if got := eventCount(c.kind, c.n); got != c.want {
 			t.Errorf("eventCount(%q, %d) = %q, want %q", c.kind, c.n, got, c.want)
 		}
+	}
+}
+
+func TestMonth(t *testing.T) {
+	loc := newYork(t)
+	for _, c := range []struct{ now, from, to time.Time }{
+		{time.Date(2026, 11, 1, 0, 0, 0, 0, loc), time.Date(2026, 10, 1, 0, 0, 0, 0, loc), time.Date(2026, 11, 1, 0, 0, 0, 0, loc)},
+		{time.Date(2026, 11, 30, 23, 59, 0, 0, loc), time.Date(2026, 10, 1, 0, 0, 0, 0, loc), time.Date(2026, 11, 1, 0, 0, 0, 0, loc)},
+		{time.Date(2027, 1, 15, 12, 0, 0, 0, loc), time.Date(2026, 12, 1, 0, 0, 0, 0, loc), time.Date(2027, 1, 1, 0, 0, 0, 0, loc)},
+		{time.Date(2027, 3, 31, 12, 0, 0, 0, loc), time.Date(2027, 2, 1, 0, 0, 0, 0, loc), time.Date(2027, 3, 1, 0, 0, 0, 0, loc)},
+	} {
+		if from, to := Monthly.Range(c.now, loc); !from.Equal(c.from) || !to.Equal(c.to) {
+			t.Errorf("Month(%v) = %v – %v, want %v – %v", c.now, from, to, c.from, c.to)
+		}
+	}
+	if Monthly.previous(time.Date(2027, 3, 1, 0, 0, 0, 0, loc)) != time.Date(2027, 2, 1, 0, 0, 0, 0, loc) {
+		t.Error("previous month of March is not February")
+	}
+	if ParsePeriod("monthly") != Monthly || ParsePeriod("") != Weekly || ParsePeriod("bogus") != Weekly {
+		t.Error("ParsePeriod")
+	}
+}
+
+func TestBuildMonthly(t *testing.T) {
+	ctx := context.Background()
+	loc := newYork(t)
+	st := openStore(t)
+	d, _, _ := seed(t, st, loc)
+	// A $5 monthly fee from October: counted once per month with usage.
+	if _, err := st.AddRate(ctx, energy.Rate{Price: 0.20, MonthlyFee: 5, EffectiveFrom: time.Date(2026, 10, 1, 0, 0, 0, 0, loc)},
+		time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	from, to := Monthly.Range(time.Date(2026, 12, 1, 8, 0, 0, 0, loc), loc)
+	msg, err := Build(ctx, st, Monthly, from, to, loc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "Monthly summary November 2026: 32.0 kWh, $11.40, 4 alerts"; msg.Subject != want {
+		t.Errorf("Subject = %q, want %q", msg.Subject, want)
+	}
+	for _, s := range []string{
+		"Monthly summary, November 2026",
+		"== " + d.Name + " ==",
+		"Charging: 32.0 kWh, $11.40 · 2 charging sessions",
+		"Previous month: 10.0 kWh, $7.00",
+		"Device events: 1 restart",
+		"Costs include the monthly fee",
+	} {
+		if !strings.Contains(msg.Text, s) {
+			t.Errorf("text lacks %q:\n%s", s, msg.Text)
+		}
+	}
+	if !strings.Contains(msg.HTML, ">Monthly summary</h1>") {
+		t.Error("HTML heading is not the monthly one")
+	}
+
+	// The weekly summary still leaves the fee out.
+	wf, wt := Week(time.Date(2026, 11, 9, 8, 0, 0, 0, loc), loc)
+	if w, _ := Build(ctx, st, Weekly, wf, wt, loc); !strings.Contains(w.Subject, "32.0 kWh, $6.40") {
+		t.Errorf("weekly subject = %q", w.Subject)
+	}
+
+	// No alerts in a quiet month.
+	from, to = Monthly.Range(time.Date(2026, 10, 1, 8, 0, 0, 0, loc), loc)
+	if msg, _ := Build(ctx, st, Monthly, from, to, loc); !strings.Contains(msg.Text, "No alerts this month.") {
+		t.Errorf("September text:\n%s", msg.Text)
+	}
+}
+
+func TestMonthlyScheduler(t *testing.T) {
+	loc := newYork(t)
+	st := openStore(t)
+	q := &fakeQueue{n: 1}
+	var now time.Time
+	s := NewScheduler(st, q, Config{Location: loc, Now: func() time.Time { return now }})
+	tick := func(at time.Time, per Period, want int) {
+		t.Helper()
+		now = at
+		if n, err := s.Tick(context.Background(), per); err != nil || n != want {
+			t.Fatalf("Tick(%v) at %v = %d, %v; want %d", per, at, n, err, want)
+		}
+	}
+	tick(time.Date(2026, 11, 20, 12, 0, 0, 0, loc), Monthly, 1) // first start mid-month: October
+	if !strings.HasPrefix(q.msgs[0].Subject, "Monthly summary October 2026:") || !q.monthly[0] {
+		t.Fatalf("first = %q monthly=%v", q.msgs[0].Subject, q.monthly[0])
+	}
+	tick(time.Date(2026, 12, 1, 7, 59, 30, 0, loc), Monthly, -1) // November not due before 08:00
+	if d := s.next(); d != 30*time.Second {
+		t.Errorf("next at 07:59:30 = %v", d)
+	}
+	tick(time.Date(2026, 12, 1, 8, 0, 0, 0, loc), Monthly, 1)
+	if got := q.msgs[len(q.msgs)-1].Subject; !strings.HasPrefix(got, "Monthly summary November 2026:") {
+		t.Fatalf("subject = %q", got)
+	}
+	tick(time.Date(2026, 12, 1, 9, 0, 0, 0, loc), Monthly, -1) // already queued
+	// The weekly digest is tracked separately.
+	tick(time.Date(2026, 12, 1, 9, 0, 0, 0, loc), Weekly, 1)
+	if q.monthly[len(q.monthly)-1] {
+		t.Error("weekly digest queued as monthly")
+	}
+	// Down over the 1st: caught up later in the month.
+	s = NewScheduler(st, q, Config{Location: loc, Now: func() time.Time { return now }})
+	tick(time.Date(2027, 1, 12, 12, 0, 0, 0, loc), Monthly, 1)
+	if got := q.msgs[len(q.msgs)-1].Subject; !strings.HasPrefix(got, "Monthly summary December 2026:") {
+		t.Fatalf("catch-up subject = %q", got)
 	}
 }

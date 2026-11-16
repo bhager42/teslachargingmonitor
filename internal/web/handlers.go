@@ -53,6 +53,7 @@ var flashes = map[string]string{
 	"channel-deleted":  "flash.channel_deleted",
 	"test-sent":        "flash.test_sent",
 	"digest-sent":      "flash.digest_sent",
+	"monthly-sent":     "flash.monthly_digest_sent",
 	"settings-saved":   "flash.settings_saved",
 	"beat-saved":       "flash.beat_saved",
 	"beat-tested":      "flash.beat_tested",

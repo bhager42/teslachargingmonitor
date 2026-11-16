@@ -24,6 +24,8 @@ Copyright (C) 2026 Brad Hager and contributors
   <span></span><label class="check"><input type="checkbox" name="enabled" value="1" {{if $f.Enabled}}checked{{end}}> {{t "common.enabled"}}</label>
   <span></span><div><label class="check"><input type="checkbox" name="digest" value="1" {{if $f.Digest}}checked{{end}} aria-describedby="digest-hint"> {{t "channel.digest"}}</label>
   <p class="hint" id="digest-hint">{{th "channel.digest_hint_html"}}</p></div>
+  <span></span><div><label class="check"><input type="checkbox" name="monthly_digest" value="1" {{if $f.MonthlyDigest}}checked{{end}} aria-describedby="monthly-digest-hint"> {{t "channel.monthly_digest"}}</label>
+  <p class="hint" id="monthly-digest-hint">{{th "channel.monthly_digest_hint_html"}}</p></div>
   <details class="span-2"><summary>{{t "channel.advanced"}}</summary>
     <div class="form-grid">
       <label for="host">{{t "channel.host"}}</label><input id="host" name="host" value="{{$f.Host}}" required>

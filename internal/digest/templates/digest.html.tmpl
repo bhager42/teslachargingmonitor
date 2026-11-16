@@ -18,7 +18,7 @@ option) any later version. See the LICENSE file for details.
 </head>
 <body style="margin:0;padding:16px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.45">
 <div style="max-width:640px">
-<h1 style="font-size:20px;margin:0 0 4px">{{t "digest.heading"}}</h1>
+<h1 style="font-size:20px;margin:0 0 4px">{{.Heading}}</h1>
 <p style="margin:0 0 16px;opacity:.75">{{.Range}}</p>
 <p style="margin:0 0 16px"><strong>{{t "digest.label_charging"}}</strong> {{.Total}}</p>
 {{- if .NoDevices}}<p>{{t "digest.no_devices"}}</p>{{end}}
@@ -43,7 +43,7 @@ option) any later version. See the LICENSE file for details.
 {{- end}}
 </ul>
 {{- else}}
-<p style="margin:0">{{t "digest.no_alerts"}}</p>
+<p style="margin:0">{{.NoAlerts}}</p>
 {{- end}}
 <p style="margin:16px 0 0;font-size:12px;opacity:.7">{{.Footer}}</p>
 </div>
