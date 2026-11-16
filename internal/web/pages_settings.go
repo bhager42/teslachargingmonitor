@@ -9,6 +9,7 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/bhager42/teslachargingmonitor/internal/auth"
 	"github.com/bhager42/teslachargingmonitor/internal/buildinfo"
+	"github.com/bhager42/teslachargingmonitor/internal/gateway"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
 	"github.com/bhager42/teslachargingmonitor/internal/wallconnector"
 )
@@ -217,6 +219,10 @@ func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request, sess auth.S
 		}
 		out = append(out, dd)
 	}
+	gws, _ := s.st.Gateways(ctx)
+	for _, g := range gws {
+		out = append(out, s.diagGateway(ctx, g))
+	}
 	stats, _ := s.st.Stats(ctx)
 	ver, _ := s.st.SchemaVersion(ctx)
 	info := buildinfo.Get()
@@ -231,4 +237,58 @@ func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request, sess auth.S
 	s.render(w, r, http.StatusOK, "diagnostics", s.base(page{"Title": tr.T("diagnostics.title"), "Devices": out, "Rows": rows,
 		"DBSize": fmt.Sprintf("%.1f MB", float64(stats.SizeBytes)/1e6), "Schema": ver, "GoVersion": info.GoVersion,
 		"LiveClients": clients, "Heartbeat": s.heartbeatView()}, sess, "diagnostics"))
+}
+
+// gatewayDecoders re-check a Backup Gateway's latest payloads.
+var gatewayDecoders = map[gateway.Endpoint]func([]byte) (gateway.Report, error){
+	gateway.EndpointStatus:       func(b []byte) (gateway.Report, error) { _, r, err := gateway.DecodeStatus(b); return r, err },
+	gateway.EndpointAggregates:   func(b []byte) (gateway.Report, error) { _, r, err := gateway.DecodeAggregates(b); return r, err },
+	gateway.EndpointSOE:          func(b []byte) (gateway.Report, error) { _, r, err := gateway.DecodeSOE(b); return r, err },
+	gateway.EndpointGridStatus:   func(b []byte) (gateway.Report, error) { _, r, err := gateway.DecodeGridStatus(b); return r, err },
+	gateway.EndpointSystemStatus: func(b []byte) (gateway.Report, error) { _, r, err := gateway.DecodeSystemStatus(b); return r, err },
+	gateway.EndpointOperation:    func(b []byte) (gateway.Report, error) { _, r, err := gateway.DecodeOperation(b); return r, err },
+	gateway.EndpointSitemaster:   func(b []byte) (gateway.Report, error) { _, r, err := gateway.DecodeSitemaster(b); return r, err },
+}
+
+// diagGateway is a Backup Gateway's Diagnostics card: data quality of its
+// latest poll and its recent polls, like a Wall Connector's.
+func (s *Server) diagGateway(ctx context.Context, g store.Gateway) diagDevice {
+	dd := diagDevice{Name: g.Name}
+	log, _ := s.st.GatewayPollLog(ctx, g.ID, 15)
+	for _, e := range log {
+		res := tr.T("diagnostics.poll_ok")
+		if !e.OK {
+			res = tr.T("diagnostics.poll_failed", "attempt", e.Attempt)
+		}
+		dd.Polls = append(dd.Polls, diagPoll{When: e.TS.Local().Format("2 Jan 15:04:05"), Result: res,
+			Took: e.Duration.Round(time.Millisecond).String(), Error: e.Error})
+	}
+	raw, at, _ := s.st.LatestGatewayRaw(ctx, g.ID)
+	if !at.IsZero() {
+		dd.RawAt = at.Local().Format("2 Jan 15:04")
+	}
+	if g.PendingPin != "" {
+		dd.Problems = append(dd.Problems, tr.T("diagnostics.gateway_cert_pending"))
+	}
+	for _, ep := range gateway.SnapshotEndpoints {
+		b, ok := raw[string(ep)]
+		if !ok {
+			continue
+		}
+		rep, err := gatewayDecoders[ep](b)
+		if err != nil {
+			dd.Problems = append(dd.Problems, string(ep)+": "+err.Error())
+			continue
+		}
+		for _, u := range rep.Unknown {
+			dd.Problems = append(dd.Problems, tr.T("diagnostics.unknown_field", "endpoint", string(ep), "field", u))
+		}
+		for _, m := range rep.Missing {
+			dd.Problems = append(dd.Problems, tr.T("diagnostics.missing_field", "endpoint", string(ep), "field", m))
+		}
+		for _, iv := range rep.Invalid {
+			dd.Problems = append(dd.Problems, string(ep)+": "+iv.String())
+		}
+	}
+	return dd
 }

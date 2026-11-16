@@ -1,0 +1,109 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-or-later
+Copyright (C) 2026 Brad Hager and contributors
+*/ -}}
+{{define "content"}}
+{{- $f := .Form}}
+<h1>{{t "gateway.title"}}</h1>
+<p class="hint"><a href="/settings">{{t "gateway.back"}}</a></p>
+<p>{{t "gateway.intro"}}</p>
+
+{{- with .Status}}
+<section class="card" aria-labelledby="gw-status-title">
+  <h2 id="gw-status-title">{{t "gateway.status_title"}}</h2>
+  {{- if .Pending}}
+  <div class="error" role="alert">
+    <p>{{t "gateway.pending_body"}}</p>
+    <p><code class="fingerprint">{{.PendingGroups}}</code></p>
+    <form method="post" action="/settings/gateway/accept-cert" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+      <input type="hidden" name="pin" value="{{.Pending}}">
+      <label class="check"><input type="checkbox" name="trust" value="1" required> {{t "gateway.trust_new"}}</label>
+      <button type="submit">{{t "gateway.accept"}}</button>
+    </form>
+  </div>
+  {{- end}}
+  {{- with .Backoff}}<p class="error" role="status">{{.}}</p>{{end}}
+  <dl class="fields">
+    <div><dt>{{t "gateway.firmware"}}</dt><dd>{{or .Firmware "–"}}</dd></div>
+    <div><dt>{{t "gateway.last_poll"}}</dt><dd>{{or .LastPoll (t "gateway.never")}}</dd></div>
+    <div><dt>{{t "gateway.batteries"}}</dt><dd>{{or .Battery "–"}}</dd></div>
+    <div><dt>{{t "gateway.solar_rating"}}</dt><dd>{{or .Solar "–"}}</dd></div>
+  </dl>
+  {{- if .Log}}
+  <div class="table-wrap"><table>
+    <caption>{{t "gateway.log_caption"}}</caption>
+    <thead><tr><th scope="col">{{t "gateway.col_when"}}</th><th scope="col">{{t "gateway.col_result"}}</th></tr></thead>
+    <tbody>{{range .Log}}<tr><td>{{.When}}</td><td>{{.Result}}</td></tr>{{end}}</tbody>
+  </table></div>
+  {{- end}}
+  <form method="post" action="/settings/gateway/poll" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <button type="submit" class="secondary">{{t "common.poll_now"}}</button>
+  </form>
+</section>
+{{- end}}
+
+{{- if or $f.ID .Found}}
+<form method="post" action="/settings/gateway" class="card form-grid" aria-labelledby="gw-form-title">
+  <h2 id="gw-form-title" class="span-2">{{if $f.ID}}{{t "gateway.settings_title"}}{{else}}{{t "gateway.connect_title"}}{{end}}</h2>
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  {{- if $f.NewAddress}}
+  <div class="span-2">
+    <p>{{t "gateway.found" "address" $f.Address}}</p>
+    <p><code class="fingerprint">{{$f.PinGroups}}</code></p>
+    <p class="hint">{{t "gateway.fingerprint_hint"}}</p>
+    <input type="hidden" name="pin" value="{{$f.Pin}}">
+    <label class="check"><input type="checkbox" name="trust" value="1" required> {{t "gateway.trust"}}</label>
+  </div>
+  {{- end}}
+  <label for="gw-name">{{t "device_form.name"}}</label>
+  <input id="gw-name" name="name" value="{{$f.Name}}" required maxlength="64">
+  <label for="gw-address">{{t "device_form.address"}}</label>
+  <div><input id="gw-address" name="address" value="{{$f.Address}}" required maxlength="260" spellcheck="false" autocomplete="off" inputmode="url" {{if $f.NewAddress}}readonly{{end}} aria-describedby="gw-address-hint">
+  <p class="hint" id="gw-address-hint">{{if $f.ID}}{{t "gateway.address_change_hint"}}{{else}}{{t "gateway.address_hint"}}{{end}}</p></div>
+  <label for="gw-password">{{t "gateway.password"}}</label>
+  <div><input id="gw-password" name="password" type="password" autocomplete="off" {{if not $f.HasPassword}}required{{end}} aria-describedby="gw-password-hint">
+  <p class="hint" id="gw-password-hint">{{if $f.HasPassword}}{{t "gateway.password_keep_hint"}}{{else}}{{t "gateway.password_hint"}}{{end}}</p></div>
+  <label for="gw-interval">{{t "gateway.interval"}}</label>
+  <input id="gw-interval" name="interval" type="number" min="1" max="1440" value="{{$f.Interval}}" required>
+  <label for="gw-charging">{{t "gateway.charging_interval"}}</label>
+  <input id="gw-charging" name="charging_interval" type="number" min="1" max="1440" value="{{$f.Charging}}" required>
+  {{- if $f.ID}}
+  <span></span><label class="check"><input type="checkbox" name="enabled" value="1" {{if $f.Enabled}}checked{{end}}> {{t "common.enabled"}}</label>
+  {{- else}}<input type="hidden" name="enabled" value="1">{{end}}
+  <span></span><label class="check"><input type="checkbox" name="allow_non_lan" value="1" {{if $f.AllowNonLAN}}checked{{end}}> {{t "device_form.allow_non_lan"}}</label>
+  <span></span><label class="check"><input type="checkbox" name="skip_test" value="1"> {{t "gateway.skip_test"}}</label>
+  <span></span>
+  <div class="actions">
+    {{- if $f.ID}}<button type="submit" formaction="/settings/gateway/find" formnovalidate class="secondary">{{t "gateway.check_cert"}}</button>{{end}}
+    <button type="submit">{{t "common.save"}}</button>
+  </div>
+</form>
+{{- else}}
+<form method="post" action="/settings/gateway/find" class="card form-grid" aria-labelledby="gw-find-title">
+  <h2 id="gw-find-title" class="span-2">{{t "gateway.find_title"}}</h2>
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <input type="hidden" name="name" value="{{$f.Name}}">
+  <input type="hidden" name="interval" value="{{$f.Interval}}">
+  <input type="hidden" name="charging_interval" value="{{$f.Charging}}">
+  <label for="gw-find-address">{{t "device_form.address"}}</label>
+  <div><input id="gw-find-address" name="address" value="{{$f.Address}}" required maxlength="260" placeholder="192.168.1.20" spellcheck="false" autocomplete="off" inputmode="url" aria-describedby="gw-find-hint">
+  <p class="hint" id="gw-find-hint">{{t "gateway.address_hint"}}</p></div>
+  <span></span><label class="check"><input type="checkbox" name="allow_non_lan" value="1" {{if $f.AllowNonLAN}}checked{{end}}> {{t "device_form.allow_non_lan"}}</label>
+  <span></span>
+  <div class="actions"><button type="submit">{{t "gateway.find"}}</button></div>
+</form>
+{{- end}}
+
+{{- if $f.ID}}
+<form method="post" action="/settings/gateway/delete" class="card danger-zone">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <h2>{{t "gateway.remove_title"}}</h2>
+  <p>{{t "gateway.remove_body"}}</p>
+  <label for="gw-confirm">{{th "device_form.confirm_html" "name" $f.Name}}</label>
+  <input id="gw-confirm" name="confirm" autocomplete="off" required>
+  <button type="submit" class="danger">{{t "gateway.remove"}}</button>
+</form>
+{{- end}}
+{{end}}

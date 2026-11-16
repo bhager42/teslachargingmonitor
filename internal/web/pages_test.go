@@ -46,6 +46,15 @@ type fakePoll struct {
 }
 
 func (f *fakePoll) Reload(context.Context) error { f.mu.Lock(); f.reloads++; f.mu.Unlock(); return nil }
+func (f *fakePoll) PollGatewayNow(id int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.limit {
+		return poller.ErrRateLimited
+	}
+	f.polled = append(f.polled, -id)
+	return nil
+}
 func (f *fakePoll) PollNow(id int64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -103,7 +112,7 @@ func newFull(t *testing.T) *full {
 	roots.AddCert(beatSrv.Certificate())
 	beat := heartbeat.New(st, box, heartbeat.Config{Now: clk.now, RootCAs: roots, Timeout: 5 * time.Second})
 	srv, err := New(Config{DataDir: dir}, Options{Store: st, Auth: am, Now: clk.now, Alerts: engine, Notify: disp, Poll: fp,
-		Heartbeat: beat})
+		Heartbeat: beat, Box: box})
 	if err != nil {
 		t.Fatal(err)
 	}

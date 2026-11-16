@@ -8,7 +8,7 @@ const PASSWORD = 'purple otter kayak sunrise';
 const SIM = 'http://127.0.0.1:18099';
 const PAGES = ['/', '/devices/1', '/alerts', '/alerts/rules/handle_temp_high', '/notifications', '/notifications/new',
   '/notifications/digest', '/notifications/digest?period=monthly',
-  '/settings', '/settings/devices', '/settings/devices/new', '/settings/devices/1', '/settings/security',
+  '/settings', '/settings/devices', '/settings/devices/new', '/settings/devices/1', '/settings/security', '/settings/gateway',
   '/diagnostics', '/about', '/costs', '/costs?period=month', '/costs?period=year', '/settings/energy'];
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
@@ -127,7 +127,7 @@ test('device charts redraw live after a poll, without reloading', async ({ page 
 test('works at 320 px wide without horizontal scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   for (const path of ['/', '/devices/1', '/alerts', '/notifications/new', '/settings', '/settings/devices/1', '/diagnostics',
-    '/costs', '/settings/energy']) {
+    '/costs', '/settings/energy', '/settings/gateway']) {
     await page.goto(path);
     await settle(page, path);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

@@ -1486,7 +1486,14 @@ through new optional `Input` fields, and Wall Connector rules ignore them.
    shows Gateway rules once a Gateway is configured). The rules above, with table tests and `Preview` support.
    *Acceptance:* each simulator scenario raises exactly the expected
    alerts.
-5. **Web UI.** Settings → Solar Gateway (address, password, Test
+5. **Web UI** (*settings part done*: Settings → Solar Gateway finds the
+   Gateway, shows its fingerprint for confirmation, tests the password with
+   one login and then pauses test logins for 5 min after a rejection;
+   status, poll log, Poll now, accepting a changed certificate and removal;
+   Gateway snoozes on the Alerts page; Gateway health in Diagnostics;
+   `cmd/gwsim` serves the simulator for the e2e tests, which add the
+   Gateway through these forms. *Still to do:* the power-flow card and the
+   Solar page). Settings → Solar Gateway (address, password, Test
    connection, fingerprint confirmation). A dashboard power-flow card
    (solar, home, grid, Powerwall, car), live over SSE with values
    pre-formatted in Go. A Solar page with production, consumption, grid

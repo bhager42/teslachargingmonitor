@@ -107,7 +107,7 @@ func (s *Server) alertsPage(w http.ResponseWriter, r *http.Request, sess auth.Se
 		}
 	}
 	s.render(w, r, http.StatusOK, "alerts", s.base(page{"Title": tr.T("alerts.title"), "Active": active, "History": history,
-		"Rules": rules, "Snoozes": snoozes, "Devices": devices}, sess, "alerts"))
+		"Rules": rules, "Snoozes": snoozes, "Devices": devices, "Gateways": gws}, sess, "alerts"))
 }
 
 func (s *Server) ackAlert(w http.ResponseWriter, r *http.Request, _ auth.Session) {
@@ -124,7 +124,12 @@ func (s *Server) ackAlert(w http.ResponseWriter, r *http.Request, _ auth.Session
 }
 
 func (s *Server) snooze(w http.ResponseWriter, r *http.Request, sess auth.Session) {
-	id, err1 := strconv.ParseInt(r.PostFormValue("device_id"), 10, 64)
+	target := r.PostFormValue("device_id")
+	if gid, ok := strings.CutPrefix(target, "gateway-"); ok {
+		s.snoozeGateway(w, r, gid)
+		return
+	}
+	id, err1 := strconv.ParseInt(target, 10, 64)
 	hours, err2 := strconv.Atoi(r.PostFormValue("hours"))
 	if err1 != nil || err2 != nil || !slices.Contains([]int{1, 4, 24, 72, 168}, hours) {
 		s.renderError(w, r, http.StatusBadRequest, tr.T("alerts.err_snooze_title"), tr.T("alerts.err_snooze_input"))
@@ -315,4 +320,27 @@ func (s *Server) previewRule(w http.ResponseWriter, r *http.Request, sess auth.S
 		}
 	}
 	s.renderRule(w, r, sess, http.StatusOK, def, c, page{"Preview": rows, "Previewed": true})
+}
+
+// snoozeGateway mutes a Backup Gateway's alerts ("gateway-ID" in the
+// snooze form's device list).
+func (s *Server) snoozeGateway(w http.ResponseWriter, r *http.Request, idStr string) {
+	id, err1 := strconv.ParseInt(idStr, 10, 64)
+	hours, err2 := strconv.Atoi(r.PostFormValue("hours"))
+	if err1 != nil || err2 != nil || !slices.Contains([]int{1, 4, 24, 72, 168}, hours) {
+		s.renderError(w, r, http.StatusBadRequest, tr.T("alerts.err_snooze_title"), tr.T("alerts.err_snooze_input"))
+		return
+	}
+	if _, err := s.st.Gateway(r.Context(), id); err != nil {
+		s.renderError(w, r, http.StatusBadRequest, tr.T("alerts.err_snooze_title"), tr.T("alerts.err_snooze_device"))
+		return
+	}
+	now := s.now()
+	reason := strings.TrimSpace(r.PostFormValue("reason"))
+	if _, err := s.st.AddSnooze(r.Context(), store.Snooze{GatewayID: id, Until: now.Add(time.Duration(hours) * time.Hour), Reason: reason}, now); err != nil {
+		s.renderError(w, r, http.StatusBadRequest, tr.T("alerts.err_snooze_title"), tr.T("alerts.err_snooze"))
+		return
+	}
+	s.auditUI(r, "alerts_snoozed", map[string]string{"gateway_id": idStr, "hours": strconv.Itoa(hours)})
+	http.Redirect(w, r, "/alerts?ok=snoozed", http.StatusSeeOther)
 }

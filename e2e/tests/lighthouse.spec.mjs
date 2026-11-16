@@ -18,7 +18,8 @@ import { BASE_URL } from '../playwright.config.mjs';
 
 const MIN = { performance: 95, accessibility: 100, 'best-practices': 100 };
 const CATEGORIES = Object.keys(MIN);
-const PAGES = ['/login', '/', '/devices/1', '/alerts', '/notifications', '/settings', '/costs', '/diagnostics'];
+const PAGES = ['/login', '/', '/devices/1', '/alerts', '/notifications', '/settings', '/costs', '/diagnostics',
+  '/settings/gateway'];
 const PORT = 19222;
 // Lighthouse sometimes fails to measure a metric on a CI runner (a null
 // category score, no failing audit to show); such a run is repeated, a real

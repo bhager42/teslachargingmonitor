@@ -25,6 +25,7 @@ all: check build
 build: ## Build the tcmon binary into ./bin
 	$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/tcmon ./cmd/tcmon
 	$(GO) build -trimpath -ldflags '-s -w' -o bin/wcsim ./cmd/wcsim
+	$(GO) build -trimpath -ldflags '-s -w' -o bin/gwsim ./cmd/gwsim
 
 sim: ## Run the Wall Connector simulator (SCENARIO=idle SPEED=1)
 	$(GO) run ./cmd/wcsim -scenario $(or $(SCENARIO),idle) -speed $(or $(SPEED),1)

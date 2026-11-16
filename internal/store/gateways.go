@@ -733,3 +733,25 @@ func (s *Store) GatewayHistory(ctx context.Context, gatewayID int64, from, to ti
 	}
 	return out, rows.Err()
 }
+
+// LatestGatewayRaw returns the most recent raw payloads of a Gateway, by
+// endpoint path, and when they were fetched (for Diagnostics).
+func (s *Store) LatestGatewayRaw(ctx context.Context, gatewayID int64) (map[string][]byte, time.Time, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT endpoint, body, ts FROM gateway_raw_payloads WHERE gateway_id = ? AND ts =
+		(SELECT MAX(ts) FROM gateway_raw_payloads WHERE gateway_id = ?)`, gatewayID, gatewayID)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string][]byte{}
+	var ts int64
+	for rows.Next() {
+		var ep string
+		var body []byte
+		if err := rows.Scan(&ep, &body, &ts); err != nil {
+			return nil, time.Time{}, err
+		}
+		out[ep] = body
+	}
+	return out, fromMS(ts), rows.Err()
+}
