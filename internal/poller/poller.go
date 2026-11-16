@@ -8,8 +8,10 @@
 
 // Package poller polls every enabled Wall Connector on its schedule (60 min
 // by default, 5 min while a car is plugged in), retries failures, stores the
-// results and publishes updates to subscribers (the alert engine and, later,
-// the live web UI).
+// results and publishes updates to subscribers (the alert engine and the live
+// web UI). It also polls Tesla Backup Gateways (Phase 9; gateway.go): every
+// 15 min by default and 5 min while a car is plugged in, with the login
+// back-off kept across restarts.
 package poller
 
 import (
@@ -20,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bhager42/teslachargingmonitor/internal/gateway"
+	"github.com/bhager42/teslachargingmonitor/internal/secrets"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
 	"github.com/bhager42/teslachargingmonitor/internal/wallconnector"
 )
@@ -61,6 +65,11 @@ type Config struct {
 	Logger           *slog.Logger
 	UserAgent        string
 	Client           wallconnector.Options
+	// Gateway holds client options for Backup Gateways (timeouts); the
+	// address, pin and password come from the store.
+	Gateway gateway.Options
+	// Box decrypts Gateway passwords. Without it Gateways are not polled.
+	Box *secrets.Box
 }
 
 func (c *Config) defaults() {
@@ -99,8 +108,11 @@ type Manager struct {
 	// long as whatever request triggered a Sync/Reload.
 	runCtx context.Context
 
+	gwWorkers map[int64]*gwWorker
+
 	subsMu sync.Mutex // separate lock so workers can publish while Sync waits for them
 	subs   map[chan Update]struct{}
+	gwSubs map[chan GatewayUpdate]struct{}
 }
 
 type worker struct {
@@ -114,7 +126,8 @@ type worker struct {
 // New returns a Manager. Call Run to start polling.
 func New(st *store.Store, cfg Config) *Manager {
 	cfg.defaults()
-	return &Manager{st: st, cfg: cfg, workers: map[int64]*worker{}, subs: map[chan Update]struct{}{}}
+	return &Manager{st: st, cfg: cfg, workers: map[int64]*worker{}, gwWorkers: map[int64]*gwWorker{},
+		subs: map[chan Update]struct{}{}, gwSubs: map[chan GatewayUpdate]struct{}{}}
 }
 
 // Subscribe returns a channel of updates. Slow subscribers miss updates
@@ -170,9 +183,14 @@ func (m *Manager) Run(ctx context.Context) error {
 	}
 }
 
-// Sync starts, stops or restarts workers to match the stored devices.
+// Sync starts, stops or restarts workers to match the stored devices and
+// Gateways.
 func (m *Manager) Sync(ctx context.Context) error {
 	devices, err := m.st.Devices(ctx)
+	if err != nil {
+		return err
+	}
+	gws, err := m.st.Gateways(ctx)
 	if err != nil {
 		return err
 	}
@@ -198,6 +216,7 @@ func (m *Manager) Sync(ctx context.Context) error {
 			m.startLocked(parent, d)
 		}
 	}
+	m.syncGatewaysLocked(ctx, gws)
 	return nil
 }
 
@@ -229,6 +248,9 @@ func (m *Manager) stopAll() {
 	m.mu.Lock()
 	for id := range m.workers {
 		m.stopLocked(id)
+	}
+	for id := range m.gwWorkers {
+		m.stopGatewayLocked(id)
 	}
 	m.mu.Unlock()
 	m.wg.Wait()

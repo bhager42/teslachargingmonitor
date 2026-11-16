@@ -76,7 +76,18 @@ func runServe(ctx context.Context, args []string, env Env) int {
 		log.Warn("no Wall Connector configured yet; add one in the web UI under Settings → Wall Connectors")
 	}
 
-	m := poller.New(st, poller.Config{Logger: log, UserAgent: "tcmon/" + info.Version})
+	keyPath := secretKeyPath(env, *dir)
+	key, err := secrets.LoadOrCreateKey(keyPath, func(m string) { log.Warn(m) })
+	if err != nil {
+		log.Error("loading credential encryption key", "path", keyPath, "err", err)
+		return 1
+	}
+	box, err := secrets.NewBox(key)
+	if err != nil {
+		log.Error("credential encryption key", "err", err)
+		return 1
+	}
+	m := poller.New(st, poller.Config{Logger: log, UserAgent: "tcmon/" + info.Version, Box: box})
 	engine := alerts.New(st, log)
 	if err := engine.Load(ctx); err != nil {
 		log.Error("loading alert state", "err", err)
@@ -89,17 +100,6 @@ func runServe(ctx context.Context, args []string, env Env) int {
 	toDeliver, unsubDeliver := engine.Subscribe(32)
 	defer unsubDeliver()
 
-	keyPath := secretKeyPath(env, *dir)
-	key, err := secrets.LoadOrCreateKey(keyPath, func(m string) { log.Warn(m) })
-	if err != nil {
-		log.Error("loading credential encryption key", "path", keyPath, "err", err)
-		return 1
-	}
-	box, err := secrets.NewBox(key)
-	if err != nil {
-		log.Error("credential encryption key", "err", err)
-		return 1
-	}
 	roots, err := smtpRoots(env)
 	if err != nil {
 		log.Error("SMTP CA bundle", "err", err)

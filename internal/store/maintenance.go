@@ -24,7 +24,13 @@ var RollupMetrics = []string{
 	"relay_k1_v", "relay_k2_v",
 }
 
+// SiteRollupMetrics are the readings_site columns aggregated into
+// rollups_site_1h. Energy counters are not rolled up: energy comes from
+// counter deltas, which the raw readings keep.
+var SiteRollupMetrics = []string{"solar_w", "load_w", "site_w", "battery_w", "soe_pct"}
+
 const (
+	siteRollupSetting  = "site_rollup_watermark_ms"
 	rollupWatermarkKey = "rollup_watermark_ms"
 	hourMS             = int64(time.Hour / time.Millisecond)
 	pruneBatch         = 5000
@@ -65,6 +71,41 @@ func (s *Store) Rollup(ctx context.Context, now time.Time) (int64, error) {
 	return total, err
 }
 
+// RollupSite aggregates every complete hour of Gateway readings before now
+// into rollups_site_1h and returns the number of rows written. It is
+// idempotent.
+func (s *Store) RollupSite(ctx context.Context, now time.Time) (int64, error) {
+	var from int64
+	if err := s.GetSetting(ctx, siteRollupSetting, &from); err != nil && !errors.Is(err, ErrNotFound) {
+		return 0, err
+	}
+	until := ms(now) / hourMS * hourMS
+	if until <= from {
+		return 0, nil
+	}
+	var total int64
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		for _, m := range SiteRollupMetrics {
+			//nolint:gosec // G202: column name from SiteRollupMetrics constant
+			q := `INSERT OR REPLACE INTO rollups_site_1h (gateway_id, bucket_ts, metric, min, max, avg, count)
+				SELECT gateway_id, (ts / ?) * ?, ?, MIN(` + m + `), MAX(` + m + `), AVG(` + m + `), COUNT(` + m + `)
+				FROM readings_site WHERE ts >= ? AND ts < ? AND ` + m + ` IS NOT NULL
+				GROUP BY gateway_id, ts / ?`
+			res, err := tx.ExecContext(ctx, q, hourMS, hourMS, m, from, until, hourMS)
+			if err != nil {
+				return fmt.Errorf("store: rolling up %s: %w", m, err)
+			}
+			n, _ := res.RowsAffected()
+			total += n
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO settings (key, value_json, updated_at) VALUES (?, ?, ?)
+			ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
+			siteRollupSetting, fmt.Sprint(until), ms(now))
+		return err
+	})
+	return total, err
+}
+
 // PruneResult reports how many rows Prune deleted per table.
 type PruneResult map[string]int64
 
@@ -76,8 +117,11 @@ func (s *Store) Prune(ctx context.Context, now time.Time, r Retention) (PruneRes
 	if err := r.Validate(); err != nil {
 		return nil, err
 	}
-	var watermark int64
+	var watermark, siteWatermark int64
 	if err := s.GetSetting(ctx, rollupWatermarkKey, &watermark); err != nil && !errors.Is(err, ErrNotFound) {
+		return nil, err
+	}
+	if err := s.GetSetting(ctx, siteRollupSetting, &siteWatermark); err != nil && !errors.Is(err, ErrNotFound) {
 		return nil, err
 	}
 	cutoff := func(days int) int64 { return ms(now.Add(-time.Duration(days) * 24 * time.Hour)) }
@@ -98,6 +142,11 @@ func (s *Store) Prune(ctx context.Context, now time.Time, r Retention) (PruneRes
 		{"poll_log", "ts", r.PollLogDays},
 		{"notify_deliveries", "created_at", r.PollLogDays},
 		{"audit_log", "ts", r.AuditDays},
+		{"readings_site", "ts", r.ReadingsDays},
+		{"gateway_raw_payloads", "ts", r.RawPayloadsDays},
+		{"rollups_site_1h", "bucket_ts", r.RollupsDays},
+		{"gateway_events", "ts", r.EventsDays},
+		{"gateway_poll_log", "ts", r.PollLogDays},
 	}
 	for _, t := range targets {
 		if t.days == KeepForever {
@@ -106,6 +155,9 @@ func (s *Store) Prune(ctx context.Context, now time.Time, r Retention) (PruneRes
 		c := cutoff(t.days)
 		if t.table == "readings_vitals" && c > watermark {
 			c = watermark // keep un-rolled data until it has been aggregated
+		}
+		if t.table == "readings_site" && c > siteWatermark {
+			c = siteWatermark
 		}
 		n, err := s.deleteOlder(ctx, t.table, t.col, c)
 		res[t.table] = n
@@ -126,6 +178,10 @@ func (s *Store) deleteOlder(ctx context.Context, table, col string, cutoff int64
 	if table == "rollups_1h" { // WITHOUT ROWID: delete by primary key
 		q = `DELETE FROM rollups_1h WHERE (device_id, bucket_ts, metric) IN
 			(SELECT device_id, bucket_ts, metric FROM rollups_1h WHERE bucket_ts < ? LIMIT ?)`
+	}
+	if table == "rollups_site_1h" {
+		q = `DELETE FROM rollups_site_1h WHERE (gateway_id, bucket_ts, metric) IN
+			(SELECT gateway_id, bucket_ts, metric FROM rollups_site_1h WHERE bucket_ts < ? LIMIT ?)`
 	}
 	if table == "readings_lifetime" {
 		q = pruneLifetime
@@ -178,6 +234,11 @@ func (s *Store) Maintain(ctx context.Context, now time.Time) (MaintenanceResult,
 	if out.RolledUp, err = s.Rollup(ctx, now); err != nil {
 		return out, err
 	}
+	site, err := s.RollupSite(ctx, now)
+	out.RolledUp += site
+	if err != nil {
+		return out, err
+	}
 	r, err := s.Retention(ctx)
 	if err != nil {
 		return out, err
@@ -224,6 +285,7 @@ type Stats struct {
 var StatsTables = []string{
 	"devices", "readings_vitals", "readings_lifetime", "readings_wifi", "raw_payloads",
 	"rollups_1h", "device_events", "poll_log", "alert_events", "notify_channels", "notify_deliveries", "audit_log",
+	"gateways", "readings_site", "gateway_raw_payloads", "rollups_site_1h", "gateway_events", "gateway_poll_log",
 }
 
 // Stats returns database size and row counts.

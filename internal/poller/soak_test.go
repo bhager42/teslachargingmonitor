@@ -28,11 +28,31 @@ func TestSoak(t *testing.T) {
 	}
 	h := newHarnessSpeed(t, "charging", 300) // 1 real second = 5 simulated minutes
 	h.addDevice(t)
-	cfg := fastConfig()
+	// A Backup Gateway is polled alongside (plan step 9.2): it must also
+	// stay leak-free, and reuse one login session throughout.
+	gh := newGatewayHarness(t, "sunny")
+	gh.harness = h
+	gh.addGateway(t, gh.gsim.Fingerprint())
+	cfg := gh.config()
 	cfg.IntervalOverride = time.Millisecond
 	m := New(h.st, cfg)
 	ch, unsub := m.Subscribe(64)
 	defer unsub()
+	gch, gunsub := m.SubscribeGateways(64)
+	defer gunsub()
+	gwPolls, gwErrs := make(chan int, 1), make(chan error, 1)
+	go func() {
+		n := 0
+		var firstErr error
+		for u := range gch {
+			n++
+			if u.Err != nil && firstErr == nil {
+				firstErr = u.Err
+			}
+		}
+		gwPolls <- n
+		gwErrs <- firstErr
+	}()
 	stop := run(t, m)
 
 	scenarios := []string{"charging", "idle", "overheat", "reboot", "firmware-change", "wifi-weak"}
@@ -58,6 +78,15 @@ func TestSoak(t *testing.T) {
 		}
 	}
 	stop()
+	gunsub()
+	if n, err := <-gwPolls, <-gwErrs; n == 0 || err != nil {
+		t.Errorf("gateway: %d polls, first error %v", n, err)
+	} else {
+		t.Logf("gateway: %d polls, %d login(s)", n, gh.gsim.Logins())
+	}
+	if gh.gsim.Logins() != 1 {
+		t.Errorf("gateway logins = %d, want 1 (session reused)", gh.gsim.Logins())
+	}
 	g1, h1 := sample()
 
 	stats, err := h.st.Stats(context.Background())
@@ -65,7 +94,9 @@ func TestSoak(t *testing.T) {
 		t.Fatal(err)
 	}
 	perPoll := float64(stats.SizeBytes) / float64(n)
-	t.Logf("polls=%d goroutines %d→%d heap %.1f→%.1f MiB db=%.1f MiB (%.0f B/poll)",
+	// The database also holds the Gateway's readings, so the per-poll size
+	// overstates a Wall Connector-only installation.
+	t.Logf("polls=%d goroutines %d→%d heap %.1f→%.1f MiB db=%.1f MiB (%.0f B/poll incl. gateway)",
 		n, g0, g1, float64(h0)/(1<<20), float64(h1)/(1<<20), float64(stats.SizeBytes)/(1<<20), perPoll)
 	t.Logf("estimate: hourly polling ≈ %.2f MiB/year; 2 h/day plugged in at 5 min ≈ %.2f MiB/year",
 		perPoll*24*365/(1<<20), perPoll*(22+24)*365/(1<<20))

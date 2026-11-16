@@ -59,6 +59,8 @@ func Run(ctx context.Context, args []string, env Env) int {
 		return runAlerts(ctx, rest, env)
 	case "notify":
 		return runNotify(ctx, rest, env)
+	case "gateway":
+		return runGateway(ctx, rest, env)
 	case "backup":
 		return runBackup(ctx, rest, env)
 	case "migrate":
@@ -89,13 +91,15 @@ Commands:
               primary way to configure the device address
   alerts    Show alert rules and alert history (read-only)
   notify    Manage email notifications (add-email, update, list, test, remove, log)
+  gateway   Manage the Tesla Backup Gateway for Powerwall and solar data
+            (fingerprint, add, list, accept-cert, remove)
   backup    Write a consistent copy of the database
   migrate   Apply database migrations and print the schema version
   version   Print version, license and source-code information
   help      Show this help
 
 Every command that touches data accepts -data-dir (default $TCMON_DATA_DIR
-or /data). Notification credentials are encrypted with the key in
+or /data). Notification and Gateway credentials are encrypted with the key in
 $TCMON_SECRET_KEY_FILE (default <data-dir>/secret.key) — back it up together
 with the database.
 `)
