@@ -2,7 +2,7 @@ module github.com/bhager42/teslachargingmonitor
 
 go 1.27
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	golang.org/x/crypto v0.58.0
