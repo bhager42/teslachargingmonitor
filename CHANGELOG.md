@@ -6,7 +6,7 @@ and the project uses [Semantic Versioning](https://semver.org/). Container
 images for every release are at `ghcr.io/bhager42/teslachargingmonitor`,
 signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
-## [Unreleased]
+## [1.2.0] - 2026-11-15
 
 ### Added
 - A "Firmware not updated" alert rule (`firmware_stale`, off by default) that
@@ -15,6 +15,10 @@ signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
   version exists, so the rule counts from when tcmon first saw the current
   version, and mentions a missing internet connection when that is the likely
   cause.
+
+### Security
+- Built with Go 1.27.4, which fixes GO-2026-6859 in the standard library's
+  `net/http`.
 
 ## [1.1.2] - 2026-11-10
 
@@ -139,6 +143,7 @@ First published release.
   shell, signed with cosign, with SBOM and provenance. Install guides for
   TrueNAS SCALE 25.10+ and Docker/Podman.
 
+[1.2.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/bhager42/teslachargingmonitor/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.0.0...v1.1.0
