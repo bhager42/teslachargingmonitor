@@ -1279,7 +1279,7 @@ open questions in §15 resolved or deferred explicitly.
 
 > **Status (2026-11-16): steps 9.0 (discovery), 9.1 (client and
 > simulator), 9.2 (storage and poller), 9.3 (attribution and costs), 9.4
-> (alerts) and 9.5 (web UI) done.** The local customer login works on the owner's
+> (alerts), 9.5 (web UI) and 9.6 (summary emails) done.** The local customer login works on the owner's
 > Gateway, and the first capture (day, no car connected) is committed; see
 > the verification table below. Night, charging and outage captures are
 > still to come. Anything not in the
@@ -1503,7 +1503,8 @@ through new optional `Input` fields, and Wall Connector rules ignore them.
    tables like the Costs page. Gateway health in Diagnostics.
    *Acceptance:* axe (both themes), CSP, 320 px and the Lighthouse budget
    pass on the new pages, which are added to the e2e page list.
-6. **Summary emails.** The weekly and monthly summaries add solar produced,
+6. **Summary emails** (*done*: `internal/digest/solar.go`; the section is
+   named after the Gateway and is left out without one). The weekly and monthly summaries add solar produced,
    self-consumption %, grid import/export, the car's solar share and solar
    savings, and grid outages in the device events.
    *Acceptance:* `internal/digest` tests cover a week and a month with

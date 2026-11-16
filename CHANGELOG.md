@@ -46,6 +46,11 @@ signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
   self-sufficient the home was, production per day/week/month/year with
   the numbers, and the last 24 hours of solar and home power and battery
   level.
+- With a Backup Gateway, the weekly and monthly summary emails have a solar
+  section: solar produced (and the previous period's), home use,
+  how much solar was used on site, self-sufficiency, grid import and
+  export, about how much of the charging came from solar and what it saved,
+  and grid outages and Gateway restarts or updates.
 - Development: `scripts/capture-gateway.sh` captures a Tesla Backup
   Gateway 2's local API into redacted test fixtures, the first step of
   Phase 9 (Powerwall and solar support). It is not part of the container

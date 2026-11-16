@@ -121,6 +121,7 @@ type view struct {
 	Devices                []deviceView
 	Alerts                 []alertView
 	NoDevices              bool
+	Solar                  *solarView // nil without a Backup Gateway
 }
 
 type deviceView struct {
@@ -288,6 +289,10 @@ func Build(ctx context.Context, st *store.Store, per Period, from, to time.Time,
 	// Totalled over all devices' intervals so a monthly fee counts once.
 	totKWh, totCost := energyIn(per, plan, all, from, to)
 	v.Total = charging(totKWh, totCost, cur.Currency, totSessions)
+
+	if v.Solar, err = buildSolar(ctx, st, per, plan, all, prevFrom, from, to, cur.Currency); err != nil {
+		return notify.Message{}, err
+	}
 
 	alertCount, err := addAlerts(ctx, st, &v, names, from, to, loc)
 	if err != nil {
