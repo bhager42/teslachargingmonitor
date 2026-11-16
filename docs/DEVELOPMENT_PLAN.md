@@ -1277,10 +1277,12 @@ open questions in §15 resolved or deferred explicitly.
 
 ### Phase 9 — Tesla Solar and Powerwall (owner request D27)
 
-> **Status (2026-11-15): planned, not started.** Nothing in this section is
-> verified against the owner's hardware yet. Everything about the Gateway
-> API comes from community projects, not Tesla documentation, and stays
-> *unverified* until step 9.0 captures real payloads.
+> **Status (2026-11-16): step 9.0 (discovery) in progress.** The local
+> customer login works on the owner's Gateway, and the first capture (day,
+> no car connected) is committed; see the verification table below. Night and
+> outage captures are still to come. Anything not in the
+> verification table comes from community projects, not Tesla
+> documentation, and stays *unverified*.
 
 Read the owner's **Powerwall 2 / Powerwall+ system through its Backup
 Gateway 2 on the LAN** and use the data in four ways:
@@ -1324,6 +1326,33 @@ step 9.0 confirms or corrects them for the owner's firmware.
 | `GET /api/sitemaster` | Whether the Gateway control loop is running and connected to Tesla | Health |
 | `GET /api/status` | Firmware version, uptime, Gateway ID | Identity, firmware and restart detection |
 | `GET /api/operation` | Operation mode and backup reserve % | Display only |
+
+**Verification status (owner's Gateway, firmware `26.34.2`)**: fixtures in
+`testdata/fixtures/gateway/26.34.2/` (`*.day.json`: daytime, solar
+producing, battery charging, no car connected). The Gateway's local web page
+now only says to use the Tesla app, but the API behind it still answers.
+Owner's system: one Powerwall+ (`3012170-25-B`, type `SolarPowerwall`) and
+one Powerwall 2 (`2012170-05-E`, type `ACPW`), 27 kWh nominal, a Tesla
+Solar Inverter 7.6 (7.6 kW), split-phase 120/240 V service with a
+100 A panel.
+
+| Endpoint | Status | Findings |
+|---|---|---|
+| `GET /api/status` | ✅ verified (no login) | Answers **without** a login. `din` (contains the serial; redacted), `version` `26.34.2 56d7ba06` (version plus git hash prefix), `git_hash`, `device_type` `teg`, `up_time_seconds` as a Go duration string (`420h27m56.4s`, so it's parsed with `time.ParseDuration`), `start_time` in a fixed `+0800` offset that doesn't match the site's zone (don't trust it, derive boot time from uptime), `commission_count`, `sync_type`. |
+| `POST /api/login/Basic` | ✅ verified | `customer` login returns 200 with `token` plus `email`, `firstname`, `lastname`, `roles`, `provider`, `loginTime`. Only the token is used; the personal fields are discarded. Without a login, the endpoints below return 403. |
+| `GET /api/meters/aggregates` | ✅ verified | `site`, `battery`, `load`, `solar`, each with `instant_power` (W), lifetime `energy_imported`/`energy_exported` (Wh, floats), currents, voltage, frequency, `last_*_communication_time`. **`load` has no `num_meters_aggregated`.** Signs: `site` < 0 = exporting, `battery` < 0 = charging. Power balances: solar + battery + site = load (3730 − 1290 − 49 = 2391 vs 2380 W). `battery` counters equal the sum of the per-block counters in `system_status`. `solar.energy_imported` is 0, `load.energy_exported` is 0. |
+| `GET /api/meters/site` | ✅ verified | One-element array: the `synchrometerX` site meter with `Cached_readings` (per-phase `real_power_a/b`, `v_l1n`/`v_l2n`), `cts` and `inverted` flags. Serials redacted. Not needed beyond diagnostics. |
+| `GET /api/meters/solar` | ⚠️ not JSON | HTTP 200 with a non-JSON body. Not used; solar comes from `meters/aggregates`. |
+| `GET /api/system_status/soe` | ✅ verified | `percentage` (float). It equals `nominal_energy_remaining / nominal_full_pack_energy` (35.03 %), so it is the **raw** state of energy, not the app's figure. The app shows (raw − 5) / 0.95 (31.6 % here), **confirmed** by the owner via the backup reserve (raw 33.5 = 30 % in the app). tcmon shows the app's scale and keeps the raw value. |
+| `GET /api/system_status/grid_status` | ✅ verified (connected) | `grid_status` `SystemGridConnected`, `grid_services_active` false. Islanded values still need an outage or off-grid capture. |
+| `GET /api/system_status` | ✅ verified | `battery_blocks[]`, one per Powerwall: `nominal_full_pack_energy` (13341 / 13876 Wh), `nominal_energy_remaining`, lifetime `energy_charged`/`energy_discharged`, `p_out`, `v_out`, `f_out`, `pinv_state`, `pinv_grid_state`, `backup_ready`, `disabled_reasons[]`, `off_grid`. System totals: `nominal_full_pack_energy` 27217 Wh, `nominal_energy_remaining`, `system_island_state`, `grid_faults[]`, max charge/discharge power. `battery_capacity_drop` uses the per-block full-pack energy. **`can_reboot` is a string** (`"Solar production hours"`), not a bool. |
+| `GET /api/sitemaster` | ✅ verified | `running` true, `status` `StatusUp`, `connected_to_tesla` **false** while the Tesla app shows live data (owner, 2026-11-16), so **the field is unreliable** on this firmware: it is shown in Diagnostics only and drives no alert (`gateway_not_connected` was dropped). `can_reboot` is again a string. |
+| `GET /api/operation` | ✅ verified | `real_mode` `self_consumption`, `backup_reserve_percent` 33.5 (raw scale: (33.5 − 5) / 0.95 = 30 %, **confirmed** as the app's reserve setting), `freq_shift_load_shed_*`. Display only. |
+| `GET /api/site_info` | ✅ verified | `nominal_system_energy_kWh` 27, `nominal_system_power_kW` 12.68, `panel_max_current` 100, `timezone` (kept: it drives the daylight window), `site_name` and the `grid_code` object (country, state, utility) redacted. |
+| `GET /api/powerwalls` | ✅ verified | Per Powerwall: part number, `type`, commissioning and update diagnostics. **The commissioning checks report `fail` and `grid_state` `Grid_Uncompliant` during normal operation** ("cannot perform this action with site controller running"), so these fields must never drive alerts. `system_status` reports `pinv_grid_state` `Grid_Compliant` for the same blocks. |
+| `GET /api/solars` | ✅ verified | `[{brand, model, power_rating_watts}]` (`Tesla`, `Solar Inverter 7.6`, 7600). The rating is used for `solar_production_low` sanity. |
+| `GET /api/system/update/status` | ✅ verified | `state` `/update_succeeded`, `version`. |
+| Still to capture | ⏳ | Night (battery discharging), daytime **while the car is charging** (to see the Wall Connector's power in `load`), and if possible an outage or off-grid test (islanded values). |
 
 **Rules carried over from the Wall Connector work.**
 - **Untrusted data.** Decode with a `gateway.Decode*` family that returns a
@@ -1397,7 +1426,6 @@ next to the cost math.
 | `battery_low` | Battery % below a threshold (default 20 %) on 2 polls | info, warning while islanded |
 | `solar_zero_daytime` | Solar ≈ 0 W for N hours inside a daylight window (default 10:00–15:00 local) | warning |
 | `solar_production_low` | A day's production below X % (default 30 %) of the trailing 14-day median; evaluated once a day | info, disabled by default |
-| `gateway_not_connected` | Gateway reports no connection to Tesla on 2 polls | info |
 | `battery_capacity_drop` | Full-pack energy falls below X % of its first-seen value | info |
 | `gateway_firmware_changed`, `gateway_reboot` | Like the Wall Connector event rules | info |
 
@@ -1409,7 +1437,9 @@ through new optional `Input` fields, and Wall Connector rules ignore them.
 
 0. **Discovery (blocks everything else).** Add a `scripts/capture-gateway.sh`
    that logs in once and captures every endpoint above, redacted, into
-   `testdata/fixtures/gateway/<firmware>/`. Capture in the day, at night,
+   `testdata/fixtures/gateway/<firmware>/` (*done*: `cmd/gwcapture`, with
+   the redaction rules in `internal/gateway/redact` and the recursive check
+   in `internal/fixturecheck`; [ADR 0007](adr/0007-gateway-capture.md)). Capture in the day, at night,
    while charging the car, and if possible during a grid outage or an
    off-grid test. Record the results in a verification table like §2's.
    Write an ADR for the Gateway client: auth, TLS pinning, lockout policy.
@@ -1468,6 +1498,7 @@ utility tariffs automatically (e.g. from OpenEI); multi-connector power-sharing 
 ```
 cmd/tcmon/            main entrypoint + CLI subcommands
 cmd/wcsim/            Wall Connector simulator
+cmd/gwcapture/        Backup Gateway fixture capture (Phase 9, dev tool)
 internal/{config,wallconnector,poller,store,alerts,notify,auth,web,cli}/
 internal/store/migrations/*.sql
 web/templates/        html/template files
@@ -1554,10 +1585,10 @@ the PR.
 
 | # | Question | Default until answered |
 |---|---|---|
-| S1 | Gateway firmware version, and whether the local API still accepts the customer login on it | Answered by the 9.0 capture |
-| S2 | Is the customer password available (it may need to be reset from the Gateway's own setup page)? | Needed before 9.0 |
-| S3 | How many Powerwalls, and their usable capacity? | Read from the Gateway |
-| S4 | Is the Wall Connector's circuit measured by the Gateway's `load` meter? | Assumed yes; attribution is labelled approximate. If not, the car's energy is added to the Gateway's load. |
+| S1 | Gateway firmware version, and whether the local API still accepts the customer login on it | **Answered 2026-11-16:** firmware 26.34.2; the customer login works (the local web page is gone, the API is not). |
+| S2 | Is the customer password available (it may need to be reset from the Gateway's own setup page)? | **Answered 2026-11-16:** yes. |
+| S3 | How many Powerwalls, and their usable capacity? | **Answered 2026-11-16 by the capture:** a Powerwall+ and a Powerwall 2, 27 kWh nominal (27.2 kWh full-pack). Still read from the Gateway at run time. |
+| S4 | Is the Wall Connector's circuit measured by the Gateway's `load` meter? | **Answered 2026-11-16:** yes (owner). Attribution stays labelled approximate (interval mixing). |
 | S5 | Gateway polling cadence when no car is charging | 15 min (energy totals are exact from counters at any cadence; power-flow detail isn't) |
 | S6 | Count Powerwall energy as savings? | No; shown separately |
 | S7 | Export rate or net-metering credit to model? | None; exports shown in kWh only |

@@ -1,0 +1,20 @@
+{
+  "grid_code": {
+    "country": "REDACTED",
+    "grid_code": "REDACTED",
+    "grid_freq_setting": 0,
+    "grid_phase_setting": "REDACTED",
+    "grid_voltage_setting": 0,
+    "state": "REDACTED",
+    "utility": "REDACTED"
+  },
+  "max_site_meter_power_kW": 1000000000,
+  "max_system_energy_kWh": 27,
+  "max_system_power_kW": 12.68,
+  "min_site_meter_power_kW": -1000000000,
+  "nominal_system_energy_kWh": 27,
+  "nominal_system_power_kW": 12.68,
+  "panel_max_current": 100,
+  "site_name": "REDACTED",
+  "timezone": "America/New_York"
+}

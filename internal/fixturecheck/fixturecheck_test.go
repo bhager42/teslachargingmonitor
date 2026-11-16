@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/bhager42/teslachargingmonitor/internal/gateway/redact"
 )
 
 const fixturesDir = "../../testdata/fixtures"
@@ -49,6 +51,13 @@ func fixtureFiles(t *testing.T) []string {
 	return files
 }
 
+// isGateway reports whether path is a Backup Gateway fixture
+// (scripts/capture-gateway.sh) rather than a Wall Connector one.
+func isGateway(path string) bool {
+	rel, err := filepath.Rel(fixturesDir, path)
+	return err == nil && strings.HasPrefix(filepath.ToSlash(rel), "gateway/")
+}
+
 func TestFixturesAreRedactedJSON(t *testing.T) {
 	for _, path := range fixtureFiles(t) {
 		t.Run(filepath.ToSlash(path), func(t *testing.T) {
@@ -56,9 +65,21 @@ func TestFixturesAreRedactedJSON(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var doc map[string]any
-			if err := json.Unmarshal(raw, &doc); err != nil {
+			var v any
+			if err := json.Unmarshal(raw, &v); err != nil {
 				t.Fatalf("invalid JSON: %v", err)
+			}
+			if isGateway(path) {
+				// Gateway responses can be arrays and nest identifiers
+				// anywhere, so they get the recursive check.
+				for _, p := range redact.Check(v) {
+					t.Error(p)
+				}
+				return
+			}
+			doc, ok := v.(map[string]any)
+			if !ok {
+				t.Fatal("Wall Connector fixture is not a JSON object")
 			}
 			if v, ok := doc["serial_number"]; ok && v != redactedSerial {
 				t.Errorf("serial_number %q is not redacted (want %q)", v, redactedSerial)

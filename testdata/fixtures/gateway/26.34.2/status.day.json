@@ -1,0 +1,14 @@
+{
+  "can_reboot": false,
+  "cellular_disabled": false,
+  "commission_count": 0,
+  "device_type": "teg",
+  "din": "REDACTED",
+  "git_hash": "56d7ba064772ad6d740825723c7e9c8524cd31b1",
+  "is_new": false,
+  "start_time": "2026-10-29 21:05:46 +0800",
+  "sync_type": "v2.1",
+  "teg_type": "unknown",
+  "up_time_seconds": "420h27m56.44310566s",
+  "version": "26.34.2 56d7ba06"
+}

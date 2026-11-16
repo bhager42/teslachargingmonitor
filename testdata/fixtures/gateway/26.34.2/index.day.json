@@ -1,0 +1,54 @@
+{
+  "/api/meters/aggregates": {
+    "file": "meters_aggregates.day.json",
+    "status": 200
+  },
+  "/api/meters/site": {
+    "file": "meters_site.day.json",
+    "status": 200
+  },
+  "/api/meters/solar": {
+    "json": false,
+    "status": 200
+  },
+  "/api/operation": {
+    "file": "operation.day.json",
+    "status": 200
+  },
+  "/api/powerwalls": {
+    "file": "powerwalls.day.json",
+    "status": 200
+  },
+  "/api/site_info": {
+    "file": "site_info.day.json",
+    "status": 200
+  },
+  "/api/sitemaster": {
+    "file": "sitemaster.day.json",
+    "status": 200
+  },
+  "/api/solars": {
+    "file": "solars.day.json",
+    "status": 200
+  },
+  "/api/status": {
+    "file": "status.day.json",
+    "status": 200
+  },
+  "/api/system/update/status": {
+    "file": "system_update_status.day.json",
+    "status": 200
+  },
+  "/api/system_status": {
+    "file": "system_status.day.json",
+    "status": 200
+  },
+  "/api/system_status/grid_status": {
+    "file": "system_status_grid_status.day.json",
+    "status": 200
+  },
+  "/api/system_status/soe": {
+    "file": "system_status_soe.day.json",
+    "status": 200
+  }
+}
