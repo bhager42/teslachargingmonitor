@@ -64,6 +64,10 @@ test('sign-in page is accessible and signing in works', async ({ browser }) => {
   await expect(page).toHaveURL(/\/login$/);
   const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
   expect(violations.map((v) => v.id)).toEqual([]);
+  // Playwright 1.65's Firefox crashes on getByLabel() after axe has run on a
+  // page with an aria-labelledby region (microsoft/playwright#44135); a fresh
+  // document avoids it. Remove once fixed upstream.
+  await page.reload();
   await page.getByLabel('Password').fill('not the password at all');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('alert')).toContainText('Incorrect password');
