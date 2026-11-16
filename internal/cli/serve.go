@@ -135,7 +135,7 @@ func runServe(ctx context.Context, args []string, env Env) int {
 			"setup_token", token, "valid_for", "30m")
 	}
 	webSrv, err := web.New(webCfg, web.Options{Store: st, Auth: authMgr, Logger: log, Alerts: engine,
-		Notify: dispatcher, Poll: m, Heartbeat: beat})
+		Notify: dispatcher, Poll: m, Heartbeat: beat, Box: box})
 	if err != nil {
 		log.Error("starting web server", "err", err)
 		return 1

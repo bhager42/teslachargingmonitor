@@ -16,11 +16,11 @@ Copyright (C) 2026 Brad Hager and contributors
   <ul class="plain">{{range .Snoozes}}<li>{{t "alerts.muted" "device" .Device "time" .Until}}
     <form method="post" action="/alerts/snooze/{{.ID}}/end" class="inline"><input type="hidden" name="csrf_token" value="{{$.CSRF}}"><button type="submit" class="link">{{t "alerts.end_snooze"}}</button></form></li>{{end}}</ul>
   {{- end}}
-  {{- if .Devices}}
+  {{- if or .Devices .Gateways}}
   <form method="post" action="/alerts/snooze" class="inline-form">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <label for="snooze-device">{{t "alerts.snooze_device"}}</label>
-    <select id="snooze-device" name="device_id">{{range .Devices}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+    <select id="snooze-device" name="device_id">{{range .Devices}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{range .Gateways}}<option value="gateway-{{.ID}}">{{.Name}}</option>{{end}}</select>
     <label for="snooze-hours">{{t "alerts.snooze_for"}}</label>
     <select id="snooze-hours" name="hours"><option value="1">{{t "alerts.snooze_1h"}}</option><option value="4">{{t "alerts.snooze_4h"}}</option><option value="24">{{t "alerts.snooze_1d"}}</option><option value="72">{{t "alerts.snooze_3d"}}</option><option value="168">{{t "alerts.snooze_1w"}}</option></select>
     <label for="snooze-reason" class="sr-only">{{t "alerts.reason"}}</label>

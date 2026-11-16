@@ -159,6 +159,7 @@
     padding: 0.5rem; min-block-size: 44px; }
   .inline-form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
   .inline-form input { width: auto; flex: 1 1 12rem; }
+  .fingerprint { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
   .retention { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
   .retention .days { width: 7rem; }
   fieldset { border: 0; padding: 0; margin: 0 0 0.5rem; }

@@ -22,7 +22,8 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
 - `scripts/capture.sh <ip> [label]` — capture redacted Wall Connector fixtures
 - `scripts/capture-gateway.sh <ip> [label]` — capture redacted Backup Gateway fixtures (prompts for the
   customer password; logs in once, never retries — the Gateway locks out repeated failures)
-- `make sim SCENARIO=<name> SPEED=<x>` — run the Wall Connector simulator (`internal/wcsim`)
+- `make sim SCENARIO=<name> SPEED=<x>` — run the Wall Connector simulator (`internal/wcsim`);
+  `bin/gwsim` (built by `make build`) runs the Backup Gateway simulator over HTTPS (`internal/gwsim`)
 - `make soak SOAK_POLLS=3000` — leak/soak test of the poller against the simulator
 - `go run ./cmd/tcmon serve -data-dir ./data` with `tcmon device add -data-dir ./data -address 127.0.0.1:8099` (after `make sim`) for a local end-to-end run
 - `make e2e` — Playwright + axe browser tests (WCAG 2.2 AA both themes, CSP, 320 px, live SSE) and the

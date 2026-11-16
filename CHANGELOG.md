@@ -32,6 +32,12 @@ signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
   updates and restarts. They appear under Alerts once a Gateway is set up,
   can be previewed against its stored readings, and are emailed like the
   Wall Connector's.
+- Settings → Solar Gateway: add the Backup Gateway in the web UI (find it,
+  confirm its certificate, enter the customer password, which is tested
+  with one login), see its status and recent polls, accept a changed
+  certificate, poll it now, or remove it. Its health shows under
+  Diagnostics, and its alerts can be snoozed on the Alerts page. The
+  `tcmon gateway` commands still work.
 - Development: `scripts/capture-gateway.sh` captures a Tesla Backup
   Gateway 2's local API into redacted test fixtures, the first step of
   Phase 9 (Powerwall and solar support). It is not part of the container

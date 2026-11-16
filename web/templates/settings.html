@@ -4,7 +4,7 @@ Copyright (C) 2026 Brad Hager and contributors
 */ -}}
 {{define "content"}}
 <h1>{{t "settings.title"}}</h1>
-<nav class="tabs" aria-label="{{t "settings.sections_label"}}"><a href="/settings/devices">{{t "settings.tab_devices"}}</a><a href="/settings/energy">{{t "settings.tab_energy"}}</a><a href="/notifications">{{t "settings.tab_notifications"}}</a><a href="/alerts">{{t "settings.tab_alerts"}}</a><a href="/settings/security">{{t "settings.tab_security"}}</a></nav>
+<nav class="tabs" aria-label="{{t "settings.sections_label"}}"><a href="/settings/devices">{{t "settings.tab_devices"}}</a><a href="/settings/energy">{{t "settings.tab_energy"}}</a><a href="/settings/gateway">{{t "settings.tab_gateway"}}</a><a href="/notifications">{{t "settings.tab_notifications"}}</a><a href="/alerts">{{t "settings.tab_alerts"}}</a><a href="/settings/security">{{t "settings.tab_security"}}</a></nav>
 <form method="post" action="/settings" class="card">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
   <h2>{{t "settings.display_title"}}</h2>

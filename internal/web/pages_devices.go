@@ -30,6 +30,7 @@ import (
 type PollControl interface {
 	Reload(ctx context.Context) error
 	PollNow(id int64) error
+	PollGatewayNow(id int64) error
 }
 
 func (s *Server) deviceFromPath(w http.ResponseWriter, r *http.Request) (store.Device, bool) {

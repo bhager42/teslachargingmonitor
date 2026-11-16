@@ -35,6 +35,7 @@ import (
 	"github.com/bhager42/teslachargingmonitor/internal/heartbeat"
 	"github.com/bhager42/teslachargingmonitor/internal/i18n"
 	"github.com/bhager42/teslachargingmonitor/internal/notify"
+	"github.com/bhager42/teslachargingmonitor/internal/secrets"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
 	webui "github.com/bhager42/teslachargingmonitor/web"
 )
@@ -59,6 +60,9 @@ type Server struct {
 	poll   PollControl        // optional in tests
 	beat   *heartbeat.Pinger  // optional in tests
 	hub    *Hub
+	box    *secrets.Box // optional in tests
+	// gwGuard pauses Gateway test logins after a rejected one.
+	gwGuard *gatewayGuard
 
 	pages     map[string]*template.Template
 	assetHash map[string]string
@@ -77,6 +81,9 @@ type Options struct {
 	// Heartbeat is the dead-man's-switch pinger (optional).
 	Heartbeat *heartbeat.Pinger
 	Hub       *Hub
+	// Box seals the Backup Gateway's customer password (Settings → Solar
+	// Gateway); without it a Gateway cannot be added.
+	Box *secrets.Box
 }
 
 // New validates cfg, prepares the certificate and builds the handler.
@@ -94,7 +101,7 @@ func New(cfg Config, o Options) (*Server, error) {
 		o.Hub = NewHub()
 	}
 	s := &Server{cfg: cfg, st: o.Store, auth: o.Auth, log: o.Logger, now: o.Now, alerts: o.Alerts, notify: o.Notify,
-		poll: o.Poll, beat: o.Heartbeat, hub: o.Hub}
+		poll: o.Poll, beat: o.Heartbeat, hub: o.Hub, box: o.Box, gwGuard: &gatewayGuard{}}
 	var err error
 	switch cfg.TLSMode {
 	case TLSAuto:
@@ -165,7 +172,7 @@ func (s *Server) loadAssets() error {
 	maps.Copy(funcs, tr.Funcs())
 	s.pages = map[string]*template.Template{}
 	for _, p := range []string{"login", "setup", "setup_closed", "home", "security", "about", "error", "device",
-		"devices", "device_form", "alerts", "rule", "notifications", "channel", "settings", "diagnostics", "costs", "energy", "digest"} {
+		"devices", "device_form", "alerts", "rule", "notifications", "channel", "settings", "diagnostics", "costs", "energy", "digest", "gateway"} {
 		t, err := template.New(p).Funcs(funcs).ParseFS(webui.Templates, "templates/layout.html", "templates/"+p+".html")
 		if err != nil {
 			return fmt.Errorf("web: parsing %s template: %w", p, err)
@@ -222,6 +229,12 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("GET /diagnostics", s.authed(s.diagnostics))
 	mux.Handle("GET /costs", s.authed(s.costsPage))
 	mux.Handle("GET /costs/{kind}", s.authed(s.costsCSV))
+	mux.Handle("GET /settings/gateway", s.authed(s.gatewayPage))
+	mux.Handle("POST /settings/gateway", s.authed(s.saveGateway))
+	mux.Handle("POST /settings/gateway/find", s.authed(s.findGateway))
+	mux.Handle("POST /settings/gateway/accept-cert", s.authed(s.acceptGatewayCert))
+	mux.Handle("POST /settings/gateway/poll", s.authed(s.pollGateway))
+	mux.Handle("POST /settings/gateway/delete", s.authed(s.deleteGateway))
 	mux.Handle("GET /settings/energy", s.authed(s.energyPage))
 	mux.Handle("POST /settings/energy", s.authed(s.saveEnergy))
 	mux.Handle("POST /settings/energy/{id}/delete", s.authed(s.deleteRate))
