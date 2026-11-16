@@ -50,7 +50,7 @@ FUZZTIME ?= 60s
 # package:target pairs (packages under internal/)
 FUZZ_TARGETS := wallconnector:FuzzDecode wallconnector:FuzzParseAddress wallconnector:FuzzParseFirmware \
 	alerts:FuzzRules alerts:FuzzParseQuietHours notify:FuzzEmail energy:FuzzCosts \
-	auth:FuzzCheckPolicy store:FuzzDeviceNormalize web:FuzzParseClock
+	auth:FuzzCheckPolicy store:FuzzDeviceNormalize web:FuzzParseClock gateway:FuzzDecode
 
 fuzz: ## Run every fuzz target for FUZZTIME each
 	@for t in $(FUZZ_TARGETS); do \
