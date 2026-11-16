@@ -52,6 +52,9 @@ type Input struct {
 	Snapshot *wallconnector.Snapshot // nil when the poll failed
 	Err      error
 	Events   []store.DeviceEvent
+	// FirmwareSince is when the current firmware version was first seen
+	// (zero when unknown).
+	FirmwareSince time.Time
 }
 
 // valid reports whether field of endpoint ep decoded cleanly.
@@ -525,6 +528,29 @@ var definitions = []Definition{
 		store.EventIdentityMismatch, Warning, func(e store.DeviceEvent) string {
 			return tr.T("alert_rule.identity_mismatch.message", "serial", e.Details["serial"], "previous", e.Details["previous_serial"])
 		}),
+	{
+		// The device does not report whether a newer firmware exists, so this
+		// can only measure how long the current version has been installed.
+		Key: "firmware_stale", Title: tr.T("alert_rule.firmware_stale.title"), Kind: Condition,
+		Description: tr.T("alert_rule.firmware_stale.desc"),
+		Params:      []ParamSpec{{"days", tr.T("alert_param.older_than"), tr.T("alert_param.unit_days"), 30, 1825, 180}},
+		Defaults:    Config{Enabled: false, MinSamples: 1, Cooldown: defaultCooldown},
+		Eval: func(in Input, p Params, _ *State) Result {
+			if in.FirmwareSince.IsZero() || !in.valid(wallconnector.EndpointVersion, "firmware_version") {
+				return Result{Skip: true}
+			}
+			days := math.Floor(in.At.Sub(in.FirmwareSince).Hours() / 24)
+			if days < p["days"] {
+				return Result{}
+			}
+			key := "alert_rule.firmware_stale.message"
+			if in.valid(wallconnector.EndpointWifiStatus, "internet") && !in.Snapshot.WifiStatus.Internet {
+				key = "alert_rule.firmware_stale.message_no_internet"
+			}
+			return Result{Severity: Info, Value: f(days), Message: tr.T(key, "version", in.Snapshot.Version.FirmwareVersion,
+				"days", num(days, 0), "since", in.FirmwareSince.UTC().Format(time.DateOnly))}
+		},
+	},
 	{
 		Key: "contactor_wear", Title: tr.T("alert_rule.contactor_wear.title"), Kind: Event, EventSeverity: Info,
 		Description: tr.T("alert_rule.contactor_wear.desc"),

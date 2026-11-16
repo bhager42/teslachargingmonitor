@@ -259,7 +259,7 @@ func (e *Engine) Process(ctx context.Context, u poller.Update) ([]Notification, 
 	if err != nil {
 		return nil, err
 	}
-	in := Input{Device: u.Device, At: u.At, Snapshot: u.Snapshot, Err: u.Err, Events: u.Events}
+	in := Input{Device: u.Device, At: u.At, Snapshot: u.Snapshot, Err: u.Err, Events: u.Events, FirmwareSince: u.FirmwareSince}
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -448,10 +448,19 @@ func (e *Engine) Preview(ctx context.Context, device store.Device, ruleKey strin
 	if err != nil {
 		return nil, err
 	}
+	// Only the current firmware's install time is kept, so polls on an
+	// older version have no FirmwareSince and firmware_stale skips them.
+	info, err := e.st.DeviceInfo(ctx, device.ID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return nil, err
+	}
 	st := newState()
 	var out []PreviewEvent
 	for _, h := range hist {
 		in := Input{Device: device, At: h.Snapshot.FetchedAt, Snapshot: h.Snapshot, Events: h.Events}
+		if info != nil && h.Snapshot.Version.FirmwareVersion == info.FirmwareVersion {
+			in.FirmwareSince = info.FirmwareSince
+		}
 		for _, n := range step(def, cfg, in, st, false) {
 			out = append(out, PreviewEvent{At: in.At, Kind: n.kind, Severity: n.sev, Message: n.msg, Notified: n.notify})
 		}

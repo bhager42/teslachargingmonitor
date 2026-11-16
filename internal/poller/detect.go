@@ -84,10 +84,12 @@ func nextState(prev store.DeviceState, snap *wallconnector.Snapshot) store.Devic
 			SerialNumber: ver.SerialNumber, WebService: ver.WebService, GridProfile: ver.GridProfile(),
 			LastSeen: snap.FetchedAt,
 		}
+		info.FirstSeen, info.FirmwareSince = snap.FetchedAt, snap.FetchedAt
 		if prev.Info != nil {
 			info.DeviceID, info.FirstSeen = prev.Info.DeviceID, prev.Info.FirstSeen
-		} else {
-			info.FirstSeen = snap.FetchedAt
+			if prev.Info.FirmwareVersion == ver.FirmwareVersion && !prev.Info.FirmwareSince.IsZero() {
+				info.FirmwareSince = prev.Info.FirmwareSince
+			}
 		}
 		st.Info = &info
 	}

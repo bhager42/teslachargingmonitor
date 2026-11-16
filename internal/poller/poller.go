@@ -36,9 +36,12 @@ type Update struct {
 	Snapshot *wallconnector.Snapshot // nil when Err != nil
 	Err      error                   // set when all retries failed
 	Events   []store.DeviceEvent
-	Attempts int
-	At       time.Time
-	Next     time.Time // when the next scheduled poll will run
+	// FirmwareSince is when the current firmware version was first seen
+	// (zero when unknown).
+	FirmwareSince time.Time
+	Attempts      int
+	At            time.Time
+	Next          time.Time // when the next scheduled poll will run
 }
 
 // Config tunes the poller. Zero values select production defaults.
@@ -333,8 +336,12 @@ func (m *Manager) pollOnce(ctx context.Context, w *worker, client *wallconnector
 			}
 			next := nextState(prev, snap)
 			logReading(log, snap, events, attempt, took)
-			m.publish(Update{Device: d, Snapshot: snap, Events: events, Attempts: attempt, At: start,
-				Next: start.Add(m.interval(d, next))})
+			u := Update{Device: d, Snapshot: snap, Events: events, Attempts: attempt, At: start,
+				Next: start.Add(m.interval(d, next))}
+			if next.Info != nil {
+				u.FirmwareSince = next.Info.FirmwareSince
+			}
+			m.publish(u)
 			return next
 		}
 		lastErr = err
