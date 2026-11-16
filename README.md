@@ -1,14 +1,16 @@
 # Tesla Charger Monitoring
 
 Self-hosted monitoring and email alerting for the **Tesla Universal Wall
-Connector**, packaged as a small, hardened container for **TrueNAS SCALE
-25.10+** or any Docker host.
+Connector**, and optionally a **Powerwall 2 / Powerwall+** solar system
+through its Backup Gateway, packaged as a small, hardened container for
+**TrueNAS SCALE 25.10+** or any Docker host.
 
-> **Status: v1.3.1.** Polling, alerts, Gmail email, the HTTPS web UI (live
+> **Status: v1.4.0.** Polling, alerts, Gmail email, the HTTPS web UI (live
 > dashboard, charts, alert rules, settings, diagnostics), charging costs,
 > the optional weekly and monthly summaries and dead-man's-switch ping all
 > work, and everything is configured in the browser, including the Wall
-> Connector's IP address. See the [CHANGELOG](CHANGELOG.md) and the
+> Connector's IP address. New in 1.4: optional [solar and
+> Powerwall](docs/SOLAR.md) monitoring through a Tesla Backup Gateway. See the [CHANGELOG](CHANGELOG.md) and the
 > [development plan](docs/DEVELOPMENT_PLAN.md).
 
 ## Install
@@ -90,6 +92,12 @@ provenance ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 - Optionally ping a dead-man's-switch service (healthchecks.io, Uptime
   Kuma push monitor) after each successful poll, so you hear about it if
   tcmon itself stops.
+- Optionally read a **Powerwall 2 / Powerwall+ Backup Gateway** on the LAN,
+  read only and without Tesla's cloud: live solar, home, grid and Powerwall
+  power, a Solar page with production and self-consumption, solar /
+  Powerwall / grid shares of charging with the solar savings, and alerts
+  for grid outages, a low battery and solar that stopped producing. See
+  [Solar and Powerwall](docs/SOLAR.md).
 - Dark-mode-first web dashboard protected by a single password, LAN-only,
   served over HTTPS (self-signed by default).
 
@@ -99,6 +107,8 @@ provenance ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 |---|---|
 | Tesla Universal Wall Connector | Primary target; tested against firmware 26.26.10 and 26.34.0 |
 | Tesla Wall Connector (Gen 3) | Expected to work (same API family), untested |
+| Tesla Backup Gateway 2 (Powerwall 2 / Powerwall+) | Optional, for solar and Powerwall; tested against Gateway firmware 26.34.2 |
+| Powerwall 3, solar without a Gateway | Not supported (no known local API) |
 
 ## Development
 

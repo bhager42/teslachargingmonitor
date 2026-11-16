@@ -33,7 +33,9 @@ Copy the `setup_token` from that line (valid for 30 minutes; `docker compose
 restart` prints a new one), open `https://<host-ip>:8443/`, accept the
 one-time self-signed certificate warning, and follow the setup page. Then
 add your Wall Connector under **Settings → Wall Connectors** and Gmail under
-**Notifications**.
+**Notifications**. With a Powerwall 2 or Powerwall+, you can also add its
+Backup Gateway under **Settings → Solar Gateway** (see
+[Solar and Powerwall](SOLAR.md)).
 
 Everything the app stores is in `./data`: `tcmon.db`, `secret.key` (encrypts
 the saved Gmail password) and `tls/` (the HTTPS certificate).

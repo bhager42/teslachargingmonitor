@@ -6,61 +6,63 @@ and the project uses [Semantic Versioning](https://semver.org/). Container
 images for every release are at `ghcr.io/bhager42/teslachargingmonitor`,
 signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
-## [Unreleased]
+## [1.4.0] - 2026-11-16
 
 ### Added
-- Tesla Powerwall and solar (in progress, Phase 9): tcmon can poll a Tesla
-  Backup Gateway 2 on the LAN, read only, and store solar, home, grid and
-  Powerwall power, lifetime energy counters, battery level and grid status.
-  For now it is set up with `tcmon gateway` (`fingerprint`, then `add` with
-  the customer password on standard input); the web UI, costs, alerts and
-  emails follow. The Gateway is polled every 15 minutes, and every 5 minutes
-  while a car is plugged in. Its certificate is pinned, and a rejected
-  password is never retried until a back-off (5 minutes, doubling to 6
-  hours) has passed, also across restarts.
-- With a Backup Gateway, the Costs page splits charging into solar,
-  Powerwall and grid energy and shows the solar savings (approximately: the
-  car is assumed to get the home's mix in each polling interval). The
-  daily and sessions CSV exports have new `attributed_kwh`, `solar_kwh`,
-  `powerwall_kwh`, `grid_kwh` and `solar_savings` columns, empty without
-  Gateway data.
-- Alerts for the Backup Gateway: Gateway unreachable, login failed,
-  certificate changed, grid outage (with a notice when the grid is back),
-  Powerwall battery low (the Tesla app's percentage; a warning during an
-  outage), no solar in daylight (a fixed 10:00–15:00 window), a low solar
-  day (off by default), Powerwall capacity dropped, and Gateway firmware
-  updates and restarts. They appear under Alerts once a Gateway is set up,
-  can be previewed against its stored readings, and are emailed like the
-  Wall Connector's.
-- Settings → Solar Gateway: add the Backup Gateway in the web UI (find it,
-  confirm its certificate, enter the customer password, which is tested
-  with one login), see its status and recent polls, accept a changed
-  certificate, poll it now, or remove it. Its health shows under
-  Diagnostics, and its alerts can be snoozed on the Alerts page. The
-  `tcmon gateway` commands still work.
-- With a Backup Gateway, the dashboard shows a live power-flow card (solar,
-  home, car charging, grid import or export, Powerwall charging or
-  supplying, battery %, grid status), and a new Solar page shows today's,
-  this month's, this year's and all-time solar production, home use, grid
-  import and export, how much solar was used on site and how
-  self-sufficient the home was, production per day/week/month/year with
-  the numbers, and the last 24 hours of solar and home power and battery
-  level.
-- With a Backup Gateway, the weekly and monthly summary emails have a solar
-  section: solar produced (and the previous period's), home use,
-  how much solar was used on site, self-sufficiency, grid import and
-  export, about how much of the charging came from solar and what it saved,
-  and grid outages and Gateway restarts or updates.
-- Development: `scripts/capture-gateway.sh` captures a Tesla Backup
-  Gateway 2's local API into redacted test fixtures, the first step of
-  Phase 9 (Powerwall and solar support). It is not part of the container
-  image.
+- **Solar and Powerwall** (optional): tcmon can read a Tesla Backup Gateway
+  2 (Powerwall 2 or Powerwall+) on the LAN, read only and without Tesla's
+  cloud. See [Solar and Powerwall](docs/SOLAR.md).
+  - **Settings → Solar Gateway** adds it:
+    - tcmon finds the Gateway and shows its certificate fingerprint for you
+      to confirm; the certificate is then pinned;
+    - you enter the customer password, which is stored encrypted;
+    - saving tests the password with one login.
+
+    The page then shows the Gateway's status and recent polls, and lets you
+    accept a changed certificate, poll it now or remove it.
+    `tcmon gateway` does the same from the command line.
+  - **Polling:** every 15 minutes, and every 5 minutes while a car is
+    plugged in. A rejected password is never retried at once: tcmon waits
+    5 minutes, doubling up to 6 hours, also across restarts, so it cannot
+    lock you out of the Gateway.
+  - **Dashboard:** a live power-flow card (solar, home, car charging, grid
+    import or export, Powerwall charging or supplying, battery %, grid
+    status).
+  - **Solar page:**
+    - totals for today, this month, this year and all time: production,
+      home use, grid import and export, solar used on site,
+      self-sufficiency;
+    - production per day, week, month or year;
+    - the last 24 hours of power and battery level.
+  - **Costs page:** charging split into solar, Powerwall and grid energy,
+    with the solar savings. This is approximate: the car is assumed to get
+    the home's mix in each polling interval. The daily and sessions CSV
+    downloads gain `attributed_kwh`, `solar_kwh`, `powerwall_kwh`,
+    `grid_kwh` and `solar_savings` columns, empty without Gateway data.
+    These columns are added at the end, so anything reading the CSV by
+    column count needs updating.
+  - **Alerts:** Gateway unreachable, login failed and certificate changed;
+    grid outage, with a notice when the grid is back; Powerwall battery low
+    (a warning during an outage); no solar in daylight; a low solar day
+    (off by default); Powerwall capacity dropped; Gateway firmware updates
+    and restarts. They can be previewed against stored readings, snoozed,
+    and are emailed like the Wall Connector's.
+  - **Summary emails:** the weekly and monthly summaries gain a solar
+    section.
+  - **Diagnostics:** shows the Gateway's data quality and recent polls.
+  - Battery percentages match the Tesla app.
 
 ### Fixed
 - With a time-of-use rate whose off-peak window starts or ends inside the
   hour skipped by the spring daylight-saving change, charging across that
   night could be priced as if part of it were off-peak twice. Found by
   fuzzing.
+
+### Changed
+- The database schema moves to version 10, which adds the Gateway's
+  tables and lets alerts belong to a Gateway. Existing alert history,
+  open alerts and snoozes are kept. Back up the data directory before
+  upgrading, as for every release.
 
 ## [1.3.1] - 2026-11-15
 
@@ -214,7 +216,7 @@ First published release.
   shell, signed with cosign, with SBOM and provenance. Install guides for
   TrueNAS SCALE 25.10+ and Docker/Podman.
 
-[Unreleased]: https://github.com/bhager42/teslachargingmonitor/compare/v1.3.1...HEAD
+[1.4.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.1.2...v1.2.0

@@ -1277,14 +1277,10 @@ open questions in §15 resolved or deferred explicitly.
 
 ### Phase 9 — Tesla Solar and Powerwall (owner request D27)
 
-> **Status (2026-11-16): steps 9.0 (discovery), 9.1 (client and
-> simulator), 9.2 (storage and poller), 9.3 (attribution and costs), 9.4
-> (alerts), 9.5 (web UI) and 9.6 (summary emails) done.** The local customer login works on the owner's
-> Gateway, and the first capture (day, no car connected) is committed; see
-> the verification table below. Night, charging and outage captures are
-> still to come. Anything not in the
-> verification table comes from community projects, not Tesla
-> documentation, and stays *unverified*.
+> **Status (2026-11-16): done, released in v1.4.0.** Steps 9.0–9.7 are
+> complete. Still open from discovery: captures at night, while the car is
+> charging, and during a grid outage, to confirm the islanded grid status
+> string (the outage alert does not depend on it).
 
 Read the owner's **Powerwall 2 / Powerwall+ system through its Backup
 Gateway 2 on the LAN** and use the data in four ways:
@@ -1510,7 +1506,9 @@ through new optional `Input` fields, and Wall Connector rules ignore them.
    *Acceptance:* `internal/digest` tests cover a week and a month with
    solar data, and a system without a Gateway, which shows no solar
    section.
-7. **Docs and release.** README, install guides (Gateway address, customer
+7. **Docs and release** (*done*: `docs/SOLAR.md`, README, install guides,
+   threat model (S6, T6, I7, D4 and a trust-on-first-use accepted risk),
+   released as v1.4.0). README, install guides (Gateway address, customer
    password, fingerprint), threat model (new credential, TLS pinning,
    lockout), CHANGELOG. Release as a minor version.
 

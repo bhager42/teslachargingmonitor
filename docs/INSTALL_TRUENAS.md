@@ -49,6 +49,8 @@ in `x-portals` → `port:` at the bottom, and use that port below.
    address and **Test connection**.
 5. **Notifications → Add email (Gmail)**: set up Gmail with an app password, then **Send
    test email**.
+6. Optional, with a Powerwall 2 or Powerwall+: **Settings → Solar Gateway**
+   to add its Backup Gateway (see [Solar and Powerwall](SOLAR.md)).
 
 ## Using a host name
 
@@ -161,4 +163,5 @@ deliberate.)
 | Browser shows *Misdirected request* | You used a host name: add it to `TCMON_PUBLIC_HOSTNAMES`, or use the IP address. |
 | Browser shows *403* from another network | The app answers only private (LAN) addresses by design. Use a VPN into your LAN for remote access. |
 | *No Wall Connector answered* | Check the IP, that the Wall Connector is on Wi-Fi, and that TrueNAS can reach that network. |
+| Backup Gateway problems | See the troubleshooting table in [Solar and Powerwall](SOLAR.md#troubleshooting). |
 | Setup token expired | **Apps** → **tcmon** → **Restart**, then read the new token in the log. |

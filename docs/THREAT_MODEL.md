@@ -4,10 +4,12 @@
 # Threat Model
 
 Scope: Tesla Charger Monitoring (`tcmon`) running as a container on a home
-LAN (TrueNAS SCALE or Docker), polling one Tesla Universal Wall Connector and
+LAN (TrueNAS SCALE or Docker), polling one Tesla Universal Wall Connector and,
+optionally, a Tesla Backup Gateway 2 (Powerwall; Phase 9, ADR 0007), and
 sending email via Gmail.
 
-Status: finalised in Phase 8 (2026-11-05), drafted in Phase 0. The ASVS 5.0
+Status: finalised in Phase 8 (2026-11-05), drafted in Phase 0; the Backup
+Gateway was added in Phase 9 (2026-11-16). The ASVS 5.0
 Level 2 checklist is [`security/asvs.md`](security/asvs.md), and the
 documented policies it relies on are in
 [`security/controls.md`](security/controls.md). Review this file whenever a
@@ -16,7 +18,7 @@ new external connection, input or stored secret is added.
 ## Attackers considered
 | Attacker | Capability |
 |---|---|
-| Another device on the LAN | Can reach the app's port and the Wall Connector; can sniff or spoof plain HTTP |
+| Another device on the LAN | Can reach the app's port, the Wall Connector and the Backup Gateway; can sniff or spoof plain HTTP, or answer at the Gateway's address |
 | A malicious website in the owner's browser | Can send cross-site requests to LAN addresses and try DNS rebinding |
 | Someone reading the public repository | Sees code, fixtures and CI configuration |
 | A compromised dependency or CI action | Can try to change what ends up in the image |
@@ -30,15 +32,19 @@ Connector.
 |---|---|
 | Web UI password / session cookies | Full control of the app's settings |
 | Gmail app password | Can send email as the owner |
+| Backup Gateway customer password and session token | Read access to the home's energy system; repeated failed logins lock the owner out of the Gateway |
 | Readings history | Reveals when the owner is home/charging (privacy) |
 | `secret.key`, TLS private key | Decrypt stored credentials; impersonate the app |
 | Alert pipeline integrity | Missed alerts could hide an electrical/thermal fault |
-| Device identifiers (serial, MAC, SSID) | Personal data; must not leak via repo or logs |
+| Device identifiers (serial, MAC, SSID, Gateway DIN, Powerwall serials) | Personal data; must not leak via repo or logs |
+| The Gateway login response's name and email | Personal data of the Tesla account holder |
 
 ## Trust boundaries
 1. Browser ⇄ tcmon (HTTPS, self-signed by default; LAN-only allowlist).
 2. tcmon ⇄ Wall Connector (plain, unauthenticated HTTP on the LAN —
    responses are untrusted input).
+2a. tcmon ⇄ Backup Gateway (HTTPS with a self-signed certificate, pinned on
+   first use; customer login; responses are untrusted input).
 3. tcmon ⇄ Gmail SMTP (TLS, certificate always validated).
 3a. tcmon ⇄ dead-man's-switch service (optional HTTPS GET to an
    owner-entered URL after each successful poll, D20).
@@ -52,24 +58,28 @@ Connector.
 | S2 | Session theft via sniffing | HTTPS by default, `__Host-` Secure HttpOnly SameSite=Strict cookie (§9, §10) |
 | S3 | DNS rebinding from a malicious website to the LAN app | Host header allowlist (IP literals, localhost, `TCMON_PUBLIC_HOSTNAMES`) → 421 (Phase 5) |
 | S4 | Setup hijack before the owner sets a password | Setup needs a one-time token visible only in the container log; expires after 30 min (Phase 5) |
+| S6 | A LAN device impersonates the Backup Gateway to capture its password | The certificate's SHA-256 fingerprint is shown and confirmed by the owner when the Gateway is added and then pinned; every connection must present it (it replaces chain verification). A different certificate stops polling before the login, so the password is never sent, and raises `gateway_cert_changed` until the owner accepts the new fingerprint (ADR 0007) |
 | S5 | Cookie tossing from another host or plain-HTTP origin | Every cookie uses the `__Host-` prefix over HTTPS, `SameSite=Strict`; the theme cookie gained it in Phase 8 |
+| T6 | LAN attacker spoofs Backup Gateway responses after the pinned handshake | Not possible without the pinned certificate's private key; responses are still decoded strictly (`gateway.Decode*` with a report; flagged fields never drive alerts or costs) |
 | T1 | LAN attacker spoofs Wall Connector responses | Strict decoding, size/time limits, range checks; data can't trigger code execution (§2, §6) |
 | T2 | Tampered container image | Signed images, SBOM, provenance, digest pinning (§10, §11) |
 | T4 | Malicious dependency or CI action | Actions pinned by SHA, base image by digest; Dependabot, dependency review, govulncheck, Grype, CodeQL, Scorecard; minimal dependencies |
 | T5 | Forged log entries via request text | JSON logs; request-controlled text stripped of line breaks and truncated (`logSafe`) |
 | R1 | Settings changed without trace | Audit log of auth and settings changes (§10) |
 | I1 | XSS via device strings (SSID, codes) | `html/template` escaping, strict CSP, Trusted Types (§8, §10) |
-| I2 | Secrets in DB/backups | Channel credentials and the dead-man's-switch URL (it holds a token) encrypted (AES-256-GCM) with a separate `secret.key` (0600); `Secret` type redacted in logs/JSON; passwords never on the command line (Phase 4) |
+| I2 | Secrets in DB/backups | Channel credentials, the Backup Gateway password and the dead-man's-switch URL (it holds a token) encrypted (AES-256-GCM) with a separate `secret.key` (0600); the Gateway session token is kept in memory only, never logged or stored; `Secret` type redacted in logs/JSON; passwords never on the command line (Phase 4) |
 | I4 | Alerts or credentials sent in clear over SMTP | STARTTLS required (plaintext refused) or implicit TLS; certificate verification always on (Phase 4) |
 | T3 | Header injection via device/rule text into email | Addresses parsed with `net/mail`, subject flattened and RFC 2047-encoded, HTML template auto-escaping (Phase 4) |
-| I3 | Identifiers committed to the public repo | Redacting capture script + fixture test (Phase 0) |
+| I3 | Identifiers committed to the public repo | Redacting capture scripts + fixture tests (Phase 0; for the Gateway, key- and value-based redaction checked recursively in `internal/fixturecheck`, Phase 9) |
+| I7 | Personal data from the Gateway (account name and email, DIN, Powerwall serials) | The login response's name and email are discarded (only the token is read); the DIN and serials are stored only in raw payloads, pruned after 90 days by default, never in logs |
 | I5 | Charging history reveals when someone is home | Stored only locally; retention configurable (D15); backups and CSV only for the signed-in owner; no telemetry |
 | I6 | Internal details exposed by errors or listings | Generic error pages (`auth.UserMessage`, panic recovery); no directory listings (fixed in Phase 8); `/healthz` returns only `ok` |
 | D1 | Poll storms overload the device | Min interval, single in-flight request, backoff (§6) |
 | D2 | Email flood | Batching per poll, cooldowns, repeat limits (§6, §7) |
+| D4 | tcmon locks the owner out of the Gateway by retrying a wrong password | One login per session, reused until rejected; a rejected or rate-limited login suspends logins with exponential back-off (5 min doubling to 6 h), persisted across restarts; the settings page tests a password with one login and then pauses test logins for 5 min (ADR 0007) |
 | D3 | Slow or oversized requests exhaust the server | 64 KiB bodies, 16 KiB headers, read/write/idle timeouts; Argon2id work bounded by the login throttle |
 | E1 | Container breakout / privilege escalation | Non-root, read-only rootfs, no capabilities, no-new-privileges (§11) |
-| E2 | SSRF via the device address or the dead-man's-switch URL | Device addresses limited to LAN ranges when parsed and again at dial time (DNS-rebinding-safe), no redirects; the dead-man URL is HTTPS only (certificate validated, redirects only to HTTPS, at most 3), entered by the signed-in owner, and its response body is discarded (D20) |
+| E2 | SSRF via the device or Gateway address or the dead-man's-switch URL | Device and Gateway addresses limited to LAN ranges when parsed and again at dial time (DNS-rebinding-safe), fixed API paths, no redirects; the dead-man URL is HTTPS only (certificate validated, redirects only to HTTPS, at most 3), entered by the signed-in owner, and its response body is discarded (D20) |
 | E3 | CSRF from another LAN web app | Fetch-metadata checks + tokens + SameSite=Strict (§10) |
 
 ## Accepted risks
@@ -79,6 +89,11 @@ Connector.
   or missed alerts.
 - Self-signed certificate: first-visit trust relies on the owner comparing the
   fingerprint shown in logs/About page.
+- Backup Gateway trust on first use: the Gateway offers no independent way to
+  check its certificate's fingerprint, so a device impersonating it at the
+  moment the owner adds it would be trusted. After that, a changed
+  certificate is caught. The owner adds the Gateway by its LAN address,
+  usually reserved in the router.
 - One password, no MFA (owner requirement). Brute force is limited by the
   throttle, Argon2id and LAN-only access.
 - Secrets live in files in `/data`, not a vault; the host administrator is
