@@ -1277,8 +1277,8 @@ open questions in §15 resolved or deferred explicitly.
 
 ### Phase 9 — Tesla Solar and Powerwall (owner request D27)
 
-> **Status (2026-11-16): steps 9.0 (discovery) and 9.1 (client and
-> simulator) done.** The local customer login works on the owner's
+> **Status (2026-11-16): steps 9.0 (discovery), 9.1 (client and
+> simulator) and 9.2 (storage and poller) done.** The local customer login works on the owner's
 > Gateway, and the first capture (day, no car connected) is committed; see
 > the verification table below. Night, charging and outage captures are
 > still to come. Anything not in the
@@ -1455,7 +1455,11 @@ through new optional `Input` fields, and Wall Connector rules ignore them.
    *Acceptance:* the client never retries a rejected login more than once
    per back-off step (tested against the simulator); the decoders tolerate
    every fixture and the fuzz corpus.
-2. **Storage and poller.** New tables in new migrations (never edit applied
+2. **Storage and poller** (*done*: migration `0009_gateway.sql`,
+   `internal/store/gateways.go`, `internal/poller/gateway.go`, and an interim
+   `tcmon gateway` CLI until step 5's settings page; the DIN and battery
+   serials are kept only in raw payloads, which are pruned after 90 days by
+   default). New tables in new migrations (never edit applied
    ones): `gateways` (address, pinned fingerprint, encrypted password,
    poll settings), `readings_site` (per-meter power and lifetime counters,
    battery %, grid status) and `gateway_info`. The poller polls Gateways

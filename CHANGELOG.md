@@ -9,6 +9,15 @@ signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 ## [Unreleased]
 
 ### Added
+- Tesla Powerwall and solar (in progress, Phase 9): tcmon can poll a Tesla
+  Backup Gateway 2 on the LAN, read only, and store solar, home, grid and
+  Powerwall power, lifetime energy counters, battery level and grid status.
+  For now it is set up with `tcmon gateway` (`fingerprint`, then `add` with
+  the customer password on standard input); the web UI, costs, alerts and
+  emails follow. The Gateway is polled every 15 minutes, and every 5 minutes
+  while a car is plugged in. Its certificate is pinned, and a rejected
+  password is never retried until a back-off (5 minutes, doubling to 6
+  hours) has passed, also across restarts.
 - Development: `scripts/capture-gateway.sh` captures a Tesla Backup
   Gateway 2's local API into redacted test fixtures, the first step of
   Phase 9 (Powerwall and solar support). It is not part of the container
