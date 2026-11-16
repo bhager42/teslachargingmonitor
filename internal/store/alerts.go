@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -82,16 +83,18 @@ func (s *Store) DeleteRuleOverride(ctx context.Context, ruleKey string, deviceID
 	return err
 }
 
-// AlertStateRow is the opaque persisted state of one (rule, device) pair.
+// AlertStateRow is the opaque persisted state of one (rule, device) or
+// (rule, Gateway) pair: exactly one of DeviceID and GatewayID is non-zero.
 type AlertStateRow struct {
-	RuleKey  string
-	DeviceID int64
-	JSON     []byte
+	RuleKey   string
+	DeviceID  int64
+	GatewayID int64
+	JSON      []byte
 }
 
 // AlertStates loads every persisted rule state.
 func (s *Store) AlertStates(ctx context.Context) ([]AlertStateRow, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT rule_key, device_id, state_json FROM alert_state")
+	rows, err := s.db.QueryContext(ctx, "SELECT rule_key, device_id, gateway_id, state_json FROM alert_state")
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +103,7 @@ func (s *Store) AlertStates(ctx context.Context) ([]AlertStateRow, error) {
 	for rows.Next() {
 		var r AlertStateRow
 		var js string
-		if err := rows.Scan(&r.RuleKey, &r.DeviceID, &js); err != nil {
+		if err := rows.Scan(&r.RuleKey, &r.DeviceID, &r.GatewayID, &js); err != nil {
 			return nil, err
 		}
 		r.JSON = []byte(js)
@@ -109,18 +112,20 @@ func (s *Store) AlertStates(ctx context.Context) ([]AlertStateRow, error) {
 	return out, rows.Err()
 }
 
-// AlertEvent is one entry in the alert history.
+// AlertEvent is one entry in the alert history, about a Wall Connector
+// (DeviceID) or a Backup Gateway (GatewayID).
 type AlertEvent struct {
-	ID       int64
-	RuleKey  string
-	DeviceID int64
-	TS       time.Time
-	Kind     string
-	Severity string
-	Message  string
-	Value    *float64
-	Notified bool
-	AckedAt  *time.Time
+	ID        int64
+	RuleKey   string
+	DeviceID  int64
+	GatewayID int64
+	TS        time.Time
+	Kind      string
+	Severity  string
+	Message   string
+	Value     *float64
+	Notified  bool
+	AckedAt   *time.Time
 }
 
 // SaveAlertResult persists updated rule states and new alert events in one
@@ -128,8 +133,9 @@ type AlertEvent struct {
 func (s *Store) SaveAlertResult(ctx context.Context, states []AlertStateRow, events []AlertEvent, now time.Time) error {
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		for _, st := range states {
-			if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO alert_state (rule_key, device_id, state_json, updated_at)
-				VALUES (?, ?, ?, ?)`, st.RuleKey, st.DeviceID, string(st.JSON), ms(now)); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO alert_state (rule_key, device_id, gateway_id,
+				state_json, updated_at) VALUES (?, ?, ?, ?, ?)`, st.RuleKey, st.DeviceID, st.GatewayID, string(st.JSON),
+				ms(now)); err != nil {
 				return fmt.Errorf("store: saving alert state: %w", err)
 			}
 		}
@@ -139,9 +145,9 @@ func (s *Store) SaveAlertResult(ctx context.Context, states []AlertStateRow, eve
 			if e.Value != nil {
 				v = *e.Value
 			}
-			res, err := tx.ExecContext(ctx, `INSERT INTO alert_events (rule_key, device_id, ts, kind, severity, message,
-				value, notified) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-				e.RuleKey, e.DeviceID, ms(e.TS), e.Kind, e.Severity, e.Message, v, b2i(e.Notified))
+			res, err := tx.ExecContext(ctx, `INSERT INTO alert_events (rule_key, device_id, gateway_id, ts, kind, severity,
+				message, value, notified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				e.RuleKey, e.DeviceID, e.GatewayID, ms(e.TS), e.Kind, e.Severity, e.Message, v, b2i(e.Notified))
 			if err != nil {
 				return fmt.Errorf("store: saving alert event: %w", err)
 			}
@@ -156,6 +162,7 @@ func (s *Store) SaveAlertResult(ctx context.Context, states []AlertStateRow, eve
 // AlertEventFilter selects alert history.
 type AlertEventFilter struct {
 	DeviceID    int64 // 0 = all
+	GatewayID   int64 // 0 = all
 	Since       time.Time
 	UnackedOnly bool
 	Limit       int // default 100
@@ -166,10 +173,11 @@ func (s *Store) AlertEvents(ctx context.Context, f AlertEventFilter) ([]AlertEve
 	if f.Limit <= 0 {
 		f.Limit = 100
 	}
-	q := `SELECT id, rule_key, device_id, ts, kind, severity, message, value, notified, acked_at
-		FROM alert_events WHERE ts >= ? AND (? = 0 OR device_id = ?) AND (? = 0 OR acked_at IS NULL)
-		ORDER BY ts DESC, id DESC LIMIT ?`
-	rows, err := s.db.QueryContext(ctx, q, ms(f.Since), f.DeviceID, f.DeviceID, b2i(f.UnackedOnly), f.Limit)
+	q := `SELECT id, rule_key, device_id, gateway_id, ts, kind, severity, message, value, notified, acked_at
+		FROM alert_events WHERE ts >= ? AND (? = 0 OR device_id = ?) AND (? = 0 OR gateway_id = ?)
+		AND (? = 0 OR acked_at IS NULL) ORDER BY ts DESC, id DESC LIMIT ?`
+	rows, err := s.db.QueryContext(ctx, q, ms(f.Since), f.DeviceID, f.DeviceID, f.GatewayID, f.GatewayID,
+		b2i(f.UnackedOnly), f.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +188,8 @@ func (s *Store) AlertEvents(ctx context.Context, f AlertEventFilter) ([]AlertEve
 		var ts int64
 		var v sql.NullFloat64
 		var acked sql.NullInt64
-		if err := rows.Scan(&e.ID, &e.RuleKey, &e.DeviceID, &ts, &e.Kind, &e.Severity, &e.Message, &v, &e.Notified, &acked); err != nil {
+		if err := rows.Scan(&e.ID, &e.RuleKey, &e.DeviceID, &e.GatewayID, &ts, &e.Kind, &e.Severity, &e.Message, &v,
+			&e.Notified, &acked); err != nil {
 			return nil, err
 		}
 		e.TS = fromMS(ts)
@@ -208,10 +217,12 @@ func (s *Store) AckAlertEvent(ctx context.Context, id int64, now time.Time) erro
 	return nil
 }
 
-// Snooze mutes notifications for a device (RuleKey "") or one of its rules.
+// Snooze mutes notifications for a device or Gateway (RuleKey "") or one of
+// its rules. Exactly one of DeviceID and GatewayID is non-zero.
 type Snooze struct {
 	ID        int64
 	DeviceID  int64
+	GatewayID int64
 	RuleKey   string
 	Until     time.Time
 	Reason    string
@@ -223,14 +234,17 @@ const MaxSnooze = 30 * 24 * time.Hour
 
 // AddSnooze stores a snooze ending at s.Until.
 func (s *Store) AddSnooze(ctx context.Context, sn Snooze, now time.Time) (Snooze, error) {
+	if (sn.DeviceID == 0) == (sn.GatewayID == 0) {
+		return Snooze{}, errors.New("store: a snooze needs a device or a gateway")
+	}
 	if !sn.Until.After(now) || sn.Until.Sub(now) > MaxSnooze {
 		return Snooze{}, fmt.Errorf("store: snooze must end within %v", MaxSnooze)
 	}
 	if r := []rune(sn.Reason); len(r) > 200 {
 		sn.Reason = string(r[:200])
 	}
-	res, err := s.db.ExecContext(ctx, `INSERT INTO alert_snoozes (device_id, rule_key, until_ts, reason, created_at)
-		VALUES (?, ?, ?, ?, ?)`, sn.DeviceID, sn.RuleKey, ms(sn.Until), sn.Reason, ms(now))
+	res, err := s.db.ExecContext(ctx, `INSERT INTO alert_snoozes (device_id, gateway_id, rule_key, until_ts, reason,
+		created_at) VALUES (?, ?, ?, ?, ?, ?)`, sn.DeviceID, sn.GatewayID, sn.RuleKey, ms(sn.Until), sn.Reason, ms(now))
 	if err != nil {
 		return Snooze{}, fmt.Errorf("store: adding snooze: %w", err)
 	}
@@ -241,8 +255,21 @@ func (s *Store) AddSnooze(ctx context.Context, sn Snooze, now time.Time) (Snooze
 
 // ActiveSnoozes returns snoozes for a device that have not expired.
 func (s *Store) ActiveSnoozes(ctx context.Context, deviceID int64, now time.Time) ([]Snooze, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, device_id, rule_key, until_ts, reason, created_at FROM alert_snoozes
-		WHERE device_id = ? AND until_ts > ? ORDER BY until_ts`, deviceID, ms(now))
+	return s.activeSnoozes(ctx, "device_id", deviceID, now)
+}
+
+// ActiveGatewaySnoozes returns snoozes for a Gateway that have not expired.
+func (s *Store) ActiveGatewaySnoozes(ctx context.Context, gatewayID int64, now time.Time) ([]Snooze, error) {
+	return s.activeSnoozes(ctx, "gateway_id", gatewayID, now)
+}
+
+func (s *Store) activeSnoozes(ctx context.Context, col string, id int64, now time.Time) ([]Snooze, error) {
+	if id == 0 {
+		return nil, nil
+	}
+	//nolint:gosec // G202: col is "device_id" or "gateway_id", never input
+	rows, err := s.db.QueryContext(ctx, `SELECT id, device_id, gateway_id, rule_key, until_ts, reason, created_at
+		FROM alert_snoozes WHERE `+col+` = ? AND until_ts > ? ORDER BY until_ts`, id, ms(now))
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +278,7 @@ func (s *Store) ActiveSnoozes(ctx context.Context, deviceID int64, now time.Time
 	for rows.Next() {
 		var sn Snooze
 		var until, created int64
-		if err := rows.Scan(&sn.ID, &sn.DeviceID, &sn.RuleKey, &until, &sn.Reason, &created); err != nil {
+		if err := rows.Scan(&sn.ID, &sn.DeviceID, &sn.GatewayID, &sn.RuleKey, &until, &sn.Reason, &created); err != nil {
 			return nil, err
 		}
 		sn.Until, sn.CreatedAt = fromMS(until), fromMS(created)

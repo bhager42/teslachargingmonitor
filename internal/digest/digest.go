@@ -327,8 +327,16 @@ func addAlerts(ctx context.Context, st *store.Store, v *view, names map[int64]st
 		return 0, err
 	}
 	type key struct {
-		rule   string
-		device int64
+		rule    string
+		device  int64
+		gateway int64
+	}
+	// Gateway alerts are named after the Gateway (Phase 9).
+	gwNames := map[int64]string{}
+	if gws, err := st.Gateways(ctx); err == nil {
+		for _, g := range gws {
+			gwNames[g.ID] = g.Name
+		}
 	}
 	type group struct {
 		sev   alerts.Severity
@@ -350,7 +358,7 @@ func addAlerts(ctx context.Context, st *store.Store, v *view, names map[int64]st
 		if err != nil {
 			sev = alerts.Info
 		}
-		k := key{e.RuleKey, e.DeviceID}
+		k := key{e.RuleKey, e.DeviceID, e.GatewayID}
 		g := groups[k]
 		if g == nil {
 			g = &group{}
@@ -381,8 +389,12 @@ func addAlerts(ctx context.Context, st *store.Store, v *view, names map[int64]st
 		if icon == "" {
 			icon = "ℹ️"
 		}
+		name := names[k.device]
+		if k.gateway != 0 {
+			name = gwNames[k.gateway]
+		}
 		v.Alerts = append(v.Alerts, alertView{Icon: icon, Severity: g.sev.Label(), Title: title,
-			Device: cmp.Or(names[k.device], tr.T("digest.removed_device")), Count: tr.N("digest.times", g.count),
+			Device: cmp.Or(name, tr.T("digest.removed_device")), Count: tr.N("digest.times", g.count),
 			Last: g.last.In(loc).Format("Mon 2 Jan 15:04")})
 	}
 	return total, nil

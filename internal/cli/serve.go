@@ -95,6 +95,8 @@ func runServe(ctx context.Context, args []string, env Env) int {
 	}
 	updates, unsubUpdates := m.Subscribe(32)
 	defer unsubUpdates()
+	gwUpdates, unsubGW := m.SubscribeGateways(32)
+	defer unsubGW()
 	notifications, unsubNotes := engine.Subscribe(32)
 	defer unsubNotes()
 	toDeliver, unsubDeliver := engine.Subscribe(32)
@@ -150,6 +152,7 @@ func runServe(ctx context.Context, args []string, env Env) int {
 	})
 	wg.Go(func() { runMaintenance(ctx, st, log, time.Now) })
 	wg.Go(func() { engine.Run(ctx, updates) })
+	wg.Go(func() { engine.RunGateways(ctx, gwUpdates) })
 	wg.Go(func() { logNotifications(ctx, log, notifications) })
 	wg.Go(func() { dispatcher.Run(ctx, toDeliver) })
 	wg.Go(func() { beat.Run(ctx, beatUpdates) })

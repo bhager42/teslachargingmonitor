@@ -92,10 +92,12 @@ func KindLabel(kind string) string {
 
 // Notification is an alert event that should be delivered to channels.
 type Notification struct {
-	EventID    int64
-	RuleKey    string
-	RuleTitle  string
-	DeviceID   int64
+	EventID   int64
+	RuleKey   string
+	RuleTitle string
+	DeviceID  int64
+	GatewayID int64 // set instead of DeviceID for Gateway rules
+	// DeviceName names the Wall Connector or the Gateway.
 	DeviceName string
 	Kind       string
 	Severity   Severity
@@ -105,8 +107,9 @@ type Notification struct {
 }
 
 type stateKey struct {
-	rule   string
-	device int64
+	rule    string
+	device  int64
+	gateway int64
 }
 
 // Engine evaluates rules for every poll update.
@@ -143,7 +146,7 @@ func (e *Engine) Load(ctx context.Context) error {
 			e.log.Warn("discarding unreadable alert state", "rule", r.RuleKey, "device_id", r.DeviceID, "err", err)
 			continue
 		}
-		e.states[stateKey{r.RuleKey, r.DeviceID}] = s
+		e.states[stateKey{r.RuleKey, r.DeviceID, r.GatewayID}] = s
 	}
 	return nil
 }
@@ -248,8 +251,9 @@ func (e *Engine) Run(ctx context.Context, updates <-chan poller.Update) {
 	}
 }
 
-// Process evaluates every enabled rule for one poll update, persists state
-// and history, publishes and returns the notifications to deliver.
+// Process evaluates every enabled Wall Connector rule for one poll update,
+// persists state and history, publishes and returns the notifications to
+// deliver.
 func (e *Engine) Process(ctx context.Context, u poller.Update) ([]Notification, error) {
 	cfgs, err := e.Configs(ctx, u.Device.ID)
 	if err != nil {
@@ -260,7 +264,19 @@ func (e *Engine) Process(ctx context.Context, u poller.Update) ([]Notification, 
 		return nil, err
 	}
 	in := Input{Device: u.Device, At: u.At, Snapshot: u.Snapshot, Err: u.Err, Events: u.Events, FirmwareSince: u.FirmwareSince}
+	return e.evaluate(ctx, SubjectDevice, subject{device: u.Device.ID, name: u.Device.Name}, cfgs, snoozes, in)
+}
 
+// subject identifies what one evaluation is about.
+type subject struct {
+	device, gateway int64
+	name            string
+}
+
+// evaluate runs every enabled rule of one subject kind against in.
+func (e *Engine) evaluate(ctx context.Context, kind Subject, sub subject, cfgs map[string]Config,
+	snoozes []store.Snooze, in Input,
+) ([]Notification, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	var rows []store.AlertStateRow
@@ -268,10 +284,10 @@ func (e *Engine) Process(ctx context.Context, u poller.Update) ([]Notification, 
 	var batch []Notification
 	for _, def := range definitions {
 		cfg := cfgs[def.Key]
-		if !cfg.Enabled {
+		if !cfg.Enabled || def.Subject != kind {
 			continue
 		}
-		k := stateKey{def.Key, u.Device.ID}
+		k := stateKey{def.Key, sub.device, sub.gateway}
 		prev, ok := e.states[k]
 		if !ok {
 			prev = newState()
@@ -279,27 +295,27 @@ func (e *Engine) Process(ctx context.Context, u poller.Update) ([]Notification, 
 		st := cloneState(prev)
 		notices := step(def, cfg, in, st, snoozed(snoozes, def.Key))
 		for _, n := range notices {
-			events = append(events, store.AlertEvent{RuleKey: def.Key, DeviceID: u.Device.ID, TS: u.At, Kind: n.kind,
-				Severity: n.sev.String(), Message: n.msg, Value: n.value, Notified: n.notify})
+			events = append(events, store.AlertEvent{RuleKey: def.Key, DeviceID: sub.device, GatewayID: sub.gateway,
+				TS: in.At, Kind: n.kind, Severity: n.sev.String(), Message: n.msg, Value: n.value, Notified: n.notify})
 		}
 		js, err := json.Marshal(st)
 		if err != nil {
 			return nil, err
 		}
-		rows = append(rows, store.AlertStateRow{RuleKey: def.Key, DeviceID: u.Device.ID, JSON: js})
+		rows = append(rows, store.AlertStateRow{RuleKey: def.Key, DeviceID: sub.device, GatewayID: sub.gateway, JSON: js})
 		e.states[k] = st
 	}
-	if err := e.st.SaveAlertResult(ctx, rows, events, u.At); err != nil {
+	if err := e.st.SaveAlertResult(ctx, rows, events, in.At); err != nil {
 		return nil, err
 	}
 	for _, ev := range events {
 		def, _ := Lookup(ev.RuleKey)
 		sev, _ := ParseSeverity(ev.Severity)
-		e.log.Info("alert", "rule", ev.RuleKey, "device", u.Device.Name, "kind", ev.Kind, "severity", ev.Severity,
+		e.log.Info("alert", "rule", ev.RuleKey, "device", sub.name, "kind", ev.Kind, "severity", ev.Severity,
 			"notified", ev.Notified, "message", ev.Message)
 		if ev.Notified {
 			batch = append(batch, Notification{EventID: ev.ID, RuleKey: ev.RuleKey, RuleTitle: def.Title,
-				DeviceID: u.Device.ID, DeviceName: u.Device.Name, Kind: ev.Kind, Severity: sev,
+				DeviceID: sub.device, GatewayID: sub.gateway, DeviceName: sub.name, Kind: ev.Kind, Severity: sev,
 				Message: ev.Message, Value: ev.Value, At: ev.TS})
 		}
 	}
@@ -483,7 +499,7 @@ func (e *Engine) Active(deviceID int64) []ActiveAlert {
 	defer e.mu.Unlock()
 	var out []ActiveAlert
 	for _, def := range definitions {
-		st, ok := e.states[stateKey{def.Key, deviceID}]
+		st, ok := e.states[stateKey{def.Key, deviceID, 0}]
 		if !ok || st.Status != StatusFiring {
 			continue
 		}

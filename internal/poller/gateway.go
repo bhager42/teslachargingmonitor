@@ -11,6 +11,7 @@ package poller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"strconv"
@@ -20,9 +21,13 @@ import (
 	"github.com/bhager42/teslachargingmonitor/internal/store"
 )
 
+// ErrGatewayConfig wraps problems with a Gateway's stored settings that
+// stop it from being polled at all (no key, an undecryptable password).
+var ErrGatewayConfig = errors.New("poller: gateway settings unusable")
+
 // ErrNoBox is reported for a Gateway when the poller has no credential box
 // to decrypt its password.
-var ErrNoBox = errors.New("poller: no credential key to decrypt the Gateway password")
+var ErrNoBox = fmt.Errorf("%w: no credential key to decrypt the Gateway password", ErrGatewayConfig)
 
 // gatewayInfoEvery is how often the slowly changing site description
 // (/api/site_info, /api/solars) is refreshed.
@@ -176,7 +181,7 @@ func (m *Manager) runGatewayWorker(ctx context.Context, w *gwWorker) {
 	pw, err := g.Password(m.cfg.Box)
 	if err != nil {
 		log.Error("cannot decrypt the gateway password; enter it again", "err", err)
-		stopped(err)
+		stopped(fmt.Errorf("%w: %w", ErrGatewayConfig, err))
 		return
 	}
 	opts := m.cfg.Gateway
@@ -187,7 +192,7 @@ func (m *Manager) runGatewayWorker(ctx context.Context, w *gwWorker) {
 	client, err := gateway.NewClient(g.Address, opts)
 	if err != nil {
 		log.Error("invalid gateway settings; not polling", "err", err)
-		stopped(err)
+		stopped(fmt.Errorf("%w: %w", ErrGatewayConfig, err))
 		return
 	}
 	defer client.Close()
@@ -249,7 +254,7 @@ type gwPoll struct {
 func retryable(err error) bool {
 	var be *gateway.BackoffError
 	return !errors.As(err, &be) && !errors.Is(err, gateway.ErrCertChanged) &&
-		!errors.Is(err, gateway.ErrNotAuthorized) && !errors.Is(err, ErrNoBox)
+		!errors.Is(err, gateway.ErrNotAuthorized) && !errors.Is(err, ErrGatewayConfig)
 }
 
 // persistBackoff writes the client's back-off when it changed, so a restart
