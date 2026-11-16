@@ -56,10 +56,15 @@ container name: **`tcmon`**. Repo/image: `bhager42/teslachargingmonitor` /
 - First-class TrueNAS SCALE 25.10+ install path ("Install via YAML" custom app),
   plus plain `docker run` / `compose.yaml`.
 - AGPL-3.0 licensed, supply-chain-hardened builds (SBOM, signatures, provenance).
+- Phase 9 (D27): read a Powerwall 2 / Powerwall+ system's Backup Gateway 2
+  on the LAN for solar monitoring, solar-aware charging costs, solar alerts
+  and solar figures in the summary emails.
 
 ### Non-goals (v1)
 - Controlling the charger (the local API is read-only; Tesla Fleet API / vehicle
   control is out of scope).
+- Changing any Powerwall or Gateway setting, or reading them through Tesla's
+  cloud (Phase 9 is local and read-only, D27).
 - Multi-user accounts, roles, SSO/OIDC.
 - Cloud hosting / internet exposure as a supported configuration (LAN or
   reverse-proxy/VPN only; document the risk).
@@ -1270,6 +1275,190 @@ Delivered as small PRs, in this order:
 **Accept:** v1.0.0 tagged, release notes, signed images, CHANGELOG, all
 open questions in §15 resolved or deferred explicitly.
 
+### Phase 9 — Tesla Solar and Powerwall (owner request D27)
+
+> **Status (2026-11-15): planned, not started.** Nothing in this section is
+> verified against the owner's hardware yet. Everything about the Gateway
+> API comes from community projects, not Tesla documentation, and stays
+> *unverified* until step 9.0 captures real payloads.
+
+Read the owner's **Powerwall 2 / Powerwall+ system through its Backup
+Gateway 2 on the LAN** and use the data in four ways:
+1. **Solar monitoring:** solar production, home use, grid import and
+   export, and battery charge, live and over time.
+2. **Solar-aware charging:** how much of each charging session came from
+   solar, the Powerwall and the grid, and what the solar share saved.
+3. **Solar alerts:** grid outage, Gateway unreachable, low battery, solar
+   producing nothing in daylight, and more.
+4. **Summary emails:** solar figures in the weekly and monthly summaries.
+
+**Scope limits.**
+- **Local only (D27).** tcmon talks only to the Gateway on the LAN. The
+  Tesla Fleet API and other Tesla cloud services stay out of scope (§1), so
+  no Tesla account tokens are stored and no Tesla servers are contacted.
+- **Read only.** tcmon never changes Gateway settings: no operation mode, no
+  backup reserve, no storm watch, no grid-charging changes. The only
+  request that isn't a GET is the local login.
+- **No charging control.** Charging the car from surplus solar would need
+  vehicle commands or a writable charger API. The Wall Connector's local
+  API is read-only and vehicle control is out of scope (§1), so tcmon only
+  *reports* where charging energy came from.
+- **Powerwall 3 and solar-only systems are not supported.** The
+  Powerwall 3 has no equivalent local web API, and the Tesla Solar Inverter
+  without a Gateway has no known local API. Either would need a new
+  decision (§15.2).
+
+#### The Backup Gateway 2 local API (unverified)
+
+The Gateway serves HTTPS on port 443 with a **self-signed certificate**.
+Community projects (for example pypowerwall) describe the endpoints below;
+step 9.0 confirms or corrects them for the owner's firmware.
+
+| Endpoint | Expected content | Use |
+|---|---|---|
+| `POST /api/login/Basic` | Log in as the `customer` user with the Gateway's customer password and an email; returns an auth token / cookie. | Session for the GETs below |
+| `GET /api/meters/aggregates` | Per meter (`site` = grid, `solar`, `battery`, `load` = home): `instant_power` (W), lifetime `energy_imported` / `energy_exported` (Wh), timestamps | Power flow, and energy from counter deltas |
+| `GET /api/system_status/soe` | Battery state of energy (%) | Battery level (the app's figure may be rescaled to exclude the reserve; to be confirmed) |
+| `GET /api/system_status/grid_status` | Grid state, e.g. connected / islanded / transitioning | Grid outage detection |
+| `GET /api/system_status` | Battery blocks, nominal energy remaining and full-pack energy | Capacity and battery count |
+| `GET /api/sitemaster` | Whether the Gateway control loop is running and connected to Tesla | Health |
+| `GET /api/status` | Firmware version, uptime, Gateway ID | Identity, firmware and restart detection |
+| `GET /api/operation` | Operation mode and backup reserve % | Display only |
+
+**Rules carried over from the Wall Connector work.**
+- **Untrusted data.** Decode with a `gateway.Decode*` family that returns a
+  `Report` like `wallconnector.Decode*`. Flagged fields never drive alerts
+  or costs. Unknown fields are kept in the raw JSON and shown in
+  Diagnostics.
+- **Counters, not power, for energy.** Energy comes from the lifetime
+  `energy_imported` / `energy_exported` counter deltas, like the Wall
+  Connector's `energy_wh` (§6b). Instantaneous watts are for display only.
+  A counter that goes down starts a new baseline.
+- **Fixtures stay redacted.** The Gateway ID, serial numbers, DIN, email,
+  IP addresses and tokens are replaced. `internal/fixturecheck` learns the
+  Gateway patterns.
+
+**Login and lockout.** The Gateway is expected to rate-limit or lock out
+repeated failed logins. tcmon logs in once, reuses the session until a
+401, and then logs in again at most once. After a failed login it backs
+off exponentially (at least 5 min, at most 6 h) and raises
+`gateway_auth_failed` instead of retrying in a loop. A wrong password
+entered in the GUI is tested once and never retried automatically.
+
+**TLS.** The certificate is self-signed, so tcmon pins it on first use.
+The device form shows the SHA-256 fingerprint and the owner confirms it
+(trust on first use). A different certificate later stops polling and
+raises `gateway_cert_changed` until the owner accepts the new fingerprint.
+Never use `InsecureSkipVerify` without a pin.
+
+**Credentials.** The customer password is entered in the Web GUI (like
+D2's device address), stored only via `secrets.Box`, passed around as
+`secrets.Secret`, and never logged, returned or accepted as a CLI argument.
+The `netguard` LAN-address policy applies as it does to Wall Connectors.
+
+#### Solar-aware charging (attribution)
+
+The Gateway's `load` meter is expected to include the Wall Connector
+circuit (to be confirmed in 9.0, §15.2). For each polling interval:
+
+- **Car energy** *C* comes from the Wall Connector's `energy_wh` delta.
+- **What supplied the home** (including the car), from the Gateway's
+  counter deltas:
+  - *S* = solar used on site = solar produced − exported to the grid −
+    charged into the Powerwall (at least 0)
+  - *B* = Powerwall discharged
+  - *G* = grid imported
+- **The car's split** is proportional: solar = *C* × *S* / (*S* + *B* + *G*),
+  and the same for *B* and *G*.
+
+This is an **approximation**: within one interval, the car and the rest of
+the house get the same mix. Accuracy depends on the interval length, so the
+Gateway is polled on the Wall Connector's fast cadence (5 min, D10) while a
+car is charging. The UI and the emails say "approximately" and link to an
+explanation.
+
+**Savings** = the solar share's kWh × the price that would have applied
+(from `internal/energy` rates, time of use included). Powerwall energy is
+shown separately and **not counted as savings** by default, because the
+battery may have charged from the grid (§15.2). Export credits and
+net-metering compensation are not modelled.
+
+The attribution math lives in `internal/energy` (pure and table-tested),
+next to the cost math.
+
+#### Alert rules (new, in `internal/alerts/rules.go`)
+
+| Rule | Condition | Default severity |
+|---|---|---|
+| `gateway_unreachable` | Gateway polls fail after retries (like `device_unreachable`) | warning → critical |
+| `gateway_auth_failed` | Login rejected; polling backs off | critical |
+| `gateway_cert_changed` | TLS fingerprint differs from the pinned one; polling stopped | critical |
+| `grid_outage` | Grid status islanded (on battery), with a resolved notice when back on grid | warning |
+| `battery_low` | Battery % below a threshold (default 20 %) on 2 polls | info, warning while islanded |
+| `solar_zero_daytime` | Solar ≈ 0 W for N hours inside a daylight window (default 10:00–15:00 local) | warning |
+| `solar_production_low` | A day's production below X % (default 30 %) of the trailing 14-day median; evaluated once a day | info, disabled by default |
+| `gateway_not_connected` | Gateway reports no connection to Tesla on 2 polls | info |
+| `battery_capacity_drop` | Full-pack energy falls below X % of its first-seen value | info |
+| `gateway_firmware_changed`, `gateway_reboot` | Like the Wall Connector event rules | info |
+
+Daylight uses a fixed window rather than sunrise and sunset, so tcmon needs
+no location. State transitions stay in `step()`. Rules get Gateway data
+through new optional `Input` fields, and Wall Connector rules ignore them.
+
+#### Steps
+
+0. **Discovery (blocks everything else).** Add a `scripts/capture-gateway.sh`
+   that logs in once and captures every endpoint above, redacted, into
+   `testdata/fixtures/gateway/<firmware>/`. Capture in the day, at night,
+   while charging the car, and if possible during a grid outage or an
+   off-grid test. Record the results in a verification table like §2's.
+   Write an ADR for the Gateway client: auth, TLS pinning, lockout policy.
+   *Acceptance:* fixtures pass `fixturecheck`; the open questions in §15.2
+   that a capture can answer are answered.
+1. **Client and simulator.** `internal/gateway`: login, session reuse,
+   pinned TLS, `Decode*` with `Report`, lockout-safe retries. Gateway
+   scenarios in the simulator: sunny day, cloudy day, night on battery,
+   grid outage, battery low, login rejected, rate-limited, certificate
+   changed, malformed JSON. Fuzz targets for the decoders.
+   *Acceptance:* the client never retries a rejected login more than once
+   per back-off step (tested against the simulator); the decoders tolerate
+   every fixture and the fuzz corpus.
+2. **Storage and poller.** New tables in new migrations (never edit applied
+   ones): `gateways` (address, pinned fingerprint, encrypted password,
+   poll settings), `readings_site` (per-meter power and lifetime counters,
+   battery %, grid status) and `gateway_info`. The poller polls Gateways
+   alongside Wall Connectors on the same cadence rules, faster while a car
+   is charging. Retention and rollups apply as for vitals.
+   *Acceptance:* the soak test covers a Gateway; a restart keeps the session
+   back-off and the pin.
+3. **Attribution and costs.** `internal/energy` adds the split above and
+   the solar savings. The Costs page and the sessions table add solar,
+   Powerwall and grid columns and solar savings. The CSV export adds the
+   same columns.
+   *Acceptance:* table tests cover export, battery charging from solar,
+   night charging (all grid or battery) and counter resets; a simulated
+   sunny-day session's split adds up to its kWh.
+4. **Alerts.** The rules above, with table tests and `Preview` support.
+   *Acceptance:* each simulator scenario raises exactly the expected
+   alerts.
+5. **Web UI.** Settings → Solar Gateway (address, password, Test
+   connection, fingerprint confirmation). A dashboard power-flow card
+   (solar, home, grid, Powerwall, car), live over SSE with values
+   pre-formatted in Go. A Solar page with production, consumption, grid
+   import/export and battery % charts, server-rendered SVG with data
+   tables like the Costs page. Gateway health in Diagnostics.
+   *Acceptance:* axe (both themes), CSP, 320 px and the Lighthouse budget
+   pass on the new pages, which are added to the e2e page list.
+6. **Summary emails.** The weekly and monthly summaries add solar produced,
+   self-consumption %, grid import/export, the car's solar share and solar
+   savings, and grid outages in the device events.
+   *Acceptance:* `internal/digest` tests cover a week and a month with
+   solar data, and a system without a Gateway, which shows no solar
+   section.
+7. **Docs and release.** README, install guides (Gateway address, customer
+   password, fingerprint), threat model (new credential, TLS pinning,
+   lockout), CHANGELOG. Release as a minor version.
+
 ### Later / stretch
 TrueNAS community catalog submission; Home Assistant MQTT discovery; importing
 utility tariffs automatically (e.g. from OpenEI); multi-connector power-sharing view; passkey
@@ -1325,6 +1514,7 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 | D24 | **Pricing as built is enough** (item 10a): flat $0.155/kWh default, optional off-peak price and monthly fee, energy-only cost by default, US dollars. | 2026-11-07 | No change; taxes or tiered rates would be a later feature. |
 | D25 | Items 1, 5, 6, 15, 16 and 23 **deferred past 1.0**. | 2026-11-07 | Power-sharing view, a second alert channel, InfluxDB/Home Assistant/MQTT and the TrueNAS community catalog stay in Later / stretch; the install guides already cover the network and dataset choices. |
 | D26 | **Monthly summary email, optional** (off by default), alongside the weekly one. | 2026-11-15 | Same content as the weekly digest for the previous calendar month, sent on the 1st; costs include monthly fees. |
+| D27 | **Tesla Solar support** planned as **Phase 9**. Owner's system: **Powerwall 2 / Powerwall+ with Backup Gateway 2**. Data is read **locally only** from the Gateway (no Tesla cloud). Features: solar monitoring, solar-aware charging, solar alerts, solar in the summary emails. | 2026-11-15 | §1 goals and non-goals; Phase 9; open questions in §15.2. Amends D1: the Wall Connector is still the only charger. |
 
 ### 15.1 Status of the original questions
 
@@ -1356,6 +1546,23 @@ kept without a change being requested.
 | 21 | DCO or CLA | DCO sign-off, no CLA (CONTRIBUTING.md). |
 | 22 | Language | Go (D9). |
 | 23 | TrueNAS community catalog | **Deferred past 1.0** (D25); listed in Later / stretch. |
+
+### 15.2 Open questions for Phase 9 (solar)
+
+Use the documented default until the owner answers; note the assumption in
+the PR.
+
+| # | Question | Default until answered |
+|---|---|---|
+| S1 | Gateway firmware version, and whether the local API still accepts the customer login on it | Answered by the 9.0 capture |
+| S2 | Is the customer password available (it may need to be reset from the Gateway's own setup page)? | Needed before 9.0 |
+| S3 | How many Powerwalls, and their usable capacity? | Read from the Gateway |
+| S4 | Is the Wall Connector's circuit measured by the Gateway's `load` meter? | Assumed yes; attribution is labelled approximate. If not, the car's energy is added to the Gateway's load. |
+| S5 | Gateway polling cadence when no car is charging | 15 min (energy totals are exact from counters at any cadence; power-flow detail isn't) |
+| S6 | Count Powerwall energy as savings? | No; shown separately |
+| S7 | Export rate or net-metering credit to model? | None; exports shown in kWh only |
+| S8 | Daylight window and thresholds for the solar alerts | 10:00–15:00; zero = below 50 W for 2 h; low day < 30 % of the 14-day median |
+| S9 | Support Powerwall 3 or a solar-only system later? | Out of scope; needs a new decision |
 
 ---
 
