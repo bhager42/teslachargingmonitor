@@ -32,7 +32,7 @@ Install golangci-lint with the project toolchain (a binary built with an older
 Go refuses to lint this module):
 
 ```bash
-GOTOOLCHAIN=go1.27.3 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+GOTOOLCHAIN=go1.27.4 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 ```
 
 1. Create a branch, make focused changes with tests and docs.
