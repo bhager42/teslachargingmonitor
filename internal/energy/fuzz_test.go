@@ -38,6 +38,7 @@ func FuzzCosts(f *testing.F) {
 		plan := NewPlan([]Rate{{Price: price, OffPeakPrice: &offPrice, OffPeakStart: offStart, OffPeakEnd: offEnd,
 			MonthlyFee: fee, EffectiveFrom: time.Date(2026, 3, 1, 0, 0, 0, 0, loc)}}, loc)
 
+		raw := data
 		// 6 bytes per poll: minutes since the last poll (uint16), counter
 		// change in Wh (int16), flags (plugged, counter valid), current (A).
 		ts := time.Date(2026, 3, 7, 12, 0, 0, 0, loc) // the weekend before a DST change
@@ -64,8 +65,39 @@ func FuzzCosts(f *testing.F) {
 				t.Fatalf("bad interval %+v (price %v / %v)", iv, price, offPrice)
 			}
 		}
-		for _, s := range Sessions(polls, plan) {
-			if !(s.KWh > 0) || !finiteNonNeg(s.Cost) || s.End.Before(s.Start) || s.PeakA < 0 {
+		// A Gateway polled every 15 min alongside, with counter changes
+		// derived from the same bytes (they may also go backwards).
+		var site []SiteSample
+		gs := SiteSample{TS: time.Date(2026, 3, 7, 11, 0, 0, 0, loc), SolarWh: 4e7, GridImportWh: 2e8,
+			GridExportWh: 2e6, BatteryChargeWh: 9e6, BatteryDischargeWh: 7e6}
+		for i := 0; i+5 <= len(raw); i += 5 {
+			site = append(site, gs)
+			gs.TS = gs.TS.Add(15 * time.Minute)
+			gs.SolarWh += float64(int8(raw[i])) * 30              //nolint:gosec // deliberate signed bytes
+			gs.GridImportWh += float64(int8(raw[i+1])) * 30       //nolint:gosec // as above
+			gs.GridExportWh += float64(int8(raw[i+2])) * 30       //nolint:gosec // as above
+			gs.BatteryChargeWh += float64(int8(raw[i+3])) * 30    //nolint:gosec // as above
+			gs.BatteryDischargeWh += float64(int8(raw[i+4])) * 30 //nolint:gosec // as above
+		}
+		sup := SupplyIntervals(site)
+		for _, x := range sup {
+			if !finiteNonNeg(x.Solar) || !finiteNonNeg(x.Battery) || !finiteNonNeg(x.Grid) {
+				t.Fatalf("bad supply %+v", x)
+			}
+		}
+		for _, x := range Attribute(ivs, sup) {
+			if !x.Attributed {
+				continue
+			}
+			sum := x.SolarWh + x.BatteryWh + x.GridWh
+			if !finiteNonNeg(x.SolarWh) || !finiteNonNeg(x.BatteryWh) || !finiteNonNeg(x.GridWh) ||
+				math.Abs(sum-x.Wh) > 1e-6*max(1, x.Wh) || !finiteNonNeg(x.Savings) || x.Savings > x.Cost*(1+1e-9)+1e-12 {
+				t.Fatalf("bad attribution %+v", x)
+			}
+		}
+		for _, s := range SessionsWithSupply(polls, plan, sup) {
+			if !(s.KWh > 0) || !finiteNonNeg(s.Cost) || s.End.Before(s.Start) || s.PeakA < 0 ||
+				s.AttributedKWh > s.KWh*(1+1e-9)+1e-12 || !finiteNonNeg(s.Savings) {
 				t.Fatalf("bad session %+v", s)
 			}
 		}

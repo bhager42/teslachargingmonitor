@@ -1,0 +1,7 @@
+go test fuzz v1
+[]byte("\x0000020\b00020")
+float64(0)
+float64(2)
+int(134)
+int(77)
+float64(1068)

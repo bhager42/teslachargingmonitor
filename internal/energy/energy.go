@@ -9,7 +9,10 @@
 // Package energy turns the Wall Connector's lifetime energy counter into
 // costs: per-poll energy deltas priced with the owner's rate history
 // (optionally time-of-use), bucketed by day, week, month and year in local time,
-// and grouped into charging sessions. It is pure (no I/O).
+// and grouped into charging sessions. With a Tesla Backup Gateway it also
+// estimates how much of the charging came from solar, the Powerwall and
+// the grid, and what the solar share saved (attribution.go). It is pure
+// (no I/O).
 package energy
 
 import (
@@ -71,6 +74,7 @@ func (p Plan) RateAt(t time.Time) Rate {
 // offPeakOverlap returns how much of [a, b) falls inside r's off-peak window.
 func (p Plan) offPeakOverlap(r Rate, a, b time.Time) time.Duration {
 	var total time.Duration
+	var done time.Time // end of the time already counted
 	y, m, d := a.In(p.Loc).Date()
 	for day := time.Date(y, m, d-1, 0, 0, 0, 0, p.Loc); day.Before(b); day = time.Date(day.Year(), day.Month(), day.Day()+1, 0, 0, 0, 0, p.Loc) {
 		// Wall-clock times, not durations from midnight: days with a DST
@@ -82,9 +86,14 @@ func (p Plan) offPeakOverlap(r Rate, a, b time.Time) time.Duration {
 			endDay++ // window spans midnight
 		}
 		end := time.Date(dy, dm, endDay, 0, r.OffPeakEnd, 0, 0, p.Loc)
-		lo, hi := maxTime(a, start), minTime(b, end)
+		// On a spring-forward day a window edge can fall in the skipped
+		// hour, and Go may normalize it so this window overlaps the
+		// previous day's; never count the same time twice (found by
+		// FuzzCosts: off-peak 02:14–01:17 across 8 March in New York).
+		lo, hi := maxTime(maxTime(a, start), done), minTime(b, end)
 		if hi.After(lo) {
 			total += hi.Sub(lo)
+			done = hi
 		}
 	}
 	return total
@@ -130,9 +139,16 @@ type Sample struct {
 }
 
 // Interval is the energy delivered between two consecutive samples.
+// When Attributed (see Attribute), SolarWh + BatteryWh + GridWh = Wh and
+// Savings is the solar share of Cost.
 type Interval struct {
-	From, To time.Time
-	Wh, Cost float64
+	From, To   time.Time
+	Wh, Cost   float64
+	Attributed bool
+	SolarWh    float64
+	BatteryWh  float64
+	GridWh     float64
+	Savings    float64
 }
 
 // Intervals converts counter samples (oldest first) into priced intervals.
@@ -154,11 +170,37 @@ func Intervals(samples []Sample, p Plan) []Interval {
 // Mid is the interval's midpoint, used to assign it to a day or month.
 func (x Interval) Mid() time.Time { return x.From.Add(x.To.Sub(x.From) / 2) }
 
-// Bucket is a period's total.
+// Bucket is a period's total. The solar split covers only the attributed
+// part of KWh (AttributedKWh); the rest had no Gateway data.
 type Bucket struct {
-	Start time.Time
-	KWh   float64
-	Cost  float64
+	Start         time.Time
+	KWh           float64
+	Cost          float64
+	AttributedKWh float64
+	SolarKWh      float64
+	BatteryKWh    float64
+	GridKWh       float64
+	Savings       float64
+}
+
+func (b *Bucket) add(x Interval) {
+	b.KWh += x.Wh / 1000
+	b.Cost += x.Cost
+	if x.Attributed {
+		b.AttributedKWh += x.Wh / 1000
+		b.SolarKWh += x.SolarWh / 1000
+		b.BatteryKWh += x.BatteryWh / 1000
+		b.GridKWh += x.GridWh / 1000
+		b.Savings += x.Savings
+	}
+}
+
+// SolarShare is the solar fraction of the attributed energy (0 when none).
+func (b Bucket) SolarShare() float64 {
+	if b.AttributedKWh <= 0 {
+		return 0
+	}
+	return b.SolarKWh / b.AttributedKWh
 }
 
 // Period identifies how buckets are aligned.
@@ -240,8 +282,7 @@ func (p Plan) Buckets(iv []Interval, per Period, n int, now time.Time) []Bucket 
 		if i < 0 || !mid.Before(p.Next(per, starts[i])) {
 			continue
 		}
-		out[i].KWh += x.Wh / 1000
-		out[i].Cost += x.Cost
+		out[i].add(x)
 		feeMonths[i][p.Start(Month, mid)] = true
 	}
 	if per == Month || per == Year {
@@ -261,8 +302,7 @@ func (p Plan) Total(iv []Interval, from, to time.Time) Bucket {
 	months := map[time.Time]bool{}
 	for _, x := range iv {
 		if mid := x.Mid(); !mid.Before(from) && mid.Before(to) {
-			b.KWh += x.Wh / 1000
-			b.Cost += x.Cost
+			b.add(x)
 			months[p.Start(Month, mid)] = true
 		}
 	}
@@ -281,20 +321,44 @@ type PlugSample struct {
 	Wh       *float64 // lifetime counter; nil if not valid
 }
 
-// Session is a charging session derived from polls.
+// Session is a charging session derived from polls. The solar split
+// covers AttributedKWh of KWh (see Bucket).
 type Session struct {
-	Start, End time.Time
-	Ongoing    bool
-	KWh, Cost  float64
-	PeakA      float64
+	Start, End    time.Time
+	Ongoing       bool
+	KWh, Cost     float64
+	PeakA         float64
+	AttributedKWh float64
+	SolarKWh      float64
+	BatteryKWh    float64
+	GridKWh       float64
+	Savings       float64
 }
 
-// Sessions groups consecutive plugged-in polls into sessions. Energy is the
+func (s *Session) add(iv []Interval) {
+	for _, x := range iv {
+		var b Bucket
+		b.add(x)
+		s.KWh += b.KWh
+		s.Cost += b.Cost
+		s.AttributedKWh += b.AttributedKWh
+		s.SolarKWh += b.SolarKWh
+		s.BatteryKWh += b.BatteryKWh
+		s.GridKWh += b.GridKWh
+		s.Savings += b.Savings
+	}
+}
+
+// Sessions is SessionsWithSupply without solar attribution.
+func Sessions(ps []PlugSample, p Plan) []Session { return SessionsWithSupply(ps, p, nil) }
+
+// SessionsWithSupply groups consecutive plugged-in polls into sessions,
+// attributing their energy with sup (see Attribute; nil for none). Energy is the
 // counter difference from the last poll before the car was plugged in to
 // the first poll after it was unplugged (or the latest poll while still
 // plugged), so nothing delivered between polls is lost. Times are accurate
 // to the polling interval. Plug-ins with no energy are skipped.
-func Sessions(ps []PlugSample, p Plan) []Session {
+func SessionsWithSupply(ps []PlugSample, p Plan, sup []SupplyInterval) []Session {
 	var out []Session
 	var cur *Session
 	var base *PlugSample
@@ -304,10 +368,7 @@ func Sessions(ps []PlugSample, p Plan) []Session {
 			samples = append(samples, Sample{end.TS, *end.Wh})
 		}
 		cur.End, cur.Ongoing = end.TS, ongoing
-		for _, iv := range Intervals(samples, p) {
-			cur.KWh += iv.Wh / 1000
-			cur.Cost += iv.Cost
-		}
+		cur.add(Attribute(Intervals(samples, p), sup))
 		if cur.KWh > 0 {
 			out = append(out, *cur)
 		}
@@ -340,10 +401,7 @@ func Sessions(ps []PlugSample, p Plan) []Session {
 	if cur != nil {
 		last := ps[len(ps)-1]
 		cur.End, cur.Ongoing = last.TS, true
-		for _, iv := range Intervals(samples, p) {
-			cur.KWh += iv.Wh / 1000
-			cur.Cost += iv.Cost
-		}
+		cur.add(Attribute(Intervals(samples, p), sup))
 		if cur.KWh > 0 {
 			out = append(out, *cur)
 		}

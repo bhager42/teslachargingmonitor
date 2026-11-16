@@ -19,6 +19,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/bhager42/teslachargingmonitor/internal/energy"
 	"github.com/bhager42/teslachargingmonitor/internal/gateway"
 	"github.com/bhager42/teslachargingmonitor/internal/secrets"
 	"github.com/bhager42/teslachargingmonitor/internal/wallconnector"
@@ -609,5 +610,48 @@ func (s *Store) AnyVehiclePlugged(ctx context.Context) (bool, error) {
 		SELECT 1 FROM readings_vitals v WHERE v.device_id = d.id
 		AND v.ts = (SELECT MAX(ts) FROM readings_vitals WHERE device_id = d.id)
 		AND (v.vehicle_connected = 1 OR v.contactor_closed = 1))`).Scan(&n)
+	return n > 0, err
+}
+
+// SiteSamples returns the Gateway's lifetime counters in [from, to), plus
+// the last reading before from, for solar attribution. With several
+// Gateways it uses the first enabled one (the owner has one, D27). Rows with
+// any counter the decoder flagged are skipped. It returns nil when no
+// Gateway is configured.
+func (s *Store) SiteSamples(ctx context.Context, from, to time.Time) ([]energy.SiteSample, error) {
+	var id int64
+	err := s.db.QueryRowContext(ctx, "SELECT id FROM gateways WHERE enabled = 1 ORDER BY id LIMIT 1").Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	const cols = `ts, solar_exported_wh, site_imported_wh, site_exported_wh, battery_imported_wh, battery_exported_wh
+		FROM readings_site WHERE gateway_id = ? AND solar_exported_wh IS NOT NULL AND site_imported_wh IS NOT NULL
+		AND site_exported_wh IS NOT NULL AND battery_imported_wh IS NOT NULL AND battery_exported_wh IS NOT NULL`
+	rows, err := s.db.QueryContext(ctx, `SELECT * FROM (SELECT `+cols+` AND ts < ? ORDER BY ts DESC LIMIT 1)
+		UNION ALL SELECT `+cols+` AND ts >= ? AND ts < ? ORDER BY 1`, id, ms(from), id, ms(from), ms(to))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []energy.SiteSample
+	for rows.Next() {
+		var x energy.SiteSample
+		var ts int64
+		if err := rows.Scan(&ts, &x.SolarWh, &x.GridImportWh, &x.GridExportWh, &x.BatteryChargeWh, &x.BatteryDischargeWh); err != nil {
+			return nil, err
+		}
+		x.TS = fromMS(ts)
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
+// HasGateway reports whether an enabled Gateway is configured.
+func (s *Store) HasGateway(ctx context.Context) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM gateways WHERE enabled = 1").Scan(&n)
 	return n > 0, err
 }

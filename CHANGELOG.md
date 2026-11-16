@@ -18,10 +18,22 @@ signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
   while a car is plugged in. Its certificate is pinned, and a rejected
   password is never retried until a back-off (5 minutes, doubling to 6
   hours) has passed, also across restarts.
+- With a Backup Gateway, the Costs page splits charging into solar,
+  Powerwall and grid energy and shows the solar savings (approximately: the
+  car is assumed to get the home's mix in each polling interval). The
+  daily and sessions CSV exports have new `attributed_kwh`, `solar_kwh`,
+  `powerwall_kwh`, `grid_kwh` and `solar_savings` columns, empty without
+  Gateway data.
 - Development: `scripts/capture-gateway.sh` captures a Tesla Backup
   Gateway 2's local API into redacted test fixtures, the first step of
   Phase 9 (Powerwall and solar support). It is not part of the container
   image.
+
+### Fixed
+- With a time-of-use rate whose off-peak window starts or ends inside the
+  hour skipped by the spring daylight-saving change, charging across that
+  night could be priced as if part of it were off-peak twice. Found by
+  fuzzing.
 
 ## [1.3.1] - 2026-11-15
 

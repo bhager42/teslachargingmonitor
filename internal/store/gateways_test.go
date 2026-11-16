@@ -320,3 +320,42 @@ func TestDeleteGatewayCascades(t *testing.T) {
 		t.Errorf("second delete: %v", err)
 	}
 }
+
+func TestSiteSamples(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	if xs, err := s.SiteSamples(ctx, time.Unix(0, 0), time.Now()); err != nil || xs != nil {
+		t.Fatalf("no gateway: %v %v", xs, err)
+	}
+	if has, _ := s.HasGateway(ctx); has {
+		t.Error("HasGateway without one")
+	}
+	g := addGateway(t, s, testBox(t))
+	t0 := time.Date(2026, 11, 16, 13, 0, 0, 0, time.UTC)
+	for i := range 4 {
+		snap := fixtureSnapshot(t, t0.Add(time.Duration(i)*15*time.Minute))
+		snap.Aggregates.Solar.EnergyExported += float64(i) * 900
+		if i == 2 { // a flagged counter: skipped
+			rep := snap.Reports[gateway.EndpointAggregates]
+			rep.Invalid = append(rep.Invalid, gateway.FieldError{Field: "site.energy_imported"})
+			snap.Reports[gateway.EndpointAggregates] = rep
+		}
+		if err := s.SaveGatewaySnapshot(ctx, g.ID, snap, nil, nil, 1, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	xs, err := s.SiteSamples(ctx, t0.Add(20*time.Minute), t0.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The reading before from (15 min), then 45 min; 30 min is flagged.
+	if len(xs) != 2 || !xs[0].TS.Equal(t0.Add(15*time.Minute)) || !xs[1].TS.Equal(t0.Add(45*time.Minute)) {
+		t.Fatalf("samples = %+v", xs)
+	}
+	if xs[1].SolarWh-xs[0].SolarWh != 1800 || xs[0].GridExportWh != 1890463.3841501034 {
+		t.Errorf("counters = %+v", xs)
+	}
+	if has, _ := s.HasGateway(ctx); !has {
+		t.Error("HasGateway")
+	}
+}

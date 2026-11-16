@@ -62,7 +62,8 @@ func price(v float64, cur string) string {
 	return cur + s
 }
 
-// intervals returns priced energy intervals for all devices in [from, to).
+// intervals returns priced energy intervals for all devices in [from, to),
+// attributed to solar, Powerwall and grid when a Gateway is configured.
 func (s *Server) intervals(ctx context.Context, p energy.Plan, from, to time.Time) []energy.Interval {
 	devices, _ := s.st.Devices(ctx)
 	var all []energy.Interval
@@ -74,8 +75,55 @@ func (s *Server) intervals(ctx context.Context, p energy.Plan, from, to time.Tim
 		}
 		all = append(all, energy.Intervals(samples, p)...)
 	}
-	return all
+	return energy.Attribute(all, s.supply(ctx, from, to))
 }
+
+// supply returns the Gateway's home-supply intervals in [from, to), or nil
+// without a Gateway.
+func (s *Server) supply(ctx context.Context, from, to time.Time) []energy.SupplyInterval {
+	samples, err := s.st.SiteSamples(ctx, from, to)
+	if err != nil {
+		s.log.Warn("reading gateway counters", "err", err)
+		return nil
+	}
+	return energy.SupplyIntervals(samples)
+}
+
+// kwhOrDash formats a solar split value, or "–" when nothing in the row
+// could be attributed (no Gateway data).
+func kwhOrDash(v, attributed float64) string {
+	if attributed <= 0 {
+		return "–"
+	}
+	return fmt.Sprintf("%.1f", v)
+}
+
+func moneyOrDash(v, attributed float64, cur string) string {
+	if attributed <= 0 {
+		return "–"
+	}
+	return money(v, cur)
+}
+
+// solarText summarizes a total's solar split, e.g. "≈ 64 % solar, saved
+// $3.10", or "" when none of it could be attributed.
+func solarText(b energy.Bucket, cur string) string {
+	if b.AttributedKWh <= 0 {
+		return ""
+	}
+	return tr.T("costs.solar_total", "pct", fmt.Sprintf("%.0f", 100*b.SolarShare()), "savings", money(b.Savings, cur))
+}
+
+// csvSplit is the solar columns of a CSV row; empty without Gateway data.
+func csvSplit(attributed, solar, battery, grid, savings float64) []string {
+	if attributed <= 0 {
+		return []string{"", "", "", "", ""}
+	}
+	f := func(v float64, prec int) string { return strconv.FormatFloat(v, 'f', prec, 64) }
+	return []string{f(attributed, 3), f(solar, 3), f(battery, 3), f(grid, 3), f(savings, 2)}
+}
+
+var csvSplitHeader = []string{"attributed_kwh", "solar_kwh", "powerwall_kwh", "grid_kwh", "solar_savings"}
 
 // costFields adds session and month cost to a device card.
 func (s *Server) costFields(ctx context.Context, c *DeviceCard, deviceID int64) {
@@ -105,9 +153,9 @@ type bar struct {
 	ShowLabel         bool
 }
 
-type costRow struct{ Period, KWh, Cost string }
+type costRow struct{ Period, KWh, Cost, Solar, Battery, Grid, Savings string }
 
-type sessionRow struct{ Start, End, Duration, KWh, Cost, Peak string }
+type sessionRow struct{ Start, End, Duration, KWh, Cost, Peak, Solar, Battery, Grid, Savings string }
 
 // periods are the chart's tabs. N is the number of bars; 0 means every
 // year from the first one with charging data.
@@ -155,6 +203,7 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 		chartFrom = p.Start(sel.Per, chartFrom.Add(-time.Hour))
 	}
 
+	hasSolar, _ := s.st.HasGateway(ctx)
 	monthStart := p.Start(energy.Month, now)
 	lastMonth := p.Start(energy.Month, monthStart.Add(-time.Hour))
 	yearStart := time.Date(now.In(p.Loc).Year(), 1, 1, 0, 0, 0, 0, p.Loc)
@@ -165,7 +214,11 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 	}{{tr.T("costs.this_month"), monthStart, end}, {tr.T("costs.last_month"), lastMonth, monthStart},
 		{tr.T("costs.this_year"), yearStart, end}, {tr.T("costs.all_time"), time.Unix(0, 0), end}} {
 		b := p.Total(all, t.from, t.to)
-		totals = append(totals, kv{t.label, money(b.Cost, cur) + " · " + fmtNum(b.KWh, "kWh", 1)})
+		v := money(b.Cost, cur) + " · " + fmtNum(b.KWh, "kWh", 1)
+		if st := solarText(b, cur); st != "" {
+			v += " · " + st
+		}
+		totals = append(totals, kv{t.label, v})
 	}
 
 	buckets := p.Buckets(all, sel.Per, n, now)
@@ -196,7 +249,9 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 			br.LabelX, br.Anchor = W, "end"
 		}
 		bars = append(bars, br)
-		rows = append(rows, costRow{Period: label, KWh: fmt.Sprintf("%.1f", b.KWh), Cost: money(b.Cost, cur)})
+		rows = append(rows, costRow{Period: label, KWh: fmt.Sprintf("%.1f", b.KWh), Cost: money(b.Cost, cur),
+			Solar: kwhOrDash(b.SolarKWh, b.AttributedKWh), Battery: kwhOrDash(b.BatteryKWh, b.AttributedKWh),
+			Grid: kwhOrDash(b.GridKWh, b.AttributedKWh), Savings: moneyOrDash(b.Savings, b.AttributedKWh, cur)})
 	}
 	total := p.Total(all, chartFrom, end)
 	summary := tr.T("costs.summary", "period", sel.Name, "range", strings.ToLower(sel.Label),
@@ -204,12 +259,14 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 
 	var sessions []sessionRow
 	devices, _ := s.st.Devices(ctx)
+	sessFrom := now.Add(-90 * 24 * time.Hour)
+	sup := s.supply(ctx, sessFrom.Add(-24*time.Hour), end)
 	for _, d := range devices {
-		ps, err := s.st.PlugSamples(ctx, d.ID, now.Add(-90*24*time.Hour), end)
+		ps, err := s.st.PlugSamples(ctx, d.ID, sessFrom, end)
 		if err != nil {
 			continue
 		}
-		ss := energy.Sessions(ps, p)
+		ss := energy.SessionsWithSupply(ps, p, sup)
 		for i := len(ss) - 1; i >= 0 && len(sessions) < 50; i-- {
 			x := ss[i]
 			endTxt := x.End.In(p.Loc).Format("2 Jan 15:04")
@@ -218,7 +275,9 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 			}
 			sessions = append(sessions, sessionRow{Start: x.Start.In(p.Loc).Format("Mon 2 Jan 15:04"), End: endTxt,
 				Duration: fmtDuration(x.End.Sub(x.Start)), KWh: fmt.Sprintf("%.1f", x.KWh), Cost: money(x.Cost, cur),
-				Peak: fmt.Sprintf("%.0f A", x.PeakA)})
+				Peak: fmt.Sprintf("%.0f A", x.PeakA), Solar: kwhOrDash(x.SolarKWh, x.AttributedKWh),
+				Battery: kwhOrDash(x.BatteryKWh, x.AttributedKWh), Grid: kwhOrDash(x.GridKWh, x.AttributedKWh),
+				Savings: moneyOrDash(x.Savings, x.AttributedKWh, cur)})
 		}
 	}
 	rate := p.RateAt(now)
@@ -231,7 +290,7 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 	}
 	s.render(w, r, http.StatusOK, "costs", s.base(page{"Title": tr.T("costs.title"), "Totals": totals, "Bars": bars,
 		"Rows": rows, "Summary": summary, "Periods": periods, "Period": sel.Key, "PeriodName": sel.Name, "PeriodLabel": sel.Label,
-		"Sessions": sessions, "Rate": rateText, "TZ": time.Local.String(), "ChartW": W, "ChartH": H,
+		"Sessions": sessions, "Rate": rateText, "TZ": time.Local.String(), "ChartW": W, "ChartH": H, "Solar": hasSolar,
 		"Baseline": H - bottom, "LabelY": H - 6}, sess, "costs"))
 }
 
@@ -257,19 +316,21 @@ func (s *Server) costsCSV(w http.ResponseWriter, r *http.Request, _ auth.Session
 	defer cw.Flush()
 	switch kind {
 	case "daily":
-		_ = cw.Write([]string{"date", "kwh", "cost"})
+		_ = cw.Write(append([]string{"date", "kwh", "cost"}, csvSplitHeader...))
 		for _, b := range p.Buckets(s.intervals(ctx, p, now.Add(-367*24*time.Hour), end), energy.Day, 365, now) {
-			_ = cw.Write([]string{b.Start.In(p.Loc).Format(time.DateOnly), strconv.FormatFloat(b.KWh, 'f', 3, 64),
-				strconv.FormatFloat(b.Cost, 'f', 2, 64)})
+			_ = cw.Write(append([]string{b.Start.In(p.Loc).Format(time.DateOnly), strconv.FormatFloat(b.KWh, 'f', 3, 64),
+				strconv.FormatFloat(b.Cost, 'f', 2, 64)}, csvSplit(b.AttributedKWh, b.SolarKWh, b.BatteryKWh, b.GridKWh, b.Savings)...))
 		}
 	case "sessions":
-		_ = cw.Write([]string{"device", "start", "end", "ongoing", "kwh", "cost", "peak_current_a"})
+		_ = cw.Write(append([]string{"device", "start", "end", "ongoing", "kwh", "cost", "peak_current_a"}, csvSplitHeader...))
 		devices, _ := s.st.Devices(ctx)
+		sup := s.supply(ctx, time.Unix(0, 0), end)
 		for _, d := range devices {
 			ps, _ := s.st.PlugSamples(ctx, d.ID, time.Unix(0, 0), end)
-			for _, x := range energy.Sessions(ps, p) {
-				_ = cw.Write([]string{d.Name, x.Start.Format(time.RFC3339), x.End.Format(time.RFC3339), strconv.FormatBool(x.Ongoing),
-					strconv.FormatFloat(x.KWh, 'f', 3, 64), strconv.FormatFloat(x.Cost, 'f', 2, 64), strconv.FormatFloat(x.PeakA, 'f', 1, 64)})
+			for _, x := range energy.SessionsWithSupply(ps, p, sup) {
+				_ = cw.Write(append([]string{d.Name, x.Start.Format(time.RFC3339), x.End.Format(time.RFC3339), strconv.FormatBool(x.Ongoing),
+					strconv.FormatFloat(x.KWh, 'f', 3, 64), strconv.FormatFloat(x.Cost, 'f', 2, 64), strconv.FormatFloat(x.PeakA, 'f', 1, 64)},
+					csvSplit(x.AttributedKWh, x.SolarKWh, x.BatteryKWh, x.GridKWh, x.Savings)...))
 			}
 		}
 	default:
