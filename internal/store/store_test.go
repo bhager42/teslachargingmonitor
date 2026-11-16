@@ -76,7 +76,7 @@ func TestOpenCreatesSecureFileAndMigrates(t *testing.T) {
 	if perm := fi.Mode().Perm(); perm != 0o600 {
 		t.Errorf("db file mode = %o, want 600", perm)
 	}
-	if v, err := s.SchemaVersion(context.Background()); err != nil || v != 6 {
+	if v, err := s.SchemaVersion(context.Background()); err != nil || v != 7 {
 		t.Errorf("schema version = %d, %v", v, err)
 	}
 	var av, fk int
@@ -383,5 +383,34 @@ func TestSettingsRoundTrip(t *testing.T) {
 	}
 	if err := s.GetSetting(ctx, "x", &v); err != nil || v["a"] != 1 {
 		t.Errorf("v = %v, %v", v, err)
+	}
+}
+
+func TestFirmwareSince(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	d := addDevice(t, s)
+	save := func(at time.Time, fw string) *DeviceInfo {
+		t.Helper()
+		snap := snapshotFrom(t, "idle", 0, at)
+		snap.Version.FirmwareVersion = fw
+		if err := s.SaveSnapshot(ctx, d.ID, snap, nil, 1, time.Millisecond); err != nil {
+			t.Fatal(err)
+		}
+		info, err := s.DeviceInfo(ctx, d.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info
+	}
+	day := 24 * time.Hour
+	if info := save(t0, "26.26.10"); !info.FirmwareSince.Equal(t0) {
+		t.Errorf("first sighting: since = %v, want %v", info.FirmwareSince, t0)
+	}
+	if info := save(t0.Add(day), "26.26.10"); !info.FirmwareSince.Equal(t0) {
+		t.Errorf("same firmware: since = %v, want %v", info.FirmwareSince, t0)
+	}
+	if info := save(t0.Add(2*day), "26.34.0"); !info.FirmwareSince.Equal(t0.Add(2 * day)) {
+		t.Errorf("new firmware: since = %v, want %v", info.FirmwareSince, t0.Add(2*day))
 	}
 }

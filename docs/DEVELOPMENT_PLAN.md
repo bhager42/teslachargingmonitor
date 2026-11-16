@@ -374,6 +374,7 @@ A per-(rule, device) state machine provides:
 | `wifi_no_internet` | `internet == false` on 2 consecutive polls (affects firmware updates) | info |
 | `unexpected_reboot` | uptime decreased | info |
 | `firmware_changed` | firmware version changed | info |
+| `firmware_stale` | firmware version unchanged for longer than N days (default 180), counted from when tcmon first saw it; the device does not report whether a newer version exists | info (disabled by default) |
 | `grid_profile_changed` | any IEEE 1547 CRC in `/version` changed (grid-interconnection/trip settings altered, e.g. by a firmware update or remote config) | warning |
 | `contactor_wear` | `contactor_cycles_loaded` crosses configurable milestones | info |
 

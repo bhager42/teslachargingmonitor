@@ -122,3 +122,19 @@ func TestInterval(t *testing.T) {
 		t.Errorf("fast polling disabled but interval = %v", iv)
 	}
 }
+
+func TestNextStateFirmwareSince(t *testing.T) {
+	st := nextState(store.DeviceState{}, snap("idle", 0, t0))
+	if !st.Info.FirmwareSince.Equal(t0) {
+		t.Fatalf("first sighting: since = %v", st.Info.FirmwareSince)
+	}
+	st = nextState(st, snap("idle", time.Hour, t0.Add(time.Hour)))
+	if !st.Info.FirmwareSince.Equal(t0) {
+		t.Errorf("same firmware: since = %v, want %v", st.Info.FirmwareSince, t0)
+	}
+	at := t0.Add(wcsim.EventAfter + time.Minute)
+	st = nextState(st, snap("firmware-change", wcsim.EventAfter+time.Minute, at))
+	if !st.Info.FirmwareSince.Equal(at) {
+		t.Errorf("new firmware: since = %v, want %v", st.Info.FirmwareSince, at)
+	}
+}

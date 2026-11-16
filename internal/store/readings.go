@@ -29,6 +29,7 @@ type DeviceInfo struct {
 	WebService      string
 	GridProfile     wallconnector.GridProfile
 	FirstSeen       time.Time
+	FirmwareSince   time.Time // when FirmwareVersion was first seen
 	LastSeen        time.Time
 }
 
@@ -155,15 +156,18 @@ func (s *Store) SaveSnapshot(ctx context.Context, deviceID int64, snap *wallconn
 			gp := ver.GridProfile()
 			if _, err := tx.ExecContext(ctx, `INSERT INTO device_info (device_id, firmware_version, git_branch, part_number,
 				serial_number, web_service, ieee1547_vf_trips_crc, ieee1547_ride_thru_crc, ieee1547_combined_crc,
-				first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-				ON CONFLICT (device_id) DO UPDATE SET firmware_version = excluded.firmware_version,
+				first_seen_at, last_seen_at, firmware_since_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				ON CONFLICT (device_id) DO UPDATE SET firmware_since_at = CASE
+					WHEN device_info.firmware_version = excluded.firmware_version THEN device_info.firmware_since_at
+					ELSE excluded.firmware_since_at END,
+				firmware_version = excluded.firmware_version,
 				git_branch = excluded.git_branch, part_number = excluded.part_number,
 				serial_number = excluded.serial_number, web_service = excluded.web_service,
 				ieee1547_vf_trips_crc = excluded.ieee1547_vf_trips_crc,
 				ieee1547_ride_thru_crc = excluded.ieee1547_ride_thru_crc,
 				ieee1547_combined_crc = excluded.ieee1547_combined_crc, last_seen_at = excluded.last_seen_at`,
 				deviceID, ver.FirmwareVersion, ver.GitBranch, ver.PartNumber, ver.SerialNumber, ver.WebService,
-				gp.VfTrips, gp.RideThru, gp.CombinedCompliance, ts, ts); err != nil {
+				gp.VfTrips, gp.RideThru, gp.CombinedCompliance, ts, ts, ts); err != nil {
 				return fmt.Errorf("store: saving device info: %w", err)
 			}
 		}
@@ -218,19 +222,20 @@ func (s *Store) RecordPollFailure(ctx context.Context, deviceID int64, at time.T
 // DeviceInfo returns the stored identity of a device.
 func (s *Store) DeviceInfo(ctx context.Context, deviceID int64) (*DeviceInfo, error) {
 	var di DeviceInfo
-	var first, last int64
+	var first, last, since int64
 	err := s.db.QueryRowContext(ctx, `SELECT device_id, firmware_version, git_branch, part_number, serial_number,
-		web_service, ieee1547_vf_trips_crc, ieee1547_ride_thru_crc, ieee1547_combined_crc, first_seen_at, last_seen_at
+		web_service, ieee1547_vf_trips_crc, ieee1547_ride_thru_crc, ieee1547_combined_crc, first_seen_at, last_seen_at,
+		firmware_since_at
 		FROM device_info WHERE device_id = ?`, deviceID).Scan(&di.DeviceID, &di.FirmwareVersion, &di.GitBranch,
 		&di.PartNumber, &di.SerialNumber, &di.WebService, &di.GridProfile.VfTrips, &di.GridProfile.RideThru,
-		&di.GridProfile.CombinedCompliance, &first, &last)
+		&di.GridProfile.CombinedCompliance, &first, &last, &since)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	di.FirstSeen, di.LastSeen = fromMS(first), fromMS(last)
+	di.FirstSeen, di.LastSeen, di.FirmwareSince = fromMS(first), fromMS(last), fromMS(since)
 	return &di, nil
 }
 

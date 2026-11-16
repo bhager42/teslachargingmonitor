@@ -461,3 +461,45 @@ func TestRealCapturesRaiseNoDefaultAlerts(t *testing.T) {
 		}
 	}
 }
+
+func TestFirmwareStale(t *testing.T) {
+	day := 24 * time.Hour
+	at := func(d int) Input {
+		in := idle(t0.Add(time.Duration(d) * day))
+		in.FirmwareSince = t0
+		return in
+	}
+	updated := at(200)
+	updated.FirmwareSince = updated.At
+	got := run(t, "firmware_stale", nil, []sample{
+		{in: at(1)}, {in: at(179)}, {in: at(180)}, {in: at(181)}, {in: updated},
+	})
+	// No resolved notice: firmware_changed already reports the update.
+	eq(t, got, []string{"", "", "firing:info", "", ""})
+
+	def := mustRule(t, "firmware_stale")
+	if def.DefaultConfig().Enabled {
+		t.Error("firmware_stale must ship disabled")
+	}
+	p := def.DefaultConfig().Params
+	unknown := idle(t0)
+	if res := def.Eval(unknown, p, newState()); !res.Skip {
+		t.Error("unknown install time must skip")
+	}
+	invalid := at(200)
+	invalid.Snapshot.Reports[wallconnector.EndpointVersion] = wallconnector.Report{
+		Invalid: []wallconnector.FieldError{{Field: "firmware_version"}}}
+	if res := def.Eval(invalid, p, newState()); !res.Skip {
+		t.Error("invalid firmware_version must skip")
+	}
+	res := def.Eval(at(200), p, newState())
+	if !strings.Contains(res.Message, "200 days") || !strings.Contains(res.Message, "2026-11-02") ||
+		strings.Contains(res.Message, "internet") {
+		t.Errorf("message = %q", res.Message)
+	}
+	offline := at(200)
+	offline.Snapshot.WifiStatus.Internet = false
+	if res := def.Eval(offline, p, newState()); !strings.Contains(res.Message, "no internet") {
+		t.Errorf("offline message = %q", res.Message)
+	}
+}

@@ -6,6 +6,16 @@ and the project uses [Semantic Versioning](https://semver.org/). Container
 images for every release are at `ghcr.io/bhager42/teslachargingmonitor`,
 signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
+## [Unreleased]
+
+### Added
+- A "Firmware not updated" alert rule (`firmware_stale`, off by default) that
+  fires when the firmware version has not changed for a configurable number
+  of days (default 180). The Wall Connector does not report whether a newer
+  version exists, so the rule counts from when tcmon first saw the current
+  version, and mentions a missing internet connection when that is the likely
+  cause.
+
 ## [1.1.2] - 2026-11-10
 
 ### Fixed
