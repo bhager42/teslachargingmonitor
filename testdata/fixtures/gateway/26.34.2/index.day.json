@@ -1,10 +1,10 @@
 {
   "/api/meters/aggregates": {
-    "file": "meters_aggregates.day-charging.json",
+    "file": "meters_aggregates.day.json",
     "status": 200
   },
   "/api/meters/site": {
-    "file": "meters_site.day-charging.json",
+    "file": "meters_site.day.json",
     "status": 200
   },
   "/api/meters/solar": {
@@ -12,43 +12,43 @@
     "status": 200
   },
   "/api/operation": {
-    "file": "operation.day-charging.json",
+    "file": "operation.day.json",
     "status": 200
   },
   "/api/powerwalls": {
-    "file": "powerwalls.day-charging.json",
+    "file": "powerwalls.day.json",
     "status": 200
   },
   "/api/site_info": {
-    "file": "site_info.day-charging.json",
+    "file": "site_info.day.json",
     "status": 200
   },
   "/api/sitemaster": {
-    "file": "sitemaster.day-charging.json",
+    "file": "sitemaster.day.json",
     "status": 200
   },
   "/api/solars": {
-    "file": "solars.day-charging.json",
+    "file": "solars.day.json",
     "status": 200
   },
   "/api/status": {
-    "file": "status.day-charging.json",
+    "file": "status.day.json",
     "status": 200
   },
   "/api/system/update/status": {
-    "file": "system_update_status.day-charging.json",
+    "file": "system_update_status.day.json",
     "status": 200
   },
   "/api/system_status": {
-    "file": "system_status.day-charging.json",
+    "file": "system_status.day.json",
     "status": 200
   },
   "/api/system_status/grid_status": {
-    "file": "system_status_grid_status.day-charging.json",
+    "file": "system_status_grid_status.day.json",
     "status": 200
   },
   "/api/system_status/soe": {
-    "file": "system_status_soe.day-charging.json",
+    "file": "system_status_soe.day.json",
     "status": 200
   }
 }

@@ -1279,7 +1279,7 @@ open questions in §15 resolved or deferred explicitly.
 
 > **Status (2026-11-16): step 9.0 (discovery) in progress.** The local
 > customer login works on the owner's Gateway, and the first capture (day,
-> charging) is committed; see the verification table below. Night and
+> no car connected) is committed; see the verification table below. Night and
 > outage captures are still to come. Anything not in the
 > verification table comes from community projects, not Tesla
 > documentation, and stays *unverified*.
@@ -1328,8 +1328,8 @@ step 9.0 confirms or corrects them for the owner's firmware.
 | `GET /api/operation` | Operation mode and backup reserve % | Display only |
 
 **Verification status (owner's Gateway, firmware `26.34.2`)**: fixtures in
-`testdata/fixtures/gateway/26.34.2/` (`*.day-charging.json`: daytime, solar
-producing, battery charging, car plugged in). The Gateway's local web page
+`testdata/fixtures/gateway/26.34.2/` (`*.day.json`: daytime, solar
+producing, battery charging, no car connected). The Gateway's local web page
 now only says to use the Tesla app, but the API behind it still answers.
 Owner's system: one Powerwall+ (`3012170-25-B`, type `SolarPowerwall`) and
 one Powerwall 2 (`2012170-05-E`, type `ACPW`), 27 kWh nominal, a Tesla
@@ -1343,16 +1343,16 @@ Solar Inverter 7.6 (7.6 kW), split-phase 120/240 V service with a
 | `GET /api/meters/aggregates` | ✅ verified | `site`, `battery`, `load`, `solar`, each with `instant_power` (W), lifetime `energy_imported`/`energy_exported` (Wh, floats), currents, voltage, frequency, `last_*_communication_time`. **`load` has no `num_meters_aggregated`.** Signs: `site` < 0 = exporting, `battery` < 0 = charging. Power balances: solar + battery + site = load (3730 − 1290 − 49 = 2391 vs 2380 W). `battery` counters equal the sum of the per-block counters in `system_status`. `solar.energy_imported` is 0, `load.energy_exported` is 0. |
 | `GET /api/meters/site` | ✅ verified | One-element array: the `synchrometerX` site meter with `Cached_readings` (per-phase `real_power_a/b`, `v_l1n`/`v_l2n`), `cts` and `inverted` flags. Serials redacted. Not needed beyond diagnostics. |
 | `GET /api/meters/solar` | ⚠️ not JSON | HTTP 200 with a non-JSON body. Not used; solar comes from `meters/aggregates`. |
-| `GET /api/system_status/soe` | ✅ verified | `percentage` (float). It equals `nominal_energy_remaining / nominal_full_pack_energy` (35.03 %), so it is the **raw** state of energy, not the app's figure. The app is expected to show (raw − 5) / 0.95 (31.6 % here); to be confirmed against the app on the next capture. |
+| `GET /api/system_status/soe` | ✅ verified | `percentage` (float). It equals `nominal_energy_remaining / nominal_full_pack_energy` (35.03 %), so it is the **raw** state of energy, not the app's figure. The app shows (raw − 5) / 0.95 (31.6 % here), **confirmed** by the owner via the backup reserve (raw 33.5 = 30 % in the app). tcmon shows the app's scale and keeps the raw value. |
 | `GET /api/system_status/grid_status` | ✅ verified (connected) | `grid_status` `SystemGridConnected`, `grid_services_active` false. Islanded values still need an outage or off-grid capture. |
 | `GET /api/system_status` | ✅ verified | `battery_blocks[]`, one per Powerwall: `nominal_full_pack_energy` (13341 / 13876 Wh), `nominal_energy_remaining`, lifetime `energy_charged`/`energy_discharged`, `p_out`, `v_out`, `f_out`, `pinv_state`, `pinv_grid_state`, `backup_ready`, `disabled_reasons[]`, `off_grid`. System totals: `nominal_full_pack_energy` 27217 Wh, `nominal_energy_remaining`, `system_island_state`, `grid_faults[]`, max charge/discharge power. `battery_capacity_drop` uses the per-block full-pack energy. **`can_reboot` is a string** (`"Solar production hours"`), not a bool. |
 | `GET /api/sitemaster` | ✅ verified | `running` true, `status` `StatusUp`, `connected_to_tesla` **false** although the system is online and working (to be confirmed with the owner; if the Tesla app shows live data, this field is unreliable and `gateway_not_connected` is dropped or kept off by default). `can_reboot` is again a string. |
-| `GET /api/operation` | ✅ verified | `real_mode` `self_consumption`, `backup_reserve_percent` 33.5 (raw scale: (33.5 − 5) / 0.95 = 30 % in the app, which supports the soe rescaling above), `freq_shift_load_shed_*`. Display only. |
+| `GET /api/operation` | ✅ verified | `real_mode` `self_consumption`, `backup_reserve_percent` 33.5 (raw scale: (33.5 − 5) / 0.95 = 30 %, **confirmed** as the app's reserve setting), `freq_shift_load_shed_*`. Display only. |
 | `GET /api/site_info` | ✅ verified | `nominal_system_energy_kWh` 27, `nominal_system_power_kW` 12.68, `panel_max_current` 100, `timezone` (kept: it drives the daylight window), `site_name` and the `grid_code` object (country, state, utility) redacted. |
 | `GET /api/powerwalls` | ✅ verified | Per Powerwall: part number, `type`, commissioning and update diagnostics. **The commissioning checks report `fail` and `grid_state` `Grid_Uncompliant` during normal operation** ("cannot perform this action with site controller running"), so these fields must never drive alerts. `system_status` reports `pinv_grid_state` `Grid_Compliant` for the same blocks. |
 | `GET /api/solars` | ✅ verified | `[{brand, model, power_rating_watts}]` (`Tesla`, `Solar Inverter 7.6`, 7600). The rating is used for `solar_production_low` sanity. |
 | `GET /api/system/update/status` | ✅ verified | `state` `/update_succeeded`, `version`. |
-| Still to capture | ⏳ | Night (battery discharging), a known car charging rate to answer S4, and if possible an outage or off-grid test (islanded values). |
+| Still to capture | ⏳ | Night (battery discharging), daytime **while the car is charging** (to see the Wall Connector's power in `load`), and if possible an outage or off-grid test (islanded values). |
 
 **Rules carried over from the Wall Connector work.**
 - **Untrusted data.** Decode with a `gateway.Decode*` family that returns a
@@ -1589,7 +1589,7 @@ the PR.
 | S1 | Gateway firmware version, and whether the local API still accepts the customer login on it | **Answered 2026-11-16:** firmware 26.34.2; the customer login works (the local web page is gone, the API is not). |
 | S2 | Is the customer password available (it may need to be reset from the Gateway's own setup page)? | **Answered 2026-11-16:** yes. |
 | S3 | How many Powerwalls, and their usable capacity? | **Answered 2026-11-16 by the capture:** a Powerwall+ and a Powerwall 2, 27 kWh nominal (27.2 kWh full-pack). Still read from the Gateway at run time. |
-| S4 | Is the Wall Connector's circuit measured by the Gateway's `load` meter? | Assumed yes; attribution is labelled approximate. If not, the car's energy is added to the Gateway's load. |
+| S4 | Is the Wall Connector's circuit measured by the Gateway's `load` meter? | **Answered 2026-11-16:** yes (owner). Attribution stays labelled approximate (interval mixing). |
 | S5 | Gateway polling cadence when no car is charging | 15 min (energy totals are exact from counters at any cadence; power-flow detail isn't) |
 | S6 | Count Powerwall energy as savings? | No; shown separately |
 | S7 | Export rate or net-metering credit to model? | None; exports shown in kWh only |
