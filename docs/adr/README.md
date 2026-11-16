@@ -11,3 +11,4 @@ decision is made or reversed; never rewrite an accepted ADR — supersede it.
 | [0004](0004-dependabot.md) | Dependabot for dependency updates | Accepted |
 | [0005](0005-container-image.md) | Container image and release pipeline | Accepted |
 | [0006](0006-message-catalog.md) | Message catalog for user-facing text | Accepted |
+| [0007](0007-gateway-capture.md) | Backup Gateway access and fixture capture | Accepted |

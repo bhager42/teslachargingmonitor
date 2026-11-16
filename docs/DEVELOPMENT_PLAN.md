@@ -1277,10 +1277,13 @@ open questions in §15 resolved or deferred explicitly.
 
 ### Phase 9 — Tesla Solar and Powerwall (owner request D27)
 
-> **Status (2026-11-15): planned, not started.** Nothing in this section is
-> verified against the owner's hardware yet. Everything about the Gateway
-> API comes from community projects, not Tesla documentation, and stays
-> *unverified* until step 9.0 captures real payloads.
+> **Status (2026-11-16): step 9.0 (discovery) in progress.** A one-off probe
+> of the owner's Gateway confirmed that the local customer login and the
+> core endpoints still work (see the verification table below). The
+> capture tool (`scripts/capture-gateway.sh`) is ready; fixtures and the
+> rest of the table follow from the owner's captures. Anything not in the
+> verification table comes from community projects, not Tesla
+> documentation, and stays *unverified*.
 
 Read the owner's **Powerwall 2 / Powerwall+ system through its Backup
 Gateway 2 on the LAN** and use the data in four ways:
@@ -1324,6 +1327,20 @@ step 9.0 confirms or corrects them for the owner's firmware.
 | `GET /api/sitemaster` | Whether the Gateway control loop is running and connected to Tesla | Health |
 | `GET /api/status` | Firmware version, uptime, Gateway ID | Identity, firmware and restart detection |
 | `GET /api/operation` | Operation mode and backup reserve % | Display only |
+
+**Verification status (owner's Gateway, firmware `26.34.2`).** First
+probe on 2026-11-16 (status codes and field names only, no fixtures yet).
+The Gateway's local web page now only says to use the Tesla app, but the
+API behind it still answers.
+
+| Endpoint | Status | Findings |
+|---|---|---|
+| `GET /api/status` | ✅ verified (no login) | Answers **without** a login: `din`, `version` (`26.34.2` plus a build suffix), `device_type` `teg`. The DIN contains the serial number and is redacted everywhere. |
+| `POST /api/login/Basic` | ✅ verified | `customer` login with the Gateway's customer password returns 200 with `token` plus `email`, `firstname`, `lastname`, `roles`, `provider`, `loginTime`. Only the token is used; the personal fields are discarded, never stored or logged. Without a login, the endpoints below return 403. |
+| `GET /api/meters/aggregates` | ✅ verified (fields) | `site`, `battery`, `load`, `solar` objects, each with `instant_power`, `energy_imported`, `energy_exported`, per-phase currents, voltage, frequency and `last_*_communication_time` fields. **`load` has no `num_meters_aggregated`**; the others do, so the decoder must not require the same fields in every meter. |
+| `GET /api/system_status/soe` | ✅ verified (fields) | `percentage` (number). Whether it matches the Tesla app's figure is still to be compared. |
+| `GET /api/system_status/grid_status` | ✅ verified (fields) | `grid_status` (string), `grid_services_active` (bool). The string values (connected, islanded, ...) are still to be recorded. |
+| Other endpoints in the table above | ⏳ | Captured by `scripts/capture-gateway.sh`, together with `meters/site`, `meters/solar`, `site_info`, `powerwalls`, `solars` and `system/update/status`. |
 
 **Rules carried over from the Wall Connector work.**
 - **Untrusted data.** Decode with a `gateway.Decode*` family that returns a
@@ -1409,7 +1426,9 @@ through new optional `Input` fields, and Wall Connector rules ignore them.
 
 0. **Discovery (blocks everything else).** Add a `scripts/capture-gateway.sh`
    that logs in once and captures every endpoint above, redacted, into
-   `testdata/fixtures/gateway/<firmware>/`. Capture in the day, at night,
+   `testdata/fixtures/gateway/<firmware>/` (*done*: `cmd/gwcapture`, with
+   the redaction rules in `internal/gateway/redact` and the recursive check
+   in `internal/fixturecheck`; [ADR 0007](adr/0007-gateway-capture.md)). Capture in the day, at night,
    while charging the car, and if possible during a grid outage or an
    off-grid test. Record the results in a verification table like §2's.
    Write an ADR for the Gateway client: auth, TLS pinning, lockout policy.
@@ -1468,6 +1487,7 @@ utility tariffs automatically (e.g. from OpenEI); multi-connector power-sharing 
 ```
 cmd/tcmon/            main entrypoint + CLI subcommands
 cmd/wcsim/            Wall Connector simulator
+cmd/gwcapture/        Backup Gateway fixture capture (Phase 9, dev tool)
 internal/{config,wallconnector,poller,store,alerts,notify,auth,web,cli}/
 internal/store/migrations/*.sql
 web/templates/        html/template files
@@ -1554,8 +1574,8 @@ the PR.
 
 | # | Question | Default until answered |
 |---|---|---|
-| S1 | Gateway firmware version, and whether the local API still accepts the customer login on it | Answered by the 9.0 capture |
-| S2 | Is the customer password available (it may need to be reset from the Gateway's own setup page)? | Needed before 9.0 |
+| S1 | Gateway firmware version, and whether the local API still accepts the customer login on it | **Answered 2026-11-16:** firmware 26.34.2; the customer login works (the local web page is gone, the API is not). |
+| S2 | Is the customer password available (it may need to be reset from the Gateway's own setup page)? | **Answered 2026-11-16:** yes. |
 | S3 | How many Powerwalls, and their usable capacity? | Read from the Gateway |
 | S4 | Is the Wall Connector's circuit measured by the Gateway's `load` meter? | Assumed yes; attribution is labelled approximate. If not, the car's energy is added to the Gateway's load. |
 | S5 | Gateway polling cadence when no car is charging | 15 min (energy totals are exact from counters at any cadence; power-flow detail isn't) |
