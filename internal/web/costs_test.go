@@ -10,6 +10,8 @@ package web
 
 import (
 	"context"
+	"encoding/csv"
+	"fmt"
 	"math"
 	"net/url"
 	"strconv"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	"github.com/bhager42/teslachargingmonitor/internal/energy"
+	"github.com/bhager42/teslachargingmonitor/internal/gateway"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
 	"github.com/bhager42/teslachargingmonitor/internal/wallconnector"
 	"github.com/bhager42/teslachargingmonitor/internal/wcsim"
@@ -198,5 +201,79 @@ func TestCostsByYear(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("/costs?period=year missing %q", want)
 		}
+	}
+}
+
+// Plan step 9.3: with a Gateway, the Costs page and the CSV exports split
+// charging into solar, Powerwall and grid and show the solar savings.
+func TestCostsShowSolarSplit(t *testing.T) {
+	f := newFull(t)
+	d := f.addDevice()
+	ctx := context.Background()
+	start := f.clk.now().Add(-3 * time.Hour).Truncate(time.Minute)
+
+	_, body := f.get("/costs")
+	if strings.Contains(body, "Solar kWh") {
+		t.Fatal("solar columns shown without a Gateway")
+	}
+
+	g, err := f.st.CreateGateway(ctx, store.NewGateway("Powerwall", "192.168.1.20", strings.Repeat("ab", 32), []byte{1}), f.clk.now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Every 15 min from an hour before the session: 4 kW solar and 4 kW
+	// from the grid, nothing exported or stored, so half of it is solar.
+	for i := range 10 {
+		h := float64(i) / 4
+		snap := &gateway.Snapshot{FetchedAt: start.Add(-time.Hour + time.Duration(i)*15*time.Minute),
+			Reports: map[gateway.Endpoint]gateway.Report{}}
+		snap.Aggregates.Solar.EnergyExported = 4e7 + 4000*h
+		snap.Aggregates.Site.EnergyImported = 2e8 + 4000*h
+		snap.Aggregates.Site.EnergyExported = 2e6
+		snap.Aggregates.Battery.EnergyImported = 9e6
+		snap.Aggregates.Battery.EnergyExported = 7e6
+		if err := f.st.SaveGatewaySnapshot(ctx, g.ID, snap, nil, nil, 1, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wh := f.chargeSession(d, start, 60)
+	cost := wh / 1000 * 0.155
+
+	_, body = f.get("/costs")
+	for _, want := range []string{"Solar kWh", "Powerwall kWh", "Solar savings", "≈ 50 % solar, saved",
+		"figures are approximate", fmt.Sprintf("%.1f", wh/2000), money(cost/2, "$")} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/costs missing %q", want)
+		}
+	}
+
+	r := f.do("GET", "/costs/sessions", nil, cookie(f.c))
+	rows, err := csv.NewReader(r.Body).ReadAll()
+	_ = r.Body.Close()
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("sessions CSV: %v %v", rows, err)
+	}
+	if got := strings.Join(rows[0][7:], ","); got != "attributed_kwh,solar_kwh,powerwall_kwh,grid_kwh,solar_savings" {
+		t.Errorf("CSV header = %q", got)
+	}
+	num := func(s string) float64 { v, _ := strconv.ParseFloat(s, 64); return v }
+	row := rows[1]
+	if math.Abs(num(row[8])-wh/2000) > 0.002 || num(row[9]) != 0 || math.Abs(num(row[10])-wh/2000) > 0.002 ||
+		math.Abs(num(row[8])+num(row[9])+num(row[10])-num(row[4])) > 0.002 {
+		t.Errorf("CSV split = %v (session %.3f kWh)", row, wh/1000)
+	}
+
+	r = f.do("GET", "/costs/daily", nil, cookie(f.c))
+	daily, _ := csv.NewReader(r.Body).ReadAll()
+	_ = r.Body.Close()
+	var attributed float64
+	for _, row := range daily[1:] {
+		attributed += num(row[3])
+		if num(row[1]) == 0 && row[4] != "" {
+			t.Errorf("a day without charging has a solar split: %v", row)
+		}
+	}
+	if math.Abs(attributed-wh/1000) > 0.002 {
+		t.Errorf("daily CSV attributed %.3f kWh, want %.3f", attributed, wh/1000)
 	}
 }

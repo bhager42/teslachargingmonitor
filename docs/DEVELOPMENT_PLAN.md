@@ -1278,7 +1278,8 @@ open questions in §15 resolved or deferred explicitly.
 ### Phase 9 — Tesla Solar and Powerwall (owner request D27)
 
 > **Status (2026-11-16): steps 9.0 (discovery), 9.1 (client and
-> simulator) and 9.2 (storage and poller) done.** The local customer login works on the owner's
+> simulator), 9.2 (storage and poller) and 9.3 (attribution and costs)
+> done.** The local customer login works on the owner's
 > Gateway, and the first capture (day, no car connected) is committed; see
 > the verification table below. Night, charging and outage captures are
 > still to come. Anything not in the
@@ -1467,7 +1468,11 @@ through new optional `Input` fields, and Wall Connector rules ignore them.
    is charging. Retention and rollups apply as for vitals.
    *Acceptance:* the soak test covers a Gateway; a restart keeps the session
    back-off and the pin.
-3. **Attribution and costs.** `internal/energy` adds the split above and
+3. **Attribution and costs** (*done*: `internal/energy/attribution.go`;
+   exports and battery charging are taken from solar first, then from the
+   Powerwall or the grid, so a battery charged from the grid does not count
+   as solar; Gateway gaps over 2 h and counter resets are left
+   unattributed and shown as –). `internal/energy` adds the split above and
    the solar savings. The Costs page and the sessions table add solar,
    Powerwall and grid columns and solar savings. The CSV export adds the
    same columns.
