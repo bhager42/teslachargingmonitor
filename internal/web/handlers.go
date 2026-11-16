@@ -153,6 +153,10 @@ func (s *Server) authed(h authedHandler) http.Handler {
 
 func (s *Server) base(p page, sess auth.Session, nav string) page {
 	p["SignedIn"], p["CSRF"], p["Nav"] = true, sess.CSRFToken, nav
+	// The Solar page is in the menu once a Backup Gateway is set up.
+	ctx, cancel := contextWithTimeout()
+	p["HasSolar"], _ = s.st.HasGateway(ctx)
+	cancel()
 	return p
 }
 

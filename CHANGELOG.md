@@ -38,6 +38,14 @@ signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
   certificate, poll it now, or remove it. Its health shows under
   Diagnostics, and its alerts can be snoozed on the Alerts page. The
   `tcmon gateway` commands still work.
+- With a Backup Gateway, the dashboard shows a live power-flow card (solar,
+  home, car charging, grid import or export, Powerwall charging or
+  supplying, battery %, grid status), and a new Solar page shows today's,
+  this month's, this year's and all-time solar production, home use, grid
+  import and export, how much solar was used on site and how
+  self-sufficient the home was, production per day/week/month/year with
+  the numbers, and the last 24 hours of solar and home power and battery
+  level.
 - Development: `scripts/capture-gateway.sh` captures a Tesla Backup
   Gateway 2's local API into redacted test fixtures, the first step of
   Phase 9 (Powerwall and solar support). It is not part of the container

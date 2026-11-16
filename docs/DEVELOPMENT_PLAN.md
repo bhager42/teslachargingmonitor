@@ -1278,8 +1278,8 @@ open questions in §15 resolved or deferred explicitly.
 ### Phase 9 — Tesla Solar and Powerwall (owner request D27)
 
 > **Status (2026-11-16): steps 9.0 (discovery), 9.1 (client and
-> simulator), 9.2 (storage and poller), 9.3 (attribution and costs) and
-> 9.4 (alerts) done.** The local customer login works on the owner's
+> simulator), 9.2 (storage and poller), 9.3 (attribution and costs), 9.4
+> (alerts) and 9.5 (web UI) done.** The local customer login works on the owner's
 > Gateway, and the first capture (day, no car connected) is committed; see
 > the verification table below. Night, charging and outage captures are
 > still to come. Anything not in the
@@ -1486,14 +1486,16 @@ through new optional `Input` fields, and Wall Connector rules ignore them.
    shows Gateway rules once a Gateway is configured). The rules above, with table tests and `Preview` support.
    *Acceptance:* each simulator scenario raises exactly the expected
    alerts.
-5. **Web UI** (*settings part done*: Settings → Solar Gateway finds the
+5. **Web UI** (*done*: Settings → Solar Gateway finds the
    Gateway, shows its fingerprint for confirmation, tests the password with
    one login and then pauses test logins for 5 min after a rejection;
    status, poll log, Poll now, accepting a changed certificate and removal;
    Gateway snoozes on the Alerts page; Gateway health in Diagnostics;
    `cmd/gwsim` serves the simulator for the e2e tests, which add the
-   Gateway through these forms. *Still to do:* the power-flow card and the
-   Solar page). Settings → Solar Gateway (address, password, Test
+   Gateway through these forms; the dashboard's power-flow card, live over
+   SSE (`gateway` event); the Solar page with totals, self-consumption and
+   self-sufficiency, production per period, and 24-hour power and battery
+   charts, linked from the menu once a Gateway exists). Settings → Solar Gateway (address, password, Test
    connection, fingerprint confirmation). A dashboard power-flow card
    (solar, home, grid, Powerwall, car), live over SSE with values
    pre-formatted in Go. A Solar page with production, consumption, grid

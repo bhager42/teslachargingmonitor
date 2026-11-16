@@ -32,6 +32,7 @@ const minCoverage = 0.5
 type SiteSample struct {
 	TS                 time.Time
 	SolarWh            float64 // solar produced (solar meter, exported)
+	LoadWh             float64 // used by the home (load meter, imported)
 	GridImportWh       float64 // site meter, imported
 	GridExportWh       float64 // site meter, exported
 	BatteryChargeWh    float64 // battery meter, imported

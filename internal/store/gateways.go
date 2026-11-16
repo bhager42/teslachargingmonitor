@@ -627,8 +627,9 @@ func (s *Store) SiteSamples(ctx context.Context, from, to time.Time) ([]energy.S
 	if err != nil {
 		return nil, err
 	}
-	const cols = `ts, solar_exported_wh, site_imported_wh, site_exported_wh, battery_imported_wh, battery_exported_wh
-		FROM readings_site WHERE gateway_id = ? AND solar_exported_wh IS NOT NULL AND site_imported_wh IS NOT NULL
+	const cols = `ts, solar_exported_wh, load_imported_wh, site_imported_wh, site_exported_wh, battery_imported_wh,
+		battery_exported_wh FROM readings_site WHERE gateway_id = ? AND solar_exported_wh IS NOT NULL
+		AND load_imported_wh IS NOT NULL AND site_imported_wh IS NOT NULL
 		AND site_exported_wh IS NOT NULL AND battery_imported_wh IS NOT NULL AND battery_exported_wh IS NOT NULL`
 	rows, err := s.db.QueryContext(ctx, `SELECT * FROM (SELECT `+cols+` AND ts < ? ORDER BY ts DESC LIMIT 1)
 		UNION ALL SELECT `+cols+` AND ts >= ? AND ts < ? ORDER BY 1`, id, ms(from), id, ms(from), ms(to))
@@ -640,7 +641,8 @@ func (s *Store) SiteSamples(ctx context.Context, from, to time.Time) ([]energy.S
 	for rows.Next() {
 		var x energy.SiteSample
 		var ts int64
-		if err := rows.Scan(&ts, &x.SolarWh, &x.GridImportWh, &x.GridExportWh, &x.BatteryChargeWh, &x.BatteryDischargeWh); err != nil {
+		if err := rows.Scan(&ts, &x.SolarWh, &x.LoadWh, &x.GridImportWh, &x.GridExportWh, &x.BatteryChargeWh,
+			&x.BatteryDischargeWh); err != nil {
 			return nil, err
 		}
 		x.TS = fromMS(ts)
@@ -754,4 +756,39 @@ func (s *Store) LatestGatewayRaw(ctx context.Context, gatewayID int64) (map[stri
 		out[ep] = body
 	}
 	return out, fromMS(ts), rows.Err()
+}
+
+// LatestSiteReading returns a Gateway's most recent reading (ok false when
+// there is none).
+func (s *Store) LatestSiteReading(ctx context.Context, gatewayID int64) (SiteReading, bool, error) {
+	var ts int64
+	if err := s.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(ts), -1) FROM readings_site WHERE gateway_id = ?",
+		gatewayID).Scan(&ts); err != nil || ts < 0 {
+		return SiteReading{}, false, err
+	}
+	rs, err := s.SiteReadings(ctx, gatewayID, fromMS(ts), fromMS(ts+1))
+	if err != nil || len(rs) == 0 {
+		return SiteReading{}, false, err
+	}
+	return rs[len(rs)-1], true, nil
+}
+
+// ChargingPowerW is the charging power of every enabled Wall Connector's
+// latest reading (current × grid voltage while the contactor is closed),
+// and when the newest of those readings was taken.
+func (s *Store) ChargingPowerW(ctx context.Context) (float64, time.Time, error) {
+	var w sql.NullFloat64
+	var ts sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `SELECT SUM(CASE WHEN v.contactor_closed = 1 THEN
+			COALESCE(v.vehicle_current_a, 0) * COALESCE(v.grid_v, 0) ELSE 0 END), MAX(v.ts)
+		FROM devices d JOIN readings_vitals v ON v.device_id = d.id
+		AND v.ts = (SELECT MAX(ts) FROM readings_vitals WHERE device_id = d.id) WHERE d.enabled = 1`).Scan(&w, &ts)
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	var at time.Time
+	if ts.Valid {
+		at = fromMS(ts.Int64)
+	}
+	return w.Float64, at, nil
 }
