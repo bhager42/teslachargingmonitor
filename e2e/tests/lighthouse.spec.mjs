@@ -20,6 +20,10 @@ const MIN = { performance: 95, accessibility: 100, 'best-practices': 100 };
 const CATEGORIES = Object.keys(MIN);
 const PAGES = ['/login', '/', '/devices/1', '/alerts', '/notifications', '/settings', '/costs', '/diagnostics'];
 const PORT = 19222;
+// Lighthouse sometimes fails to measure a metric on a CI runner (a null
+// category score, no failing audit to show); such a run is repeated, a real
+// low score never is.
+const MAX_ATTEMPTS = 3;
 const STATE = join(import.meta.dirname, '..', '.auth', 'state.json');
 
 const configs = {
@@ -58,18 +62,31 @@ test.describe('Lighthouse', () => {
         // Sign-in is audited signed out; every other page signed in.
         await context.clearCookies();
         if (path !== '/login') await context.addCookies(JSON.parse(readFileSync(STATE, 'utf8')).cookies);
-        const result = await lighthouse(`${BASE_URL}${path}`, {
-          port: PORT,
-          output: 'json',
-          logLevel: 'error',
-          onlyCategories: CATEGORIES,
-          disableStorageReset: true,
-        }, config);
+        let result;
+        for (let attempt = 1; ; attempt++) {
+          result = await lighthouse(`${BASE_URL}${path}`, {
+            port: PORT,
+            output: 'json',
+            logLevel: 'error',
+            onlyCategories: CATEGORIES,
+            disableStorageReset: true,
+          }, config);
+          const unmeasured = CATEGORIES.filter((id) => result.lhr.categories[id].score === null);
+          if (unmeasured.length === 0) break;
+          const why = result.lhr.runtimeError?.message ??
+            Object.values(result.lhr.audits).find((a) => a.errorMessage)?.errorMessage ?? 'no reason given';
+          console.log(`Lighthouse (${form}) ${path}: ${unmeasured.join(', ')} not measured (${why}), attempt ${attempt}`);
+          if (attempt === MAX_ATTEMPTS) {
+            failures.push(`${path}: ${unmeasured.join(', ')} not measured after ${MAX_ATTEMPTS} attempts: ${why}`);
+            break;
+          }
+        }
         const lhr = result.lhr;
         expect(lhr.finalDisplayedUrl, `${path} was redirected (signed out?)`).toBe(`${BASE_URL}${path}`);
         scores[path] = {};
         for (const id of CATEGORIES) {
-          const score = Math.round((lhr.categories[id].score ?? 0) * 100);
+          if (lhr.categories[id].score === null) continue; // reported above
+          const score = Math.round(lhr.categories[id].score * 100);
           scores[path][id] = score;
           if (score < MIN[id]) {
             const lost = lhr.categories[id].auditRefs
