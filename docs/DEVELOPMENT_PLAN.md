@@ -1277,10 +1277,11 @@ open questions in §15 resolved or deferred explicitly.
 
 ### Phase 9 — Tesla Solar and Powerwall (owner request D27)
 
-> **Status (2026-11-16): step 9.0 (discovery) in progress.** The local
-> customer login works on the owner's Gateway, and the first capture (day,
-> no car connected) is committed; see the verification table below. Night and
-> outage captures are still to come. Anything not in the
+> **Status (2026-11-16): steps 9.0 (discovery) and 9.1 (client and
+> simulator) done.** The local customer login works on the owner's
+> Gateway, and the first capture (day, no car connected) is committed; see
+> the verification table below. Night, charging and outage captures are
+> still to come. Anything not in the
 > verification table comes from community projects, not Tesla
 > documentation, and stays *unverified*.
 
@@ -1445,7 +1446,8 @@ through new optional `Input` fields, and Wall Connector rules ignore them.
    Write an ADR for the Gateway client: auth, TLS pinning, lockout policy.
    *Acceptance:* fixtures pass `fixturecheck`; the open questions in §15.2
    that a capture can answer are answered.
-1. **Client and simulator.** `internal/gateway`: login, session reuse,
+1. **Client and simulator** (*done*: `internal/gateway`, `internal/gwsim`).
+   `internal/gateway`: login, session reuse,
    pinned TLS, `Decode*` with `Report`, lockout-safe retries. Gateway
    scenarios in the simulator: sunny day, cloudy day, night on battery,
    grid outage, battery low, login rejected, rate-limited, certificate
@@ -1499,6 +1501,8 @@ utility tariffs automatically (e.g. from OpenEI); multi-connector power-sharing 
 cmd/tcmon/            main entrypoint + CLI subcommands
 cmd/wcsim/            Wall Connector simulator
 cmd/gwcapture/        Backup Gateway fixture capture (Phase 9, dev tool)
+internal/gateway/     Backup Gateway client and decoders (Phase 9)
+internal/gwsim/       Backup Gateway simulator (Phase 9)
 internal/{config,wallconnector,poller,store,alerts,notify,auth,web,cli}/
 internal/store/migrations/*.sql
 web/templates/        html/template files
