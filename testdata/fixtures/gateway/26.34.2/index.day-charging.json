@@ -1,0 +1,54 @@
+{
+  "/api/meters/aggregates": {
+    "file": "meters_aggregates.day-charging.json",
+    "status": 200
+  },
+  "/api/meters/site": {
+    "file": "meters_site.day-charging.json",
+    "status": 200
+  },
+  "/api/meters/solar": {
+    "json": false,
+    "status": 200
+  },
+  "/api/operation": {
+    "file": "operation.day-charging.json",
+    "status": 200
+  },
+  "/api/powerwalls": {
+    "file": "powerwalls.day-charging.json",
+    "status": 200
+  },
+  "/api/site_info": {
+    "file": "site_info.day-charging.json",
+    "status": 200
+  },
+  "/api/sitemaster": {
+    "file": "sitemaster.day-charging.json",
+    "status": 200
+  },
+  "/api/solars": {
+    "file": "solars.day-charging.json",
+    "status": 200
+  },
+  "/api/status": {
+    "file": "status.day-charging.json",
+    "status": 200
+  },
+  "/api/system/update/status": {
+    "file": "system_update_status.day-charging.json",
+    "status": 200
+  },
+  "/api/system_status": {
+    "file": "system_status.day-charging.json",
+    "status": 200
+  },
+  "/api/system_status/grid_status": {
+    "file": "system_status_grid_status.day-charging.json",
+    "status": 200
+  },
+  "/api/system_status/soe": {
+    "file": "system_status_soe.day-charging.json",
+    "status": 200
+  }
+}

@@ -1,0 +1,51 @@
+[
+  {
+    "Cached_readings": {
+      "energy_exported": 1915555.9884279324,
+      "energy_imported": 216054906.46796224,
+      "frequency": 0,
+      "i_a_current": 6.0275,
+      "i_b_current": 5.904,
+      "i_c_current": 0,
+      "instant_apparent_power": 329.38882798297817,
+      "instant_average_current": 11.9315,
+      "instant_average_voltage": 122.225,
+      "instant_power": -16,
+      "instant_reactive_power": -329,
+      "instant_total_current": 11.9315,
+      "last_communication_time": "2026-11-16T08:33:53.815783-05:00",
+      "last_phase_energy_communication_time": "0001-01-01T00:00:00Z",
+      "last_phase_power_communication_time": "2026-11-16T08:33:53.815783-05:00",
+      "last_phase_voltage_communication_time": "2026-11-16T08:33:53.735526-05:00",
+      "reactive_power_a": -145,
+      "reactive_power_b": -184,
+      "real_power_a": -606,
+      "real_power_b": 590,
+      "serial_number": "REDACTED",
+      "timeout": 1500000000,
+      "v_l1n": 122.34,
+      "v_l2n": 122.11,
+      "version": "56d7ba064772ad"
+    },
+    "connection": {
+      "device_serial": "REDACTED",
+      "https_conf": {},
+      "short_id": "REDACTED"
+    },
+    "cts": [
+      true,
+      true,
+      false,
+      false
+    ],
+    "id": 0,
+    "inverted": [
+      false,
+      false,
+      false,
+      false
+    ],
+    "location": "site",
+    "type": "synchrometerX"
+  }
+]
