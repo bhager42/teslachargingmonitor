@@ -26,6 +26,18 @@ option) any later version. See the LICENSE file for details.
   {{- with .Events}}
   {{t "digest.label_events"}} {{range $i, $e := .}}{{if $i}}, {{end}}{{$e}}{{end}}{{end}}
 {{- end}}
+{{- with .Solar}}
+
+== {{t "digest.solar_heading" "name" .Name}} ==
+  {{.Production}}
+  {{.Previous}}
+  {{.Use}}
+  {{.Grid}}
+  {{- with .Car}}
+  {{.}}{{end}}
+  {{- with .Events}}
+  {{t "digest.label_events"}} {{range $i, $e := .}}{{if $i}}, {{end}}{{$e}}{{end}}{{end}}
+{{- end}}
 
 {{t "digest.alerts_heading"}}
 {{- range .Alerts}}
