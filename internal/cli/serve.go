@@ -161,7 +161,9 @@ func runServe(ctx context.Context, args []string, env Env) int {
 	defer unsubLive()
 	liveAlerts, unsubLiveAlerts := engine.Subscribe(32)
 	defer unsubLiveAlerts()
-	wg.Go(func() { feedLive(ctx, webSrv, liveUpdates, liveAlerts) })
+	liveGW, unsubLiveGW := m.SubscribeGateways(32)
+	defer unsubLiveGW()
+	wg.Go(func() { feedLive(ctx, webSrv, liveUpdates, liveGW, liveAlerts) })
 	_ = m.Run(ctx)
 	wg.Wait()
 	log.Info("stopped")
@@ -233,7 +235,8 @@ func portSuffix(listen string) string {
 
 // feedLive forwards poll results and alert notifications to the browsers
 // connected to the web UI.
-func feedLive(ctx context.Context, w *web.Server, updates <-chan poller.Update, notes <-chan []alerts.Notification) {
+func feedLive(ctx context.Context, w *web.Server, updates <-chan poller.Update, gwUpdates <-chan poller.GatewayUpdate,
+	notes <-chan []alerts.Notification) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -245,6 +248,11 @@ func feedLive(ctx context.Context, w *web.Server, updates <-chan poller.Update, 
 			// Give the alert engine a moment so the card shows new alerts too.
 			time.Sleep(200 * time.Millisecond)
 			w.HandleUpdate(u)
+		case u, ok := <-gwUpdates:
+			if !ok {
+				return
+			}
+			w.HandleGatewayUpdate(u)
 		case b, ok := <-notes:
 			if !ok {
 				return

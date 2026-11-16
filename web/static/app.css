@@ -139,6 +139,13 @@
   svg.bars { inline-size: 100%; block-size: auto; }
   .bar-label { font-size: 15px; }
   .bar { fill: var(--accent); }
+  .bar.solar { fill: var(--warn); }
+  .chart-line.solar { stroke: var(--warn); }
+  .chart-line.battery { stroke: var(--ok); }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; align-items: center; margin: 0.25rem 0; }
+  .swatch { display: inline-block; inline-size: 1rem; block-size: 0.25rem; margin-inline-end: 0.35rem; vertical-align: middle; }
+  .swatch.solar { background: var(--warn); }
+  .swatch.home { background: var(--accent); }
   .bar:hover { opacity: 0.8; }
   .chart-axis { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .chart-text { fill: var(--muted); font-size: 11px; }

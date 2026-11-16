@@ -54,7 +54,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request, sess auth.Session)
 			Message: e.Message, Acked: e.AckedAt != nil})
 	}
 	s.render(w, r, http.StatusOK, "home", s.base(page{"Title": tr.T("home.title"), "Cards": cards, "CardFields": CardFields,
-		"Recent": recent}, sess, "home"))
+		"Recent": recent, "Flows": s.flows(r.Context()), "FlowFields": FlowFields}, sess, "home"))
 }
 
 var ranges = []struct {

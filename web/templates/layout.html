@@ -29,6 +29,9 @@ Copyright (C) 2026 Brad Hager and contributors
   <nav aria-label="{{t "layout.nav_label"}}">
     <a href="/" {{if eq .Nav "home"}}aria-current="page"{{end}}>{{t "nav.home"}}</a>
     <a href="/costs" {{if eq .Nav "costs"}}aria-current="page"{{end}}>{{t "nav.costs"}}</a>
+    {{- if .HasSolar}}
+    <a href="/solar" {{if eq .Nav "solar"}}aria-current="page"{{end}}>{{t "nav.solar"}}</a>
+    {{- end}}
     <a href="/alerts" {{if eq .Nav "alerts"}}aria-current="page"{{end}}>{{t "nav.alerts"}}</a>
     <a href="/notifications" {{if eq .Nav "notifications"}}aria-current="page"{{end}}>{{t "nav.notifications"}}</a>
     <a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}>{{t "nav.settings"}}</a>

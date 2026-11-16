@@ -86,6 +86,21 @@ function applyCard(card) {
   }
 }
 
+// The Backup Gateway's power-flow card (dashboard and Solar page); values
+// arrive formatted, so only text changes.
+function applyFlow(flow) {
+  for (const root of document.querySelectorAll(`[data-gateway-id="${flow.id}"]`)) {
+    for (const [key, value] of Object.entries(flow.fields)) {
+      const el = root.querySelector(`[data-field="${key}"]`);
+      if (el && el.textContent !== value) el.textContent = value;
+    }
+    root.classList.toggle('state-fault', flow.off_grid);
+    const upd = root.querySelector('[data-role="updated"]');
+    if (upd) { upd.dataset.ts = flow.updated_at; upd.textContent = ago(flow.updated_at); }
+    root.querySelector('[data-role="stale"]')?.remove();
+  }
+}
+
 function announceAlerts(items) {
   const region = document.getElementById('live-alerts');
   if (!region) return;
@@ -112,6 +127,7 @@ function initLive() {
       if (chart.dataset.device === String(card.id)) chart.load();
     }
   });
+  es.addEventListener('gateway', (e) => applyFlow(JSON.parse(e.data)));
   es.addEventListener('alerts', (e) => announceAlerts(JSON.parse(e.data)));
 }
 

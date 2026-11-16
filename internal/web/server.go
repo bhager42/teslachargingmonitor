@@ -172,7 +172,7 @@ func (s *Server) loadAssets() error {
 	maps.Copy(funcs, tr.Funcs())
 	s.pages = map[string]*template.Template{}
 	for _, p := range []string{"login", "setup", "setup_closed", "home", "security", "about", "error", "device",
-		"devices", "device_form", "alerts", "rule", "notifications", "channel", "settings", "diagnostics", "costs", "energy", "digest", "gateway"} {
+		"devices", "device_form", "alerts", "rule", "notifications", "channel", "settings", "diagnostics", "costs", "energy", "digest", "gateway", "solar"} {
 		t, err := template.New(p).Funcs(funcs).ParseFS(webui.Templates, "templates/layout.html", "templates/"+p+".html")
 		if err != nil {
 			return fmt.Errorf("web: parsing %s template: %w", p, err)
@@ -228,6 +228,7 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("POST /settings/heartbeat", s.authed(s.saveHeartbeat))
 	mux.Handle("GET /diagnostics", s.authed(s.diagnostics))
 	mux.Handle("GET /costs", s.authed(s.costsPage))
+	mux.Handle("GET /solar", s.authed(s.solarPage))
 	mux.Handle("GET /costs/{kind}", s.authed(s.costsCSV))
 	mux.Handle("GET /settings/gateway", s.authed(s.gatewayPage))
 	mux.Handle("POST /settings/gateway", s.authed(s.saveGateway))

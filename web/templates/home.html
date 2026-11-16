@@ -7,7 +7,7 @@ Copyright (C) 2026 Brad Hager and contributors
   <h1>{{t "home.title"}}</h1>
   <a class="button secondary" href="/settings/devices/new">{{t "common.add_wall_connector"}}</a>
 </div>
-{{- if not .Cards}}
+{{- if and (not .Cards) (not .Flows)}}
 <section class="card empty">
   <h2>{{t "home.empty_title"}}</h2>
   <p>{{t "home.empty_body"}}</p>
@@ -15,6 +15,22 @@ Copyright (C) 2026 Brad Hager and contributors
 </section>
 {{- end}}
 <div class="cards" data-live>
+{{- range .Flows}}
+{{- $f := .}}
+<article class="card flow{{if .OffGrid}} state-fault{{end}}" data-gateway-id="{{.ID}}" aria-labelledby="gw-{{.ID}}-name">
+  <header class="device-head">
+    <h2 id="gw-{{.ID}}-name"><a href="/solar">{{.Name}}</a></h2>
+  </header>
+  <dl class="fields">
+  {{- range $.FlowFields}}
+    <div><dt>{{.Label}}</dt><dd data-field="{{.Key}}">{{index $f.Fields .Key}}</dd></div>
+  {{- end}}
+  </dl>
+  <footer class="device-foot">
+    <p class="hint">{{t "home.updated"}} <span data-role="updated" data-ts="{{if not .UpdatedAt.IsZero}}{{.UpdatedAt.Format "2006-01-02T15:04:05Z07:00"}}{{end}}">{{.Updated}}</span>{{if .Stale}} <span class="badge sev-warning" data-role="stale">{{t "home.stale"}}</span>{{end}}</p>
+  </footer>
+</article>
+{{- end}}
 {{- range .Cards}}
 {{- $c := .}}
 <article class="card device state-{{.StateClass}}" data-device-id="{{.ID}}" aria-labelledby="dev-{{.ID}}-name">

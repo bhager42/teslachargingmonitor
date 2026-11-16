@@ -6,10 +6,12 @@ import { BASE_URL } from '../playwright.config.mjs';
 
 const PASSWORD = 'purple otter kayak sunrise';
 const SIM = 'http://127.0.0.1:18099';
+const GWSIM = 'https://127.0.0.1:18098';
 const PAGES = ['/', '/devices/1', '/alerts', '/alerts/rules/handle_temp_high', '/notifications', '/notifications/new',
   '/notifications/digest', '/notifications/digest?period=monthly',
   '/settings', '/settings/devices', '/settings/devices/new', '/settings/devices/1', '/settings/security', '/settings/gateway',
-  '/diagnostics', '/about', '/costs', '/costs?period=month', '/costs?period=year', '/settings/energy'];
+  '/diagnostics', '/about', '/costs', '/costs?period=month', '/costs?period=year', '/settings/energy',
+  '/solar', '/solar?period=month'];
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 // Collects CSP / Trusted Types violations and script errors.
@@ -105,6 +107,28 @@ test('dashboard updates live over SSE after a poll, without reloading', async ({
   expect(problems).toEqual([]);
 });
 
+test('the power-flow card updates live over SSE after a Gateway poll, without reloading', async ({ page }) => {
+  const problems = watch(page);
+  await page.goto('/');
+  const solar = page.locator('[data-gateway-id="1"] [data-field="solar"]');
+  await expect(solar).not.toHaveText('–');
+  await page.evaluate(() => { window.__marker = 'same page'; });
+  await page.request.post(`${GWSIM}/_sim/scenario`, { form: { name: 'night' } });
+  const csrf = await page.locator('input[name="csrf_token"]').first().inputValue();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await page.request.post('/settings/gateway/poll', {
+      form: { csrf_token: csrf }, headers: { 'Sec-Fetch-Site': 'same-origin', Origin: BASE_URL }, maxRedirects: 0,
+    });
+    if (!(res.headers().location ?? '').includes('poll-limited')) break;
+    await page.waitForTimeout(11_000);
+  }
+  await expect(solar).toHaveText('0 W', { timeout: 20_000 });
+  await expect(page.locator('[data-gateway-id="1"] [data-field="powerwall"]')).toHaveText(/^supplying/);
+  expect(await page.evaluate(() => window.__marker)).toBe('same page');
+  await page.request.post(`${GWSIM}/_sim/scenario`, { form: { name: 'day' } });
+  expect(problems).toEqual([]);
+});
+
 test('device charts redraw live after a poll, without reloading', async ({ page }) => {
   const problems = watch(page);
   await page.goto('/devices/1');
@@ -127,7 +151,7 @@ test('device charts redraw live after a poll, without reloading', async ({ page 
 test('works at 320 px wide without horizontal scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   for (const path of ['/', '/devices/1', '/alerts', '/notifications/new', '/settings', '/settings/devices/1', '/diagnostics',
-    '/costs', '/settings/energy', '/settings/gateway']) {
+    '/costs', '/settings/energy', '/settings/gateway', '/solar']) {
     await page.goto(path);
     await settle(page, path);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
