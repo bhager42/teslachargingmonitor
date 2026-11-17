@@ -19,7 +19,8 @@ particular §16, "Working rules") before opening a pull request.
   (use the comment syntax of the file type). `make headers` checks this.
 - **No personal identifiers:** never commit real serial numbers, MAC
   addresses, SSIDs, IP addresses, passwords or keys. Use
-  `scripts/capture.sh`, which redacts fixtures; `make test` verifies it.
+  `scripts/capture.sh`, `scripts/capture-gateway.sh` or
+  `tcmon fixture export`, which redact fixtures; `make test` verifies it.
 - **Dependencies:** prefer the Go standard library. A new dependency needs a
   one-line justification in the PR and must pass `make licenses` and
   `make vuln`.
