@@ -136,6 +136,8 @@ test('the power-flow card updates live over SSE after a Gateway poll, without re
   await expect(card).toHaveClass(/\bstate-grid\b/);
   await expect(card.locator('[data-role="mix-text"]')).toHaveText('40 % solar and Powerwall · 60 % grid');
   await expect(card.locator('[data-role="mix-grid"]')).toHaveAttribute('width', '60');
+  // Production and savings fill in live once there are two readings.
+  await expect(page.locator('[data-gateway-id="1"] [data-field="solar_week"]')).toHaveText(/^\d+\.\d kWh · saved \$\d+\.\d\d$/);
   expect(await page.evaluate(() => window.__marker)).toBe('same page');
   await page.request.post(`${GWSIM}/_sim/scenario`, { form: { name: 'day' } });
   expect(problems).toEqual([]);

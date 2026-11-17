@@ -12,6 +12,17 @@ Copyright (C) 2026 Brad Hager and contributors
   <h2 id="totals-title">{{t "costs.totals_title"}}</h2>
   <dl class="fields">{{range .Totals}}<div><dt>{{.K}}</dt><dd>{{.V}}</dd></div>{{end}}</dl>
 </section>
+{{- if .SolarRows}}
+<section class="card" aria-labelledby="solar-savings-title">
+  <h2 id="solar-savings-title">{{t "costs.solar_savings_title"}}</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th scope="col">{{t "costs.col_period"}}</th><th scope="col">{{t "costs.col_produced"}}</th>
+      {{- if .UsedAtHome}}<th scope="col">{{t "costs.col_used_at_home"}}</th>{{end}}<th scope="col">{{t "costs.col_saved"}}</th></tr></thead>
+    <tbody>{{range .SolarRows}}<tr><th scope="row">{{.Period}}</th><td>{{.Produced}}</td>{{if $.UsedAtHome}}<td>{{.Used}}</td>{{end}}<td>{{.Saved}}</td></tr>{{end}}</tbody>
+  </table></div>
+  <p class="hint">{{.SolarMethodHint}} <a href="/settings/energy#solar-savings">{{t "costs.solar_method_link"}}</a></p>
+</section>
+{{- end}}
 <section class="card" aria-labelledby="chart-title">
   <div class="page-head">
     <h2 id="chart-title">{{t "costs.chart_title" "period" .PeriodName}} <span class="hint">({{.PeriodLabel}})</span></h2>

@@ -60,6 +60,7 @@ var flashes = map[string]string{
 	"beat-removed":          "flash.beat_removed",
 	"rate-saved":            "flash.rate_saved",
 	"rate-deleted":          "flash.rate_deleted",
+	"solar-savings-saved":   "flash.solar_savings_saved",
 	"sessions-revoked":      "flash.sessions_revoked",
 	"signed-out":            "flash.signed_out",
 	"gateway-saved":         "flash.gateway_saved",

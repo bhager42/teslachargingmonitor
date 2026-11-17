@@ -30,6 +30,9 @@ Copyright (C) 2026 Brad Hager and contributors
   {{- range $.FlowFields}}
     <div><dt>{{.Label}}</dt><dd data-field="{{.Key}}">{{index $f.Fields .Key}}</dd></div>
   {{- end}}
+  {{- range $.SolarFields}}
+    <div><dt>{{.Label}}</dt><dd data-field="{{.Key}}">{{index $f.Fields .Key}}</dd></div>
+  {{- end}}
   </dl>
   <footer class="device-foot">
     <p class="hint">{{t "home.updated"}} <span data-role="updated" data-ts="{{if not .UpdatedAt.IsZero}}{{.UpdatedAt.Format "2006-01-02T15:04:05Z07:00"}}{{end}}">{{.Updated}}</span>{{if .Stale}} <span class="badge sev-warning" data-role="stale">{{t "home.stale"}}</span>{{end}}</p>

@@ -239,6 +239,7 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("GET /settings/energy", s.authed(s.energyPage))
 	mux.Handle("POST /settings/energy", s.authed(s.saveEnergy))
 	mux.Handle("POST /settings/energy/{id}/delete", s.authed(s.deleteRate))
+	mux.Handle("POST /settings/energy/solar", s.authed(s.saveSolarSavings))
 	mux.Handle("GET /about", s.authed(s.about))
 	mux.Handle("GET /settings/security", s.authed(s.securityPage))
 	mux.Handle("POST /settings/password", s.authed(s.changePassword))

@@ -22,6 +22,10 @@ type SiteInterval struct {
 	ExportWh    float64 // to the grid
 	ChargeWh    float64 // into the Powerwalls
 	DischargeWh float64 // out of the Powerwalls
+	// Set by Plan.SolarSavings: the solar energy counted as savings and
+	// what it would have cost from the grid.
+	SavedWh float64
+	Savings float64
 }
 
 // Mid is the interval's midpoint, used to assign it to a period.
@@ -54,6 +58,7 @@ type SiteBucket struct {
 	Start                                   time.Time
 	SolarKWh, HomeKWh, ImportKWh, ExportKWh float64
 	ChargeKWh, DischargeKWh                 float64
+	SavedKWh, Savings                       float64 // see Plan.SolarSavings
 }
 
 func (b *SiteBucket) add(x SiteInterval) {
@@ -63,6 +68,8 @@ func (b *SiteBucket) add(x SiteInterval) {
 	b.ExportKWh += x.ExportWh / 1000
 	b.ChargeKWh += x.ChargeWh / 1000
 	b.DischargeKWh += x.DischargeWh / 1000
+	b.SavedKWh += x.SavedWh / 1000
+	b.Savings += x.Savings
 }
 
 // SelfConsumption is the share of solar used on site (by the home or the

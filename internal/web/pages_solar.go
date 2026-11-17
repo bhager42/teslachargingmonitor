@@ -123,6 +123,9 @@ func (s *Server) flowFor(ctx context.Context, g store.Gateway) PowerFlow {
 	for _, f := range FlowFields {
 		pf.Fields[f.Key] = "–"
 	}
+	for _, f := range SolarFields {
+		pf.Fields[f.Key] = "–"
+	}
 	pf.Updated = tr.T("time.never")
 	r, ok, err := s.st.LatestSiteReading(ctx, g.ID)
 	if err != nil || !ok {
@@ -143,6 +146,7 @@ func (s *Server) flowFor(ctx context.Context, g store.Gateway) PowerFlow {
 		pf.Fields["grid_status"], pf.OffGrid = tr.T("flow.grid_down"), true
 	}
 	pf.flowState(r)
+	s.solarProductionFields(ctx, &pf, now)
 	if w, at, err := s.st.ChargingPowerW(ctx); err == nil && !at.IsZero() {
 		pf.Fields["car"] = fmtPower(w)
 	}

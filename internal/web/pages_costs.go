@@ -25,6 +25,9 @@ import (
 // CostSettings are display preferences for money.
 type CostSettings struct {
 	Currency string `json:"currency"`
+	// SolarSavings is how solar savings are counted (D28); empty in
+	// settings saved before it existed, which means SavingsUsedAtHome.
+	SolarSavings energy.SavingsMethod `json:"solar_savings,omitempty"`
 }
 
 const costKey = "cost"
@@ -34,6 +37,9 @@ func (s *Server) costSettings(ctx context.Context) CostSettings {
 	_ = s.st.GetSetting(ctx, costKey, &c)
 	if c.Currency == "" {
 		c.Currency = "$"
+	}
+	if !c.SolarSavings.Valid() {
+		c.SolarSavings = energy.SavingsUsedAtHome
 	}
 	return c
 }
@@ -204,6 +210,11 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 	}
 
 	hasSolar, _ := s.st.HasGateway(ctx)
+	var solarRows []solarSavingsRow
+	method := s.costSettings(ctx).SolarSavings
+	if hasSolar {
+		solarRows = s.solarSavingsRows(ctx, p, cur, now)
+	}
 	monthStart := p.Start(energy.Month, now)
 	lastMonth := p.Start(energy.Month, monthStart.Add(-time.Hour))
 	yearStart := time.Date(now.In(p.Loc).Year(), 1, 1, 0, 0, 0, 0, p.Loc)
@@ -291,7 +302,8 @@ func (s *Server) costsPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 	s.render(w, r, http.StatusOK, "costs", s.base(page{"Title": tr.T("costs.title"), "Totals": totals, "Bars": bars,
 		"Rows": rows, "Summary": summary, "Periods": periods, "Period": sel.Key, "PeriodName": sel.Name, "PeriodLabel": sel.Label,
 		"Sessions": sessions, "Rate": rateText, "TZ": time.Local.String(), "ChartW": W, "ChartH": H, "Solar": hasSolar,
-		"Baseline": H - bottom, "LabelY": H - 6}, sess, "costs"))
+		"Baseline": H - bottom, "LabelY": H - 6, "SolarRows": solarRows, "UsedAtHome": method == energy.SavingsUsedAtHome,
+		"SolarMethodHint": savingsText[method].Costs}, sess, "costs"))
 }
 
 func hhmm(min int) string { return fmt.Sprintf("%02d:%02d", min/60, min%60) }
@@ -375,6 +387,8 @@ func (s *Server) renderEnergy(w http.ResponseWriter, r *http.Request, sess auth.
 		p["Form"] = f
 	}
 	p["Title"], p["Rates"], p["Default"] = tr.T("energy.page_title"), rows, len(rates) == 0
+	p["HasSolar"], _ = s.st.HasGateway(ctx)
+	p["SavingsChoices"] = savingsChoices(cs.SolarSavings)
 	s.render(w, r, status, "energy", s.base(p, sess, "settings"))
 }
 
@@ -434,7 +448,9 @@ func (s *Server) saveEnergy(w http.ResponseWriter, r *http.Request, sess auth.Se
 		fail(err.Error())
 		return
 	}
-	if err := s.st.SetSetting(ctx, costKey, CostSettings{Currency: cur}, s.now()); err != nil {
+	cs := s.costSettings(ctx)
+	cs.Currency = cur
+	if err := s.st.SetSetting(ctx, costKey, cs, s.now()); err != nil {
 		fail(tr.T("energy.err_save_currency"))
 		return
 	}
