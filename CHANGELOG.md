@@ -6,6 +6,19 @@ and the project uses [Semantic Versioning](https://semver.org/). Container
 images for every release are at `ghcr.io/bhager42/teslachargingmonitor`,
 signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
+## [1.5.2] - 2026-11-17
+
+No change to the app itself; this release adds real-hardware test data.
+
+### Added
+- Test fixtures from the owner's hardware, exported with `tcmon fixture
+  export`: Universal Wall Connector firmware 26.34.0 while charging and
+  while plugged in after charging, and Backup Gateway firmware 26.34.2 at
+  night with the Powerwalls at the backup reserve.
+- Tests that these real captures raise no default alerts and that the
+  dashboard shows the night capture as *Using grid* and the midday one as
+  *Self-powered*.
+
 ## [1.5.1] - 2026-11-17
 
 ### Fixed
@@ -248,6 +261,7 @@ First published release.
   shell, signed with cosign, with SBOM and provenance. Install guides for
   TrueNAS SCALE 25.10+ and Docker/Podman.
 
+[1.5.2]: https://github.com/bhager42/teslachargingmonitor/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.4.0...v1.4.1
