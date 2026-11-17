@@ -6,6 +6,17 @@ and the project uses [Semantic Versioning](https://semver.org/). Container
 images for every release are at `ghcr.io/bhager42/teslachargingmonitor`,
 signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
+## [1.5.1] - 2026-11-17
+
+### Fixed
+- A Wall Connector or Gateway saved in the web UI in the first moment
+  after tcmon started could stop being polled until the next restart.
+
+### Changed
+- Dependency updates: `golang.org/x/crypto` 0.59.0, `golang.org/x/text`
+  0.44.0, `modernc.org/sqlite` 1.62.0; Playwright 1.65.1 for the browser
+  tests (not in the image).
+
 ## [1.5.0] - 2026-11-17
 
 ### Added
@@ -237,6 +248,7 @@ First published release.
   shell, signed with cosign, with SBOM and provenance. Install guides for
   TrueNAS SCALE 25.10+ and Docker/Podman.
 
+[1.5.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.3.1...v1.4.0
