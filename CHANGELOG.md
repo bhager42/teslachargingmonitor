@@ -21,9 +21,6 @@ signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
   net metering). Energy is priced at your rate when it was produced or
   used, off-peak included. See [docs/SOLAR.md](docs/SOLAR.md).
 
-### Fixed
-- Saving the electricity price no longer resets other cost settings.
-
 ## [1.5.2] - 2026-11-17
 
 No change to the app itself; this release adds real-hardware test data.
