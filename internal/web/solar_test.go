@@ -31,6 +31,9 @@ func TestSolarPageAndPowerFlow(t *testing.T) {
 	if strings.Contains(home, `href="/solar"`) {
 		t.Error("Solar in the menu without a Gateway")
 	}
+	if strings.Count(home, `href="/settings/gateway"`) != 2 { // header and the empty-state card
+		t.Error("dashboard lacks the Add Solar Gateway buttons")
+	}
 	if status, body := f.get("/solar"); status != 200 || !strings.Contains(body, "No Solar Gateway yet") {
 		t.Fatalf("/solar without a Gateway = %d", status)
 	}
@@ -59,6 +62,9 @@ func TestSolarPageAndPowerFlow(t *testing.T) {
 	}
 
 	_, home = f.get("/")
+	if strings.Contains(home, "Add Solar Gateway") {
+		t.Error("Add Solar Gateway shown with a Gateway")
+	}
 	for _, want := range []string{`href="/solar"`, `data-gateway-id="1"`, "4.00 kW", "exporting 1.50 kW", "charging 1.00 kW",
 		"32 %", "connected"} {
 		if !strings.Contains(home, want) {
