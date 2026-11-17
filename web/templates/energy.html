@@ -33,6 +33,19 @@ Copyright (C) 2026 Brad Hager and contributors
   </details>
   <span></span><div class="actions"><button type="submit">{{t "energy.save"}}</button></div>
 </form>
+{{- if .HasSolar}}
+<form method="post" action="/settings/energy/solar" class="card" id="solar-savings" aria-labelledby="solar-savings-title">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <h2 id="solar-savings-title">{{t "energy.solar_title"}}</h2>
+  <fieldset><legend>{{t "energy.solar_legend"}}</legend>
+  {{- range .SavingsChoices}}
+    <label class="check"><input type="radio" name="solar_savings" value="{{.Value}}" {{if .Checked}}checked{{end}} aria-describedby="sm-{{.Value}}"> {{.Label}}</label>
+    <p class="hint" id="sm-{{.Value}}">{{.Hint}}</p>
+  {{- end}}
+  </fieldset>
+  <div class="actions"><button type="submit">{{t "energy.solar_save"}}</button></div>
+</form>
+{{- end}}
 {{- if .Rates}}
 <section class="card" aria-labelledby="history-title">
   <h2 id="history-title">{{t "energy.history_title"}}</h2>

@@ -1571,6 +1571,7 @@ Dockerfile  LICENSE  README.md  SECURITY.md  CONTRIBUTING.md  CLAUDE.md
 | D25 | Items 1, 5, 6, 15, 16 and 23 **deferred past 1.0**. | 2026-11-07 | Power-sharing view, a second alert channel, InfluxDB/Home Assistant/MQTT and the TrueNAS community catalog stay in Later / stretch; the install guides already cover the network and dataset choices. |
 | D26 | **Monthly summary email, optional** (off by default), alongside the weekly one. | 2026-11-15 | Same content as the weekly digest for the previous calendar month, sent on the 1st; costs include monthly fees. |
 | D27 | **Tesla Solar support** planned as **Phase 9**. Owner's system: **Powerwall 2 / Powerwall+ with Backup Gateway 2**. Data is read **locally only** from the Gateway (no Tesla cloud). Features: solar monitoring, solar-aware charging, solar alerts, solar in the summary emails. | 2026-11-15 | §1 goals and non-goals; Phase 9; open questions in §15.2. Amends D1: the Wall Connector is still the only charger. |
+| D28 | **Solar production and savings** on the dashboard (today, this week) and the Costs page (day, week, month, year, since tcmon started, Gateway lifetime), with a **selectable savings method**: solar used at home including Powerwall energy from solar (default), or all solar produced as with full net metering (the owner's plan). | 2026-11-17 | `energy.Plan.SolarSavings`; Settings → Energy cost. Amends the Phase 9 "Savings" paragraph for home-wide savings; charging savings are unchanged. A separate export rate is not modelled. |
 
 ### 15.1 Status of the original questions
 

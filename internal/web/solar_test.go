@@ -11,11 +11,14 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bhager42/teslachargingmonitor/internal/energy"
 	"github.com/bhager42/teslachargingmonitor/internal/gateway"
 	"github.com/bhager42/teslachargingmonitor/internal/poller"
 	"github.com/bhager42/teslachargingmonitor/internal/store"
@@ -93,6 +96,44 @@ func TestSolarPageAndPowerFlow(t *testing.T) {
 		if status, _ := f.get(p); status != 200 {
 			t.Errorf("%s = %d", p, status)
 		}
+	}
+
+	// Production and savings: 8 kWh solar, of which 3 kWh used at home
+	// (2 kWh is still in the Powerwalls, 3 kWh exported), at $0.20/kWh.
+	if _, err := f.st.AddRate(ctx, energy.Rate{Price: 0.20, EffectiveFrom: time.Unix(0, 0)}, now); err != nil {
+		t.Fatal(err)
+	}
+	_, home = f.get("/")
+	if !strings.Contains(home, "Solar today") || !regexp.MustCompile(`data-field="solar_week">\d+\.\d kWh · saved \$\d+\.\d\d<`).MatchString(home) {
+		t.Error("dashboard lacks solar production and savings")
+	}
+	_, costs := f.get("/costs")
+	for _, want := range []string{"Solar production and savings", "Used at home kWh", "<td>8.0</td><td>3.0</td><td>$0.60</td>",
+		"Lifetime (Gateway meter)</th><td>40008.0</td>", "Exports earn nothing", `href="/settings/energy#solar-savings"`} {
+		if !strings.Contains(costs, want) {
+			t.Errorf("/costs missing %q", want)
+		}
+	}
+	if _, body := f.get("/settings/energy"); !strings.Contains(body, `value="used_at_home" checked`) {
+		t.Error("settings: used at home is not the default")
+	}
+	if r := f.post("/settings/energy/solar", url.Values{"solar_savings": {"everything"}}); r.StatusCode != 400 {
+		t.Errorf("bad method = %d", r.StatusCode)
+	}
+	if r := f.post("/settings/energy/solar", url.Values{"solar_savings": {"net_metering"}}); r.StatusCode != 303 {
+		t.Fatalf("save method = %d", r.StatusCode)
+	}
+	// Saving a rate keeps the method.
+	if r := f.post("/settings/energy", url.Values{"price": {"0.20"}, "currency": {"$"}, "apply_past": {"1"}}); r.StatusCode != 303 {
+		t.Fatalf("save rate = %d", r.StatusCode)
+	}
+	if _, body := f.get("/settings/energy"); !strings.Contains(body, `value="net_metering" checked`) {
+		t.Error("net metering not saved, or lost when a rate was saved")
+	}
+	_, costs = f.get("/costs")
+	if !strings.Contains(costs, "<td>8.0</td><td>$1.60</td>") || strings.Contains(costs, "Used at home kWh") ||
+		!strings.Contains(costs, "full net metering") {
+		t.Error("/costs with net metering")
 	}
 
 	// A Gateway poll publishes the card over SSE.

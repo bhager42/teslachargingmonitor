@@ -64,16 +64,32 @@ type SupplyInterval struct {
 // Powerwall; battery charging comes from solar, then from the grid. What
 // is left of each source supplied the home. Every result is ≥ 0.
 func HomeSupply(solar, gridImport, gridExport, charge, discharge float64) Supply {
+	return splitFlows(solar, gridImport, gridExport, charge, discharge).home
+}
+
+// flows is one interval's counter deltas assigned to sources, by the rules
+// HomeSupply describes.
+type flows struct {
+	home            Supply  // what supplied the home
+	chargeFromSolar float64 // into the Powerwalls from solar
+	chargeOther     float64 // into the Powerwalls from the grid (or unexplained)
+}
+
+func splitFlows(solar, gridImport, gridExport, charge, discharge float64) flows {
 	solar, gridImport, gridExport = max(solar, 0), max(gridImport, 0), max(gridExport, 0)
 	charge, discharge = max(charge, 0), max(discharge, 0)
 	exportFromSolar := min(gridExport, solar)
 	exportFromBattery := min(gridExport-exportFromSolar, discharge)
 	chargeFromSolar := min(charge, solar-exportFromSolar)
 	chargeFromGrid := min(charge-chargeFromSolar, gridImport)
-	return Supply{
-		Solar:   solar - exportFromSolar - chargeFromSolar,
-		Battery: discharge - exportFromBattery,
-		Grid:    gridImport - chargeFromGrid,
+	return flows{
+		home: Supply{
+			Solar:   solar - exportFromSolar - chargeFromSolar,
+			Battery: discharge - exportFromBattery,
+			Grid:    gridImport - chargeFromGrid,
+		},
+		chargeFromSolar: chargeFromSolar,
+		chargeOther:     charge - chargeFromSolar,
 	}
 }
 

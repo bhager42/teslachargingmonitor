@@ -82,7 +82,8 @@ file, never from an argument). Run `tcmon gateway` for details.
 
 - **Dashboard:** a live card with solar, home, car charging, grid
   (importing or exporting), Powerwall (charging or supplying), battery %
-  and grid status.
+  and grid status, plus the solar produced today and this week and the
+  money it saved.
 - **Solar page:**
   - Totals for today, this month, this year and all time: solar produced,
     home use, grid import and export, how much solar was used on site,
@@ -96,6 +97,21 @@ file, never from an argument). Run `tcmon gateway` for details.
   set aside. Powerwall energy is not counted as savings, because the
   batteries may have charged from the grid. Export credits are not
   included. The CSV downloads gain the same columns.
+- **Costs page, solar production and savings:** solar produced and the
+  money it saved today, this week, this month, this year and since tcmon
+  started, and the Gateway meter's lifetime production (tcmon cannot
+  price energy from before it started). Under **Settings → Energy cost →
+  Solar savings**, choose how savings are counted:
+  - **Solar used at home** (the default): solar the home used directly,
+    plus Powerwall energy estimated to have come from solar. tcmon tracks
+    how much of what is stored in the Powerwalls was charged from solar
+    and how much from the grid, and counts each discharge in that
+    proportion. Exports earn nothing.
+  - **All solar produced (net metering)**: every solar kWh, as if exports
+    were credited at the full retail rate.
+
+  Either way, energy is priced at your electricity rate when it was
+  produced or used, off-peak prices included.
 - **Alerts:**
   - Grid outage, with a notice when the grid is back.
   - Powerwall battery low, below 20 % by default; a warning during an
