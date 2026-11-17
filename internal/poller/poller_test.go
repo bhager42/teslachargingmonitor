@@ -263,6 +263,28 @@ func TestNoGoroutineLeak(t *testing.T) {
 
 // Regression: Reload from a short-lived (HTTP request) context must not tie
 // the worker's lifetime to that context.
+// A Reload that lands before Run has recorded its context (a GUI edit at
+// startup) must not tie the worker to the request: this ordering made
+// TestReloadFromShortLivedContext flaky under -race.
+func TestReloadBeforeRun(t *testing.T) {
+	h := newHarness(t, "idle")
+	cfg := fastConfig()
+	cfg.IntervalOverride = 50 * time.Millisecond
+	m := New(h.st, cfg)
+	ch, unsub := m.Subscribe(8)
+	defer unsub()
+	h.addDevice(t)
+	reqCtx, cancel := context.WithCancel(context.Background())
+	if err := m.Reload(reqCtx); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	stop := run(t, m)
+	defer stop()
+	next(t, ch)
+	next(t, ch)
+}
+
 func TestReloadFromShortLivedContext(t *testing.T) {
 	h := newHarness(t, "idle")
 	cfg := fastConfig()

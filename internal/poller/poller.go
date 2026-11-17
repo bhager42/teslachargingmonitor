@@ -211,7 +211,11 @@ func (m *Manager) Sync(ctx context.Context) error {
 		if _, running := m.workers[id]; !running {
 			parent := m.runCtx
 			if parent == nil {
-				parent = ctx // Sync before Run (tests): use the caller's context
+				// Sync before Run has recorded its context (tests, or a
+				// GUI edit at startup): keep the caller's values but not
+				// its cancellation, which may be a finished HTTP request.
+				// Run's stopAll still stops the worker.
+				parent = context.WithoutCancel(ctx)
 			}
 			m.startLocked(parent, d)
 		}
