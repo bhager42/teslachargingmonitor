@@ -63,3 +63,14 @@ Copyright (C) 2026 Brad Hager and contributors
 </body>
 </html>
 {{- end}}
+{{- /* The power-flow card's state line and source bar (dashboard and Solar page). */ -}}
+{{define "flowstatus"}}<p class="state" data-role="state"><span class="dot" aria-hidden="true"></span><span data-role="state-text">{{.State}}</span></p>{{end}}
+{{define "flowbar"}}
+  <figure class="source-bar" data-role="mix"{{if not .MixKnown}} hidden{{end}}>
+    <svg viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true">
+      <rect class="seg-self" x="0" y="0" width="{{.SelfPct}}" height="4" data-role="mix-self"></rect>
+      <rect class="seg-grid" x="{{.SelfPct}}" y="0" width="{{.GridPct}}" height="4" data-role="mix-grid"></rect>
+    </svg>
+    <figcaption class="hint" data-role="mix-text">{{.Mix}}</figcaption>
+  </figure>
+{{- end}}

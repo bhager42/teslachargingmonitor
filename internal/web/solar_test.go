@@ -65,6 +65,12 @@ func TestSolarPageAndPowerFlow(t *testing.T) {
 	if strings.Contains(home, "Add Solar Gateway") {
 		t.Error("Add Solar Gateway shown with a Gateway")
 	}
+	for _, want := range []string{"state-exporting", "Exporting to grid", `class="seg-self" x="0" y="0" width="100"`,
+		"100 % solar and Powerwall · 0 % grid"} {
+		if !strings.Contains(home, want) {
+			t.Errorf("dashboard missing %q", want)
+		}
+	}
 	for _, want := range []string{`href="/solar"`, `data-gateway-id="1"`, "4.00 kW", "exporting 1.50 kW", "charging 1.00 kW",
 		"32 %", "connected"} {
 		if !strings.Contains(home, want) {
@@ -100,5 +106,38 @@ func TestSolarPageAndPowerFlow(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("no gateway event")
+	}
+}
+
+// The power-flow card's state line and solar/grid split.
+func TestFlowState(t *testing.T) {
+	w := func(v float64) *float64 { return &v }
+	for _, tc := range []struct {
+		name       string
+		site, load *float64
+		offGrid    bool
+		state      string
+		class      string
+		known      bool
+		self, grid int
+	}{
+		{"importing", w(1500), w(6000), false, "Using grid", "grid", true, 75, 25},
+		{"all from grid", w(2000), w(2000), false, "Using grid", "grid", true, 0, 100},
+		{"more than load", w(2500), w(2000), false, "Using grid", "grid", true, 0, 100},
+		{"meter noise", w(30), w(2000), false, "Self-powered", "solar", true, 100, 0},
+		{"exporting", w(-1500), w(1500), false, "Exporting to grid", "exporting", true, 100, 0},
+		{"outage", w(0), w(900), true, "Grid outage", "fault", true, 100, 0},
+		{"no site meter", nil, w(900), false, "", "", false, 0, 0},
+		{"no load meter", w(500), nil, false, "Using grid", "grid", false, 0, 0},
+		{"no load", w(100), w(0), false, "Using grid", "grid", true, 100, 0},
+	} {
+		pf := PowerFlow{OffGrid: tc.offGrid}
+		pf.flowState(store.SiteReading{SiteW: tc.site, LoadW: tc.load})
+		if pf.State != tc.state || pf.StateClass != tc.class || pf.MixKnown != tc.known || pf.SelfPct != tc.self || pf.GridPct != tc.grid {
+			t.Errorf("%s: %+v", tc.name, pf)
+		}
+		if tc.known && pf.Mix == "" {
+			t.Errorf("%s: no mix text", tc.name)
+		}
 	}
 }

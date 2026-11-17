@@ -113,17 +113,29 @@ test('the power-flow card updates live over SSE after a Gateway poll, without re
   const solar = page.locator('[data-gateway-id="1"] [data-field="solar"]');
   await expect(solar).not.toHaveText('–');
   await page.evaluate(() => { window.__marker = 'same page'; });
-  await page.request.post(`${GWSIM}/_sim/scenario`, { form: { name: 'night' } });
   const csrf = await page.locator('input[name="csrf_token"]').first().inputValue();
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await page.request.post('/settings/gateway/poll', {
-      form: { csrf_token: csrf }, headers: { 'Sec-Fetch-Site': 'same-origin', Origin: BASE_URL }, maxRedirects: 0,
-    });
-    if (!(res.headers().location ?? '').includes('poll-limited')) break;
-    await page.waitForTimeout(11_000);
-  }
+  const pollAs = async (name) => {
+    await page.request.post(`${GWSIM}/_sim/scenario`, { form: { name } });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await page.request.post('/settings/gateway/poll', {
+        form: { csrf_token: csrf }, headers: { 'Sec-Fetch-Site': 'same-origin', Origin: BASE_URL }, maxRedirects: 0,
+      });
+      if (!(res.headers().location ?? '').includes('poll-limited')) break;
+      await page.waitForTimeout(11_000);
+    }
+  };
+  const card = page.locator('article[data-gateway-id="1"]');
+  await pollAs('night');
   await expect(solar).toHaveText('0 W', { timeout: 20_000 });
   await expect(page.locator('[data-gateway-id="1"] [data-field="powerwall"]')).toHaveText(/^supplying/);
+  await expect(card.locator('[data-role="state-text"]')).toHaveText('Self-powered');
+  await expect(card.locator('[data-role="mix-text"]')).toHaveText('100 % solar and Powerwall · 0 % grid');
+  // Overcast: the grid makes up 900 of the home's 1500 W.
+  await pollAs('cloudy');
+  await expect(card.locator('[data-role="state-text"]')).toHaveText('Using grid', { timeout: 30_000 });
+  await expect(card).toHaveClass(/\bstate-grid\b/);
+  await expect(card.locator('[data-role="mix-text"]')).toHaveText('40 % solar and Powerwall · 60 % grid');
+  await expect(card.locator('[data-role="mix-grid"]')).toHaveAttribute('width', '60');
   expect(await page.evaluate(() => window.__marker)).toBe('same page');
   await page.request.post(`${GWSIM}/_sim/scenario`, { form: { name: 'day' } });
   expect(problems).toEqual([]);

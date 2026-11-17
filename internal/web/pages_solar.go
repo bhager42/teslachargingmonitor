@@ -37,6 +37,47 @@ type PowerFlow struct {
 	UpdatedAt time.Time         `json:"updated_at"`
 	Stale     bool              `json:"stale"`
 	OffGrid   bool              `json:"off_grid"`
+	// State is a one-line summary like a Wall Connector's "Plugged in";
+	// StateClass (solar | exporting | grid | fault | unknown) colors it.
+	State      string `json:"state"`
+	StateClass string `json:"state_class"`
+	// SelfPct and GridPct split what the home (car included) uses right now
+	// between solar plus Powerwall and the grid, for the source bar
+	// (MixKnown false: no bar). Mix is the same as text.
+	MixKnown bool   `json:"mix_known"`
+	SelfPct  int    `json:"self_pct"`
+	GridPct  int    `json:"grid_pct"`
+	Mix      string `json:"mix"`
+}
+
+// gridIdleW is the grid power treated as neither importing nor exporting
+// (meter noise and the Powerwall's control margin).
+const gridIdleW = 50
+
+// flowState sets the card's state line and source split from a reading.
+func (pf *PowerFlow) flowState(r store.SiteReading) {
+	switch {
+	case pf.OffGrid:
+		pf.State, pf.StateClass = tr.T("flow.state_outage"), "fault"
+	case r.SiteW == nil:
+		return
+	case *r.SiteW > gridIdleW:
+		pf.State, pf.StateClass = tr.T("flow.state_grid"), "grid"
+	case *r.SiteW < -gridIdleW:
+		pf.State, pf.StateClass = tr.T("flow.state_exporting"), "exporting"
+	default:
+		pf.State, pf.StateClass = tr.T("flow.state_self"), "solar"
+	}
+	switch {
+	case r.SiteW == nil || r.LoadW == nil:
+		return
+	case *r.LoadW <= 0 || *r.SiteW <= gridIdleW:
+		pf.SelfPct = 100
+	default:
+		pf.SelfPct = int(math.Round(100 * math.Max(0, 1 - *r.SiteW / *r.LoadW)))
+	}
+	pf.GridPct, pf.MixKnown = 100-pf.SelfPct, true
+	pf.Mix = tr.T("flow.mix", "self", strconv.Itoa(pf.SelfPct), "grid", strconv.Itoa(pf.GridPct))
 }
 
 // FlowFields lists the power-flow card's fields, in order, with labels.
@@ -77,7 +118,8 @@ func orDash(v *float64, f func(float64) string) string {
 // flowFor builds the power-flow card from the latest stored reading.
 func (s *Server) flowFor(ctx context.Context, g store.Gateway) PowerFlow {
 	now := s.now()
-	pf := PowerFlow{ID: g.ID, Name: g.Name, Fields: map[string]string{}}
+	pf := PowerFlow{ID: g.ID, Name: g.Name, Fields: map[string]string{},
+		State: tr.T("state.waiting"), StateClass: "unknown"}
 	for _, f := range FlowFields {
 		pf.Fields[f.Key] = "–"
 	}
@@ -100,6 +142,7 @@ func (s *Server) flowFor(ctx context.Context, g store.Gateway) PowerFlow {
 	default:
 		pf.Fields["grid_status"], pf.OffGrid = tr.T("flow.grid_down"), true
 	}
+	pf.flowState(r)
 	if w, at, err := s.st.ChargingPowerW(ctx); err == nil && !at.IsZero() {
 		pf.Fields["car"] = fmtPower(w)
 	}
