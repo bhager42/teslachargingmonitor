@@ -6,7 +6,7 @@ and the project uses [Semantic Versioning](https://semver.org/). Container
 images for every release are at `ghcr.io/bhager42/teslachargingmonitor`,
 signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
-## [Unreleased]
+## [1.4.1] - 2026-11-16
 
 ### Added
 - `tcmon fixture export` writes a redacted copy of a stored Wall Connector
@@ -224,7 +224,7 @@ First published release.
   shell, signed with cosign, with SBOM and provenance. Install guides for
   TrueNAS SCALE 25.10+ and Docker/Podman.
 
-[Unreleased]: https://github.com/bhager42/teslachargingmonitor/compare/v1.4.0...HEAD
+[1.4.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.2.0...v1.3.0
