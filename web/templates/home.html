@@ -5,13 +5,16 @@ Copyright (C) 2026 Brad Hager and contributors
 {{define "content"}}
 <div class="page-head">
   <h1>{{t "home.title"}}</h1>
-  <a class="button secondary" href="/settings/devices/new">{{t "common.add_wall_connector"}}</a>
+  <div class="actions">
+    {{- if not .HasSolar}}<a class="button secondary" href="/settings/gateway">{{t "solar.add_gateway"}}</a>{{end}}
+    <a class="button secondary" href="/settings/devices/new">{{t "common.add_wall_connector"}}</a>
+  </div>
 </div>
 {{- if and (not .Cards) (not .Flows)}}
 <section class="card empty">
   <h2>{{t "home.empty_title"}}</h2>
   <p>{{t "home.empty_body"}}</p>
-  <p><a class="button" href="/settings/devices/new">{{t "common.add_wall_connector"}}</a></p>
+  <p><a class="button" href="/settings/devices/new">{{t "common.add_wall_connector"}}</a>{{if not .HasSolar}} <a class="button secondary" href="/settings/gateway">{{t "solar.add_gateway"}}</a>{{end}}</p>
 </section>
 {{- end}}
 <div class="cards" data-live>
