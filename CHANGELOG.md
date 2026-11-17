@@ -6,6 +6,19 @@ and the project uses [Semantic Versioning](https://semver.org/). Container
 images for every release are at `ghcr.io/bhager42/teslachargingmonitor`,
 signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
+## [1.5.0] - 2026-11-17
+
+### Added
+- **Dashboard status for solar and Powerwall:** the Solar Gateway card
+  shows a status line with a coloured dot, like a Wall Connector's
+  "Plugged in": *Self-powered* or *Exporting to grid* (green), *Using
+  grid* or *Grid outage* (red). Below it, a bar splits what the home (car
+  included) is using right now between solar plus Powerwall (green) and
+  the grid (red), with the percentages written out. Both update live, on
+  the dashboard and on the Solar page.
+- **Add Solar Gateway** button on the dashboard, next to *Add Wall
+  Connector*, until a Gateway is set up.
+
 ## [1.4.1] - 2026-11-16
 
 ### Added
@@ -224,6 +237,7 @@ First published release.
   shell, signed with cosign, with SBOM and provenance. Install guides for
   TrueNAS SCALE 25.10+ and Docker/Podman.
 
+[1.5.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.3.0...v1.3.1
