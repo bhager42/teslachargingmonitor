@@ -94,7 +94,19 @@ function applyFlow(flow) {
       const el = root.querySelector(`[data-field="${key}"]`);
       if (el && el.textContent !== value) el.textContent = value;
     }
-    root.classList.toggle('state-fault', flow.off_grid);
+    root.className = root.className.replace(/\bstate-\S+/, `state-${flow.state_class}`);
+    const st = root.querySelector('[data-role="state-text"]');
+    if (st) st.textContent = flow.state;
+    const mix = root.querySelector('[data-role="mix"]');
+    if (mix) {
+      mix.hidden = !flow.mix_known;
+      root.querySelector('[data-role="mix-self"]')?.setAttribute('width', flow.self_pct);
+      const grid = root.querySelector('[data-role="mix-grid"]');
+      grid?.setAttribute('x', flow.self_pct);
+      grid?.setAttribute('width', flow.grid_pct);
+      const text = root.querySelector('[data-role="mix-text"]');
+      if (text) text.textContent = flow.mix;
+    }
     const upd = root.querySelector('[data-role="updated"]');
     if (upd) { upd.dataset.ts = flow.updated_at; upd.textContent = ago(flow.updated_at); }
     root.querySelector('[data-role="stale"]')?.remove();

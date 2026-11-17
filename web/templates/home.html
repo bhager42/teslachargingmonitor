@@ -17,10 +17,12 @@ Copyright (C) 2026 Brad Hager and contributors
 <div class="cards" data-live>
 {{- range .Flows}}
 {{- $f := .}}
-<article class="card flow{{if .OffGrid}} state-fault{{end}}" data-gateway-id="{{.ID}}" aria-labelledby="gw-{{.ID}}-name">
+<article class="card flow state-{{.StateClass}}" data-gateway-id="{{.ID}}" aria-labelledby="gw-{{.ID}}-name">
   <header class="device-head">
     <h2 id="gw-{{.ID}}-name"><a href="/solar">{{.Name}}</a></h2>
+    {{template "flowstatus" .}}
   </header>
+  {{- template "flowbar" .}}
   <dl class="fields">
   {{- range $.FlowFields}}
     <div><dt>{{.Label}}</dt><dd data-field="{{.Key}}">{{index $f.Fields .Key}}</dd></div>

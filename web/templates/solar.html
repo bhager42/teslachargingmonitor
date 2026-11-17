@@ -13,8 +13,12 @@ Copyright (C) 2026 Brad Hager and contributors
 {{- else}}
 <p class="hint">{{t "solar.intro" "tz" .TZ}}</p>
 {{- with .Flow}}
-<section class="card{{if .OffGrid}} state-fault{{end}}" aria-labelledby="flow-now-title" data-live data-gateway-id="{{.ID}}">
-  <h2 id="flow-now-title">{{t "solar.now_title"}}</h2>
+<section class="card state-{{.StateClass}}" aria-labelledby="flow-now-title" data-live data-gateway-id="{{.ID}}">
+  <header class="device-head">
+    <h2 id="flow-now-title">{{t "solar.now_title"}}</h2>
+    {{template "flowstatus" .}}
+  </header>
+  {{- template "flowbar" .}}
   <dl class="fields">
   {{- range $.FlowFields}}
     <div><dt>{{.Label}}</dt><dd data-field="{{.Key}}">{{index $.Flow.Fields .Key}}</dd></div>

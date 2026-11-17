@@ -112,6 +112,12 @@
   .state-charging .dot { background: var(--ok); }
   .state-plugged .dot { background: var(--accent); }
   .state-fault .dot, .state-offline .dot { background: var(--danger); }
+  .state-solar .dot, .state-exporting .dot { background: var(--ok); }
+  .state-grid .dot { background: var(--danger); }
+  .source-bar { margin: 0; display: grid; gap: 0.25rem; }
+  .source-bar svg { display: block; inline-size: 100%; block-size: 0.6rem; border-radius: 0.3rem; }
+  .seg-self { fill: var(--ok); }
+  .seg-grid { fill: var(--danger); }
   .current-meter { inline-size: 100%; block-size: 0.6rem; }
   .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0.6rem 1rem; }
   .fields div { display: grid; }
@@ -179,6 +185,6 @@
   .empty { text-align: start; }
   main:focus { outline: none; }
   @media (prefers-contrast: more) { :root { --border: light-dark(#000, #fff); --muted: var(--text); } }
-  @media (forced-colors: active) { .dot, .chip[aria-pressed="true"] { forced-color-adjust: none; } }
+  @media (forced-colors: active) { .dot, .source-bar svg, .chip[aria-pressed="true"] { forced-color-adjust: none; } }
   @view-transition { navigation: auto; }
 }
