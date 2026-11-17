@@ -1,0 +1,32 @@
+{
+  "/api/meters/aggregates": {
+    "file": "meters_aggregates.night.json",
+    "status": 200
+  },
+  "/api/operation": {
+    "file": "operation.night.json",
+    "status": 200
+  },
+  "/api/sitemaster": {
+    "file": "sitemaster.night.json",
+    "status": 200
+  },
+  "/api/status": {
+    "file": "status.night.json",
+    "status": 200
+  },
+  "/api/system_status": {
+    "file": "system_status.night.json",
+    "status": 200
+  },
+  "/api/system_status/grid_status": {
+    "file": "system_status_grid_status.night.json",
+    "status": 200
+  },
+  "/api/system_status/soe": {
+    "file": "system_status_soe.night.json",
+    "status": 200
+  },
+  "polled_at": "2026-11-17T11:52:41Z",
+  "source": "tcmon fixture export"
+}
