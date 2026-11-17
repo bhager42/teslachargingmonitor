@@ -16,7 +16,7 @@
 // payload — so a firmware update that adds or renames a field degrades
 // gracefully and shows up in the app's diagnostics.
 //
-// Field names were verified against UWC firmware 26.26.10 (fixtures in
-// testdata/fixtures/uwc/). Charging-state values are not yet verified; see
+// Field names and values were verified against UWC firmware 26.26.10 and 26.34.0
+// (fixtures in testdata/fixtures/uwc/), idle, charging and plugged in; see
 // issue #1.
 package wallconnector

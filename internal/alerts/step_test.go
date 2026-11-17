@@ -439,7 +439,8 @@ func TestSeverityJSON(t *testing.T) {
 // enabled by default (issue #1: not_ready_reasons fired on every normal
 // charge, and later whenever a car sat plugged in after charging).
 func TestRealCapturesRaiseNoDefaultAlerts(t *testing.T) {
-	for _, name := range []string{"26.26.10/vitals.json", "26.26.10/vitals.charging.json", "26.34.0/vitals.plugged-idle.json"} {
+	for _, name := range []string{"26.26.10/vitals.json", "26.26.10/vitals.charging.json", "26.34.0/vitals.plugged-idle.json",
+		"26.34.0/vitals.charging.json", "26.34.0/vitals.plugged.json"} {
 		b, err := os.ReadFile("../../testdata/fixtures/uwc/" + name) //nolint:gosec // test fixture
 		if err != nil {
 			t.Fatal(err)

@@ -30,14 +30,14 @@ var (
 	evseStates = map[int]string{
 		1:  tr.T("code.evse_state_1"),  // UWC fw 26.26.10, unplugged
 		4:  tr.T("code.evse_state_4"),  // UWC fw 26.34.0, car plugged in, contactor open, 0 A
-		11: tr.T("code.evse_state_11"), // UWC fw 26.26.10, contactor closed, 47.4 A flowing
+		11: tr.T("code.evse_state_11"), // UWC fw 26.26.10 and 26.34.0, contactor closed, ~47.5 A flowing
 	}
 	configStatuses = map[int]string{
 		5: tr.T("code.config_status_5"), // UWC fw 26.26.10, normal commissioned unit
 	}
 	notReadyReasons = map[int]string{
 		// UWC fw 26.26.10 reports [2,4,8] while unplugged and [1] while
-		// charging normally; fw 26.34.0 reports [1] with a car plugged in
+		// charging normally; fw 26.34.0 reports [1] while charging and with a car plugged in
 		// but idle. Individual meanings are not yet known, so none are
 		// listed.
 	}
