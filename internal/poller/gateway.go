@@ -105,7 +105,7 @@ func (m *Manager) syncGatewaysLocked(ctx context.Context, gws []store.Gateway) {
 		}
 		parent := m.runCtx
 		if parent == nil {
-			parent = ctx
+			parent = context.WithoutCancel(ctx) // as in Sync
 		}
 		wctx, cancel := context.WithCancel(parent)
 		w := &gwWorker{gw: g, cancel: cancel, done: make(chan struct{}), trigger: make(chan struct{}, 1)}
