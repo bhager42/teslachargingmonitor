@@ -11,6 +11,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -138,6 +139,33 @@ func TestFlowState(t *testing.T) {
 		}
 		if tc.known && pf.Mix == "" {
 			t.Errorf("%s: no mix text", tc.name)
+		}
+	}
+}
+
+// The owner's real Gateway captures: midday, with solar charging the
+// Powerwalls, and night, with the Powerwalls held at the backup reserve so
+// the home runs from the grid.
+func TestFlowStateRealCaptures(t *testing.T) {
+	for _, tc := range []struct {
+		label, state string
+		self, grid   int
+	}{
+		{"day", "Self-powered", 100, 0},
+		{"night", "Using grid", 0, 100},
+	} {
+		b, err := os.ReadFile("../../testdata/fixtures/gateway/26.34.2/meters_aggregates." + tc.label + ".json") //nolint:gosec // test fixture
+		if err != nil {
+			t.Fatal(err)
+		}
+		a, rep, err := gateway.DecodeAggregates(b)
+		if err != nil || !rep.Clean() {
+			t.Fatalf("%s: err=%v report=%+v", tc.label, err, rep)
+		}
+		var pf PowerFlow
+		pf.flowState(store.SiteReading{SiteW: &a.Site.InstantPower, LoadW: &a.Load.InstantPower})
+		if pf.State != tc.state || !pf.MixKnown || pf.SelfPct != tc.self || pf.GridPct != tc.grid {
+			t.Errorf("%s: %+v", tc.label, pf)
 		}
 	}
 }

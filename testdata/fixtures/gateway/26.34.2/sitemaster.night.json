@@ -1,0 +1,7 @@
+{
+  "can_reboot": "Solar production hours",
+  "connected_to_tesla": false,
+  "power_supply_mode": false,
+  "running": true,
+  "status": "StatusUp"
+}
