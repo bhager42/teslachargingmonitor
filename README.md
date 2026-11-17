@@ -5,7 +5,7 @@ Connector**, and optionally a **Powerwall 2 / Powerwall+** solar system
 through its Backup Gateway, packaged as a small, hardened container for
 **TrueNAS SCALE 25.10+** or any Docker host.
 
-> **Status: v1.4.0.** Polling, alerts, Gmail email, the HTTPS web UI (live
+> **Status: v1.4.1.** Polling, alerts, Gmail email, the HTTPS web UI (live
 > dashboard, charts, alert rules, settings, diagnostics), charging costs,
 > the optional weekly and monthly summaries and dead-man's-switch ping all
 > work, and everything is configured in the browser, including the Wall
