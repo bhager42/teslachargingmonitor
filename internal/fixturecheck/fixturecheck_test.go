@@ -9,26 +9,18 @@
 package fixturecheck
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"io/fs"
-	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/bhager42/teslachargingmonitor/internal/fixtureexport"
 	"github.com/bhager42/teslachargingmonitor/internal/gateway/redact"
 )
 
 const fixturesDir = "../../testdata/fixtures"
-
-// Placeholders that scripts/capture.sh writes in place of identifiers.
-const (
-	redactedSerial = "REDACTED00000"
-	redactedMAC    = "02:00:00:00:00:00"
-	redactedSSID   = "REDACTED"
-)
 
 func fixtureFiles(t *testing.T) []string {
 	t.Helper()
@@ -81,24 +73,8 @@ func TestFixturesAreRedactedJSON(t *testing.T) {
 			if !ok {
 				t.Fatal("Wall Connector fixture is not a JSON object")
 			}
-			if v, ok := doc["serial_number"]; ok && v != redactedSerial {
-				t.Errorf("serial_number %q is not redacted (want %q)", v, redactedSerial)
-			}
-			if v, ok := doc["wifi_mac"]; ok && v != redactedMAC {
-				t.Errorf("wifi_mac %q is not redacted (want %q)", v, redactedMAC)
-			}
-			if v, ok := doc["wifi_ssid"].(string); ok {
-				dec, err := base64.StdEncoding.DecodeString(v)
-				if err != nil || string(dec) != redactedSSID {
-					t.Errorf("wifi_ssid %q is not the redacted placeholder", v)
-				}
-			}
-			if v, ok := doc["wifi_infra_ip"].(string); ok {
-				addr, err := netip.ParseAddr(v)
-				testNet := netip.MustParsePrefix("192.0.2.0/24") // RFC 5737 TEST-NET-1
-				if err != nil || !testNet.Contains(addr) {
-					t.Errorf("wifi_infra_ip %q must be in 192.0.2.0/24 (documentation range)", v)
-				}
+			for _, p := range fixtureexport.CheckWallConnector(doc) {
+				t.Error(p)
 			}
 		})
 	}

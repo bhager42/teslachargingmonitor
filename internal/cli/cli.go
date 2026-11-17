@@ -61,6 +61,8 @@ func Run(ctx context.Context, args []string, env Env) int {
 		return runNotify(ctx, rest, env)
 	case "gateway":
 		return runGateway(ctx, rest, env)
+	case "fixture":
+		return runFixture(ctx, rest, env)
 	case "backup":
 		return runBackup(ctx, rest, env)
 	case "migrate":
@@ -93,6 +95,7 @@ Commands:
   notify    Manage email notifications (add-email, update, list, test, remove, log)
   gateway   Manage the Tesla Backup Gateway for Powerwall and solar data
             (fingerprint, add, list, accept-cert, remove)
+  fixture   Export a stored poll as redacted test fixtures (fixture export)
   backup    Write a consistent copy of the database
   migrate   Apply database migrations and print the schema version
   version   Print version, license and source-code information

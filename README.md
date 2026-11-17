@@ -167,6 +167,19 @@ scripts/capture.sh 192.168.1.50            # idle
 scripts/capture.sh 192.168.1.50 charging   # while a car is charging
 ```
 
+Or export a poll that a running tcmon already stored (kept for the
+raw-payload retention period, 90 days by default), redacted the same way:
+
+```bash
+docker exec tcmon /tcmon fixture export -device 1 -when charging
+docker exec tcmon /tcmon fixture export -gateway 1 -when off-grid
+```
+
+The files land in `fixtures/` in the data directory, laid out like
+`testdata/fixtures`. `-when` takes `latest`, `charging` or `plugged` for a
+Wall Connector and `latest`, `charging`, `night` or `off-grid` for a
+Gateway; `-before 2026-11-20T03:00:00Z` picks an older poll.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
 
 ## Security

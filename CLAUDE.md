@@ -22,6 +22,8 @@ Gen 3 Wall Connector best-effort), licensed under AGPL-3.0-or-later.
 - `scripts/capture.sh <ip> [label]` — capture redacted Wall Connector fixtures
 - `scripts/capture-gateway.sh <ip> [label]` — capture redacted Backup Gateway fixtures (prompts for the
   customer password; logs in once, never retries — the Gateway locks out repeated failures)
+- `tcmon fixture export (-device ID | -gateway ID) -when <kind>` — export a poll a running tcmon already
+  stored (raw payloads, 90 days) as redacted fixtures into `<data-dir>/fixtures`; no live capture or login
 - `make sim SCENARIO=<name> SPEED=<x>` — run the Wall Connector simulator (`internal/wcsim`);
   `bin/gwsim` (built by `make build`) runs the Backup Gateway simulator over HTTPS (`internal/gwsim`)
 - `make soak SOAK_POLLS=3000` — leak/soak test of the poller against the simulator
