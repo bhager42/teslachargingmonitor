@@ -6,6 +6,24 @@ and the project uses [Semantic Versioning](https://semver.org/). Container
 images for every release are at `ghcr.io/bhager42/teslachargingmonitor`,
 signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
+## [1.6.0] - 2026-11-17
+
+### Added
+- **Solar production and savings.** The dashboard's Solar Gateway card
+  shows the solar produced today and this week and the money it saved,
+  updated live. The Costs page adds a *Solar production and savings*
+  table: today, this week, this month, this year, since tcmon started,
+  and the Gateway meter's lifetime production.
+- **Settings → Energy cost → Solar savings** chooses how savings are
+  counted: *Solar used at home* (the default: solar the home used
+  directly, plus Powerwall energy estimated to have come from solar;
+  exports earn nothing) or *All solar produced* (every kWh, as with full
+  net metering). Energy is priced at your rate when it was produced or
+  used, off-peak included. See [docs/SOLAR.md](docs/SOLAR.md).
+
+### Fixed
+- Saving the electricity price no longer resets other cost settings.
+
 ## [1.5.2] - 2026-11-17
 
 No change to the app itself; this release adds real-hardware test data.
@@ -261,6 +279,7 @@ First published release.
   shell, signed with cosign, with SBOM and provenance. Install guides for
   TrueNAS SCALE 25.10+ and Docker/Podman.
 
+[1.6.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.5.2...v1.6.0
 [1.5.2]: https://github.com/bhager42/teslachargingmonitor/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.4.1...v1.5.0
