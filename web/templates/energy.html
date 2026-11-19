@@ -37,7 +37,7 @@ Copyright (C) 2026 Brad Hager and contributors
 <form method="post" action="/settings/energy/solar" class="card" id="solar-savings" aria-labelledby="solar-savings-title">
   <input type="hidden" name="csrf_token" value="{{.CSRF}}">
   <h2 id="solar-savings-title">{{t "energy.solar_title"}}</h2>
-  <fieldset><legend>{{t "energy.solar_legend"}}</legend>
+  <fieldset class="choices"><legend>{{t "energy.solar_legend"}}</legend>
   {{- range .SavingsChoices}}
     <label class="check"><input type="radio" name="solar_savings" value="{{.Value}}" {{if .Checked}}checked{{end}} aria-describedby="sm-{{.Value}}"> {{.Label}}</label>
     <p class="hint" id="sm-{{.Value}}">{{.Hint}}</p>

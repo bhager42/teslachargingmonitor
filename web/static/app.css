@@ -62,7 +62,7 @@
   form.inline { display: inline; }
   label { font-weight: 600; }
   label.check { font-weight: 400; display: flex; gap: 0.5rem; align-items: center; }
-  input:not([type="checkbox"]) {
+  input:not([type="checkbox"], [type="radio"]) {
     font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border);
     border-radius: calc(var(--radius) / 1.5); padding: 0.55rem 0.7rem; min-block-size: 44px; width: 100%;
   }
@@ -72,6 +72,7 @@
   }
   button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
   button.link { background: none; color: var(--accent); padding: 0; min-block-size: 24px; text-decoration: underline; }
+  input[type="checkbox"], input[type="radio"] { inline-size: 1.25rem; block-size: 1.25rem; margin: 0; flex: none; accent-color: var(--accent); }
   .hint { color: var(--muted); font-size: 0.9rem; }
   .error, .flash, .banner { padding: 0.6rem 0.8rem; border-radius: calc(var(--radius) / 1.5); border: 1px solid; }
   .error, .banner-danger { color: var(--danger); border-color: var(--danger); }
@@ -177,7 +178,9 @@
   .retention .days { width: 7rem; }
   fieldset { border: 0; padding: 0; margin: 0 0 0.5rem; }
   .radio-row { display: flex; gap: 1rem; align-items: center; }
-  .radio-row legend { font-weight: 600; float: inline-start; margin-inline-end: 1rem; }
+  legend { font-weight: 600; margin-block-end: 0.5rem; }
+  .choices .hint { margin: 0.15rem 0 0.75rem 1.75rem; }
+  .radio-row legend { font-weight: 600; float: inline-start; margin-inline-end: 1rem; margin-block-end: 0; }
   .error-text { color: var(--danger); }
   .live-alerts:empty { display: none; }
   .live-alerts { position: sticky; top: 0.5rem; z-index: 5; }
