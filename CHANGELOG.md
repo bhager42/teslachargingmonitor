@@ -6,6 +6,14 @@ and the project uses [Semantic Versioning](https://semver.org/). Container
 images for every release are at `ghcr.io/bhager42/teslachargingmonitor`,
 signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
+## [1.6.1] - 2026-11-19
+
+### Fixed
+- Radio buttons were drawn as wide, padded boxes with the label pushed to
+  the far edge. This affected *Settings → Energy cost → Solar savings*
+  and the °C/°F choice on *Settings*. They now show as a normal list of
+  options, with each solar savings description indented under its option.
+
 ## [1.6.0] - 2026-11-17
 
 ### Added
@@ -276,6 +284,7 @@ First published release.
   shell, signed with cosign, with SBOM and provenance. Install guides for
   TrueNAS SCALE 25.10+ and Docker/Podman.
 
+[1.6.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.5.2...v1.6.0
 [1.5.2]: https://github.com/bhager42/teslachargingmonitor/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.5.0...v1.5.1
