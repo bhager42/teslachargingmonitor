@@ -29,7 +29,10 @@ Copyright (C) 2026 Brad Hager and contributors
 {{- end}}
 <section class="card" aria-labelledby="solar-totals-title">
   <h2 id="solar-totals-title">{{t "costs.totals_title"}}</h2>
-  <dl class="fields">{{range .Totals}}<div><dt>{{.K}}</dt><dd>{{.V}}</dd></div>{{end}}</dl>
+  <div class="table-wrap"><table>
+    <thead><tr><th scope="col">{{t "costs.col_period"}}</th><th scope="col">{{t "solar.col_solar"}}</th><th scope="col">{{t "solar.col_home"}}</th><th scope="col">{{t "solar.col_import"}}</th><th scope="col">{{t "solar.col_export"}}</th><th scope="col">{{t "solar.col_self_use"}}</th><th scope="col">{{t "solar.col_self_sufficiency"}}</th></tr></thead>
+    <tbody>{{range .Totals}}<tr><th scope="row">{{.Period}}</th><td>{{.Solar}}</td><td>{{.Home}}</td><td>{{.Import}}</td><td>{{.Export}}</td><td>{{.SelfUse}}</td><td>{{.SelfSufficiency}}</td></tr>{{end}}</tbody>
+  </table></div>
 </section>
 <section class="card" aria-labelledby="solar-chart-title">
   <div class="page-head">

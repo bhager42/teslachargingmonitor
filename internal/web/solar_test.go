@@ -85,8 +85,10 @@ func TestSolarPageAndPowerFlow(t *testing.T) {
 	if status != 200 || inlineScript.MatchString(body) || strings.Contains(body, "style=") {
 		t.Fatalf("/solar = %d", status)
 	}
-	for _, want := range []string{"Solar and Powerwall", "8.0 kWh solar · 3.0 kWh used at home", "62 % of solar used on site",
-		"100 % self-sufficient", `class="bar solar"`, `class="chart-line solar"`, `class="chart-line battery"`,
+	// Totals: one row per period; today is 8 kWh solar, 3 kWh used at home.
+	for _, want := range []string{"Solar and Powerwall",
+		`<tr><th scope="row">Today</th><td>8.0</td><td>3.0</td><td>0.0</td><td>3.0</td><td>62 %</td><td>100 %</td></tr>`,
+		`<th scope="col">Self-sufficiency</th>`, `class="bar solar"`, `class="chart-line solar"`, `class="chart-line battery"`,
 		"Battery at 32 %", "Solar now 4.00 kW"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("/solar missing %q", want)

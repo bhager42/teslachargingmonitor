@@ -183,7 +183,7 @@ func (s *Server) HandleGatewayUpdate(u poller.GatewayUpdate) {
 // ---- Solar page ----
 
 type solarRow struct {
-	Period, Solar, Home, Import, Export, Charge, Discharge, SelfUse string
+	Period, Solar, Home, Import, Export, Charge, Discharge, SelfUse, SelfSufficiency string
 }
 
 type line struct {
@@ -200,11 +200,12 @@ func pct(v float64, ok bool) string {
 func kwh(v float64) string { return fmt.Sprintf("%.1f", v) }
 
 // solarSummary is a total as one readable line.
-func solarSummary(b energy.SiteBucket) string {
+// solarTotalRow is one period of the Totals table on the Solar page.
+func solarTotalRow(period string, b energy.SiteBucket) solarRow {
 	sc, okSC := b.SelfConsumption()
 	ss, okSS := b.SelfSufficiency()
-	return tr.T("solar.total_line", "solar", kwh(b.SolarKWh), "home", kwh(b.HomeKWh), "imported", kwh(b.ImportKWh),
-		"exported", kwh(b.ExportKWh), "self_use", pct(sc, okSC), "self_sufficiency", pct(ss, okSS))
+	return solarRow{Period: period, Solar: kwh(b.SolarKWh), Home: kwh(b.HomeKWh), Import: kwh(b.ImportKWh),
+		Export: kwh(b.ExportKWh), SelfUse: pct(sc, okSC), SelfSufficiency: pct(ss, okSS)}
 }
 
 // polyline scales (t, v) points into a W×H box (top padding 8, bottom
@@ -253,13 +254,13 @@ func (s *Server) solarPage(w http.ResponseWriter, r *http.Request, sess auth.Ses
 	}
 
 	dayStart := p.Start(energy.Day, now)
-	totals := []kv{}
+	totals := []solarRow{}
 	for _, t := range []struct {
 		label    string
 		from, to time.Time
 	}{{tr.T("solar.today"), dayStart, end}, {tr.T("costs.this_month"), p.Start(energy.Month, now), end},
 		{tr.T("costs.this_year"), p.Start(energy.Year, now), end}, {tr.T("costs.all_time"), time.Unix(0, 0), end}} {
-		totals = append(totals, kv{t.label, solarSummary(energy.SiteTotal(iv, t.from, t.to))})
+		totals = append(totals, solarTotalRow(t.label, energy.SiteTotal(iv, t.from, t.to)))
 	}
 
 	// Production per period, as bars like the Costs page.
