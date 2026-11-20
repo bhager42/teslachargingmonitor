@@ -6,6 +6,14 @@ and the project uses [Semantic Versioning](https://semver.org/). Container
 images for every release are at `ghcr.io/bhager42/teslachargingmonitor`,
 signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
+## [1.6.2] - 2026-11-20
+
+### Changed
+- The *Totals* on the Solar page are now a table, with one row per
+  period and a column for each figure (solar, home, imported and
+  exported kWh, solar used on site, self-sufficiency). Before, each
+  period was one long sentence that was hard to read.
+
 ## [1.6.1] - 2026-11-19
 
 ### Fixed
@@ -284,6 +292,7 @@ First published release.
   shell, signed with cosign, with SBOM and provenance. Install guides for
   TrueNAS SCALE 25.10+ and Docker/Podman.
 
+[1.6.2]: https://github.com/bhager42/teslachargingmonitor/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.5.2...v1.6.0
 [1.5.2]: https://github.com/bhager42/teslachargingmonitor/compare/v1.5.1...v1.5.2
