@@ -123,7 +123,9 @@ file, never from an argument). Run `tcmon gateway` for details.
   - Gateway unreachable, Gateway login failed, Gateway certificate
     changed.
   - Gateway firmware updates and restarts.
-- **Summary emails:** a solar section in the weekly and monthly summaries.
+- **Summary emails:** a solar section in the weekly and monthly summaries,
+  including the solar produced and the money it saved (counted the same
+  way as on the Costs page).
 
 Battery percentages match the Tesla app. The Gateway itself reports a
 slightly higher figure that includes a hidden 5 % reserve; tcmon converts
