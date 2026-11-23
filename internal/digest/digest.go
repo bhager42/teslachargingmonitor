@@ -193,13 +193,17 @@ func Build(ctx context.Context, st *store.Store, per Period, from, to time.Time,
 		loc = time.Local
 	}
 	cur := struct {
-		Currency string `json:"currency"`
+		Currency     string               `json:"currency"`
+		SolarSavings energy.SavingsMethod `json:"solar_savings"`
 	}{Currency: "$"}
 	if err := st.GetSetting(ctx, costKey, &cur); err != nil && !errors.Is(err, store.ErrNotFound) {
 		return notify.Message{}, err
 	}
 	if cur.Currency == "" {
 		cur.Currency = "$"
+	}
+	if !cur.SolarSavings.Valid() { // unset in settings saved before 1.6.0
+		cur.SolarSavings = energy.SavingsUsedAtHome
 	}
 	disp := struct {
 		TempUnit string `json:"temp_unit"`
@@ -290,7 +294,7 @@ func Build(ctx context.Context, st *store.Store, per Period, from, to time.Time,
 	totKWh, totCost := energyIn(per, plan, all, from, to)
 	v.Total = charging(totKWh, totCost, cur.Currency, totSessions)
 
-	if v.Solar, err = buildSolar(ctx, st, per, plan, all, prevFrom, from, to, cur.Currency); err != nil {
+	if v.Solar, err = buildSolar(ctx, st, per, plan, cur.SolarSavings, all, prevFrom, from, to, cur.Currency); err != nil {
 		return notify.Message{}, err
 	}
 

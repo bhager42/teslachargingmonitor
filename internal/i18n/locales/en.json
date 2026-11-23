@@ -827,7 +827,7 @@
   "digest.event_reboot": {"one": "{n} restart", "other": "{n} restarts"},
   "digest.event_grid_outage": {"one": "{n} grid outage", "other": "{n} grid outages"},
   "digest.solar_heading": "Solar and Powerwall ({name})",
-  "digest.solar_production": "{kwh} of solar produced",
+  "digest.solar_production": "{kwh} of solar produced, saving {savings}",
   "digest.solar_previous": "Previous week: {kwh}",
   "digest.solar_monthly_previous": "Previous month: {kwh}",
   "digest.solar_use": "{home} used at home · {self_use} of solar used on site · {self_sufficiency} self-sufficient",

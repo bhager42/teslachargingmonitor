@@ -32,28 +32,38 @@ func pctText(v float64, ok bool) string {
 	return fmt.Sprintf("%.0f %%", 100*v)
 }
 
+// savingsWarmup is the Gateway history read before the period so that the
+// Powerwalls' solar share is known when it starts (they cycle daily); the
+// same as the web UI's.
+const savingsWarmup = 3 * 24 * time.Hour
+
 // buildSolar fills the solar section for [from, to), compared with
 // [prevFrom, from). charging holds every Wall Connector's priced intervals,
-// which it attributes to solar, Powerwall and grid.
-func buildSolar(ctx context.Context, st *store.Store, per Period, plan energy.Plan, charging []energy.Interval,
-	prevFrom, from, to time.Time, cur string,
+// which it attributes to solar, Powerwall and grid. method decides which
+// solar counts as money saved, as on the Costs page.
+func buildSolar(ctx context.Context, st *store.Store, per Period, plan energy.Plan, method energy.SavingsMethod,
+	charging []energy.Interval, prevFrom, from, to time.Time, cur string,
 ) (*solarView, error) {
 	gws, err := st.Gateways(ctx)
 	if err != nil || len(gws) == 0 {
 		return nil, err
 	}
 	g := gws[0]
-	samples, err := st.SiteSamples(ctx, prevFrom, to)
+	samples, err := st.SiteSamples(ctx, prevFrom.Add(-savingsWarmup), to)
 	if err != nil {
 		return nil, err
 	}
-	iv := energy.SiteIntervals(samples)
+	batteryWh := 0.0
+	if gi, err := st.GatewayInfo(ctx, g.ID); err == nil {
+		batteryWh = gi.FullPackWh
+	}
+	iv := plan.SolarSavings(energy.SiteIntervals(samples), method, batteryWh)
 	now, prev := energy.SiteTotal(iv, from, to), energy.SiteTotal(iv, prevFrom, from)
 	sc, okSC := now.SelfConsumption()
 	ss, okSS := now.SelfSufficiency()
 	sv := &solarView{
 		Name:       g.Name,
-		Production: tr.T("digest.solar_production", "kwh", kwh(now.SolarKWh)),
+		Production: tr.T("digest.solar_production", "kwh", kwh(now.SolarKWh), "savings", money(now.Savings, cur)),
 		Use: tr.T("digest.solar_use", "home", kwh(now.HomeKWh), "self_use", pctText(sc, okSC),
 			"self_sufficiency", pctText(ss, okSS)),
 		Grid: tr.T("digest.solar_grid", "imported", kwh(now.ImportKWh), "exported", kwh(now.ExportKWh)),

@@ -23,8 +23,8 @@ import (
 // solar from 10:00 to 16:00 (half exported), the home on the grid
 // otherwise; during the 3 Nov evening charge the home (with the car) is
 // supplied half by solar, half by the grid. One grid outage on 6 Nov.
-// It returns the solar produced in [from, to).
-func seedSolar(t *testing.T, st *store.Store, loc *time.Location, from, to time.Time) float64 {
+// It returns the solar produced and exported in [from, to), in kWh.
+func seedSolar(t *testing.T, st *store.Store, loc *time.Location, from, to time.Time) (produced, exported float64) {
 	t.Helper()
 	ctx := context.Background()
 	g, err := st.CreateGateway(ctx, store.NewGateway("Powerwall", "192.168.1.20", strings.Repeat("ab", 32), []byte{1}), time.Now())
@@ -32,7 +32,6 @@ func seedSolar(t *testing.T, st *store.Store, loc *time.Location, from, to time.
 		t.Fatal(err)
 	}
 	solar, load, imp, exp := 4e7, 2.5e8, 2e8, 2e6
-	var produced float64
 	for at := from.AddDate(0, 0, -7).Add(-time.Hour); at.Before(to.Add(2 * time.Hour)); at = at.Add(time.Hour) {
 		h := at.Add(-time.Hour).In(loc).Hour() // the hour that just ended
 		var s, l, i, e float64
@@ -46,7 +45,7 @@ func seedSolar(t *testing.T, st *store.Store, loc *time.Location, from, to time.
 		}
 		solar, load, imp, exp = solar+s, load+l, imp+i, exp+e
 		if mid := at.Add(-30 * time.Minute); !mid.Before(from) && mid.Before(to) {
-			produced += s
+			produced, exported = produced+s, exported+e
 		}
 		snap := &gateway.Snapshot{FetchedAt: at, Reports: map[gateway.Endpoint]gateway.Report{}}
 		a := &snap.Aggregates
@@ -62,7 +61,7 @@ func seedSolar(t *testing.T, st *store.Store, loc *time.Location, from, to time.
 			t.Fatal(err)
 		}
 	}
-	return produced / 1000
+	return produced / 1000, exported / 1000
 }
 
 // Plan step 9.6 acceptance: a week and a month with solar data, and a
@@ -83,16 +82,17 @@ func TestBuildWithSolar(t *testing.T) {
 
 	st := openStore(t)
 	seed(t, st, loc)
-	produced := seedSolar(t, st, loc, from, to)
+	produced, exported := seedSolar(t, st, loc, from, to)
 	msg, err = Build(ctx, st, Weekly, from, to, loc)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// 32 kWh charged this week; 4 × 5 kWh on 3 Nov were half solar = 10 kWh,
-	// worth $2.00 at $0.20.
+	// worth $2.00 at $0.20. Solar savings (the default method, solar used
+	// at home, with no Powerwall cycling) are the solar not exported.
 	for _, want := range []string{
 		"== Solar and Powerwall (Powerwall) ==",
-		fmt.Sprintf("%.1f kWh of solar produced", produced),
+		fmt.Sprintf("%.1f kWh of solar produced, saving $%.2f", produced, 0.20*(produced-exported)),
 		"Previous week: ",
 		"self-sufficient",
 		"Grid: ",
@@ -117,5 +117,17 @@ func TestBuildWithSolar(t *testing.T) {
 		if !strings.Contains(m.Text, want) {
 			t.Errorf("monthly text lacks %q:\n%s", want, m.Text)
 		}
+	}
+
+	// With net metering every kWh produced counts.
+	if err := st.SetSetting(ctx, costKey, map[string]string{"currency": "$", "solar_savings": "net_metering"}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if msg, err = Build(ctx, st, Weekly, from, to, loc); err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf("%.1f kWh of solar produced, saving $%.2f", produced, 0.20*produced); !strings.Contains(msg.Text, want) ||
+		!strings.Contains(msg.HTML, want) {
+		t.Errorf("net metering: text lacks %q:\n%s", want, msg.Text)
 	}
 }
