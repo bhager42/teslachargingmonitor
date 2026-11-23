@@ -6,6 +6,15 @@ and the project uses [Semantic Versioning](https://semver.org/). Container
 images for every release are at `ghcr.io/bhager42/teslachargingmonitor`,
 signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
+## [1.7.0] - 2026-11-23
+
+### Added
+- **Solar savings in the summary emails.** The weekly and monthly
+  summaries now show the money the solar produced saved, for example
+  *146.0 kWh of solar produced, saving $16.60*. It is counted the same
+  way as on the dashboard and Costs page, using the method chosen under
+  *Settings → Energy cost → Solar savings*.
+
 ## [1.6.2] - 2026-11-20
 
 ### Changed
@@ -292,6 +301,7 @@ First published release.
   shell, signed with cosign, with SBOM and provenance. Install guides for
   TrueNAS SCALE 25.10+ and Docker/Podman.
 
+[1.7.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.6.2...v1.7.0
 [1.6.2]: https://github.com/bhager42/teslachargingmonitor/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.5.2...v1.6.0
