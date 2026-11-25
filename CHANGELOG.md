@@ -6,6 +6,14 @@ and the project uses [Semantic Versioning](https://semver.org/). Container
 images for every release are at `ghcr.io/bhager42/teslachargingmonitor`,
 signed with cosign ([how to verify](docs/INSTALL_DOCKER.md#verify)).
 
+## [1.7.1] - 2026-11-25
+
+No change to the app itself; this release updates the container image.
+
+### Changed
+- The container image is built on the latest Go 1.27.4 and distroless
+  base images, which include their upstream security updates.
+
 ## [1.7.0] - 2026-11-23
 
 ### Added
@@ -301,6 +309,7 @@ First published release.
   shell, signed with cosign, with SBOM and provenance. Install guides for
   TrueNAS SCALE 25.10+ and Docker/Podman.
 
+[1.7.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/bhager42/teslachargingmonitor/compare/v1.6.2...v1.7.0
 [1.6.2]: https://github.com/bhager42/teslachargingmonitor/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/bhager42/teslachargingmonitor/compare/v1.6.0...v1.6.1
